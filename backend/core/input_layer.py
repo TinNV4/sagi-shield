@@ -9,11 +9,16 @@ Usage:
   python input_layer.py --lang ja --image fake_warrant.png --audio call.m4a
 """
 from __future__ import annotations
-import argparse, hashlib, io, json, os, re, subprocess, unicodedata
+import argparse, hashlib, hmac, io, json, os, re, subprocess, unicodedata
 from urllib.parse import urlparse
 from pydantic import BaseModel, Field
 
-SALT = os.getenv("HASH_SALT", "change-me")
+# HMAC key: the phone-number space is small, so a plain salted hash is brute-forceable once the salt
+# leaks. In production HASH_KEY comes from Secret Manager (mounted as an env var on Cloud Run).
+HASH_KEY = (os.getenv("HASH_KEY") or os.getenv("HASH_SALT", "change-me")).encode()
+
+def phone_hmac(digits: str) -> str:
+    return hmac.new(HASH_KEY, digits.encode(), hashlib.sha256).hexdigest()[:32]
 REGION = {"ja": "JP", "vi": "VN"}
 
 class PhoneInfo(BaseModel):
@@ -63,13 +68,14 @@ def mask(s: str) -> str:
 # ---------------- Phone ----------------
 def analyze_phone(raw: str, lang: str) -> PhoneInfo | None:
     digits = re.sub(r"[^\d+]", "", raw)
-    info = PhoneInfo(hash=hashlib.sha256((SALT + digits).encode()).hexdigest()[:16])
+    info = PhoneInfo(hash=phone_hmac(digits))
     try:
         import phonenumbers
         n = phonenumbers.parse(digits, REGION.get(lang, "JP"))
         if not phonenumbers.is_possible_number(n):
             return None
         info.e164 = phonenumbers.format_number(n, phonenumbers.PhoneNumberFormat.E164)
+        info.hash = phone_hmac(info.e164)  # same number, same hash, however it was typed
         info.country = phonenumbers.region_code_for_number(n)
         info.is_international = info.country != REGION.get(lang)
     except Exception:
@@ -100,7 +106,7 @@ def analyze_url(raw: str, lang: str) -> UrlInfo:
     return UrlInfo(domain=host, flags=sorted(set(flags)))
 
 # ---------------- Image ----------------
-def prepare_image(path: str, max_side: int = 1600) -> bytes:
+def prepare_image(path, max_side: int = 1600) -> bytes:
     """Resize + strip EXIF (location/device PII) before sending to Gemini vision."""
     from PIL import Image
     img = Image.open(path).convert("RGB")
