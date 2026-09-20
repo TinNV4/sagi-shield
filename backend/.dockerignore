@@ -1,0 +1,6 @@
+tests/
+eval/
+spike/
+__pycache__/
+.pytest_cache/
+.deepeval/

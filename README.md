@@ -21,6 +21,9 @@ python core/input_layer.py --lang vi --text "Công an đây, gọi lại +855987
 # rules regression tests (no network)
 python -m pytest tests -q
 
+# run the API locally (rules only, in-memory store)
+USE_LLM=0 uvicorn app.main:app --port 8080
+
 # dataset + eval
 python core/gen_dataset.py seed --lang ja --out eval/ja_seed.jsonl
 python core/gen_dataset.py eval --data eval/ja_seed.jsonl --lang ja --no-llm
@@ -31,6 +34,7 @@ python core/gen_dataset.py gen  --lang vi --n 100 --out eval/vi.jsonl   # needs 
 
 ```
 docs/       plan, UI prompt, agent rules
-backend/    core engine (done) + FastAPI app (P2-P4)
+backend/    core engine + FastAPI app (app/), tests, Dockerfile
+infra/      Cloud Run deploy script
 frontend/   AI Studio Build export goes here; lib/audioCapture.js ready
 ```

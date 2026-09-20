@@ -50,6 +50,14 @@ LANG_PACKS = {
         },
         # third-person words used when talking ABOUT scams (news, police warnings), not while running one
         "reporting": [r"名乗", r"によりますと", r"ニュース", r"手口", r"注意を呼びかけ"],
+        # rules-only fallback when the LLM gave no reasons (one short sentence per link)
+        "reasons": {
+            Stage.AUTHORITY: "警察や役所を名乗る電話は、まず疑ってください。",
+            Stage.FEAR: "「逮捕」「未納」「還付金」などで急がせるのは詐欺の典型です。",
+            Stage.ISOLATION: "「誰にも言わないで」と言うのは詐欺の特徴です。",
+            Stage.CHANNEL_SWITCH: "警察や銀行がLINEやビデオ通話で連絡することはありません。",
+            Stage.MONEY: "電話でお金・キャッシュカード・暗証番号を求められたら詐欺です。",
+        },
         "advice": {
             "HIGH": "詐欺の可能性が高いです。すぐに電話を切ってください。#9110 に相談してください。",
             "MEDIUM": "注意してください。公式の電話番号にかけ直して確認してください。",
@@ -69,6 +77,13 @@ LANG_PACKS = {
                           r"xác minh (dòng )?tiền"],
         },
         "reporting": [r"giả danh", r"mạo danh", r"thủ đoạn", r"cảnh báo", r"khuyến cáo"],
+        "reasons": {
+            Stage.AUTHORITY: "Người tự xưng công an, cơ quan nhà nước qua điện thoại: hãy nghi ngờ trước.",
+            Stage.FEAR: "Dọa bắt giữ, khóa tài khoản hoặc hứa hoàn tiền để hối thúc là chiêu lừa đảo quen thuộc.",
+            Stage.ISOLATION: "Yêu cầu giữ bí mật, không nói với người thân là dấu hiệu lừa đảo.",
+            Stage.CHANNEL_SWITCH: "Công an, ngân hàng không làm việc qua Zalo, gọi video hay yêu cầu cài ứng dụng lạ.",
+            Stage.MONEY: "Không ai có quyền yêu cầu bạn chuyển tiền hay đọc mã OTP qua điện thoại.",
+        },
         "advice": {
             "HIGH": "Nhiều khả năng là lừa đảo. Hãy cúp máy ngay, không chuyển tiền, gọi 113 hoặc công an địa phương.",
             "MEDIUM": "Cần cảnh giác. Hãy tự gọi lại số chính thức của cơ quan/ngân hàng để xác minh.",
@@ -155,6 +170,11 @@ def rule_score(hits: dict[Stage, list[str]], reporting: bool = False) -> int:
             score = max(score, floor)
     score = min(100, score)
     return min(score, REPORTING_CAP) if reporting else score
+
+def rule_reasons(hits: dict[Stage, list[str]], lang: str) -> list[str]:
+    """Canned explanations for the two deepest links hit - used when there is no LLM verdict."""
+    texts = LANG_PACKS[lang].get("reasons", {})
+    return [texts[s] for s in sorted(hits, reverse=True) if s in texts][:2]
 
 def hard_floor(hits: dict[Stage, list[str]]) -> int:
     """Floor of the strongest never-legit combo present, 0 if none."""
@@ -248,7 +268,7 @@ def analyze(text: str, lang: str = "ja", use_llm: bool = True, verdict: LlmVerdi
         "stage": max(rule_stage(hits) if score >= 40 else 0, v.stage if v else 0),
         "scam_type": v.scam_type if v else ("unknown" if score >= 40 else "safe"),
         "rule_hits": {Stage(s).name: m for s, m in hits.items()},
-        "reasons": v.reasons if v else [],
+        "reasons": (v.reasons if v and v.reasons else rule_reasons(hits, lang) if score >= 40 else [])[:2],
         "advice": LANG_PACKS[lang]["advice"][lv],
         "hotlines": LANG_PACKS[lang]["hotlines"],
     }

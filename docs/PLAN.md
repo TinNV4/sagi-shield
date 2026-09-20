@@ -149,10 +149,11 @@ flowchart TD
 
 | File | Status | Purpose |
 |---|---|---|
-| `backend/core/risk_engine.py` | ✅ rules path reworked + 23 regression tests (section 6.2); LLM path never run yet (no credentials) — **still needs the v3 fusion (LLM downgrade) and the 2-window latch** | Kill-chain hybrid scoring, JP/VN packs, `LiveTracker` (per-call accumulation, `reset()`) |
-| `backend/core/input_layer.py` | ✅ smoke-tested; needs HMAC instead of salted SHA-256; `ffmpeg` must be in the Docker image | `build_evidence()` for text/image/audio/phone/URL |
+| `backend/core/risk_engine.py` | ✅ rules, v3 fusion, 2-window latch, regression tests; **LLM path never run yet (no credentials)** | Kill-chain hybrid scoring, JP/VN packs, `LiveTracker` (per-call accumulation, `reset()`) |
+| `backend/core/input_layer.py` | ✅ smoke-tested; HMAC phone hashes; `ffmpeg` is in the Docker image | `build_evidence()` for text/image/audio/phone/URL |
 | `backend/core/gen_dataset.py` | ✅ seed + eval — **needs ablation modes (rules / LLM / hybrid) and per-set reporting** | Gemini synthetic data gen + precision/recall eval |
 | `frontend/lib/audioCapture.js` | ✅ syntax-checked, never run against a server — **needs VAD gate, pause(), WS auto-reconnect**; set `noiseSuppression: false` and test `autoGainControl` both ways in the bake-off (browser DSP can hurt far-field STT) | Mic → PCM16 16 kHz → WebSocket |
+| `backend/app/` (`main.py`, `services.py`, `storage.py`) | ✅ offline (42 tests, rules only, Google services stubbed); never run with credentials, never deployed | HTTP API of section 9 (no `/ws/live`, `/family/*`, `/agent/*` yet) |
 | `docs/AI_STUDIO_UI_PROMPT.md` | ready (v3 screens, frontend-only) | Prompt to generate the UI in AI Studio Build |
 
 ## 8. Reuse: libraries & data
@@ -246,7 +247,8 @@ gantt
 ### P0 · Setup (9/20)
 - [ ] **Team: find 1–3 teammates now** — solo entries are not allowed; all members 21+, working professionals, JAPAC-based. Register everyone on Hack2skill **before 10-04** (FAQ/T&C date) even though the homepage says 10-11
 - [ ] Confirm on the Hack2skill dashboard / Discord which dates are binding (10-04 vs 10-11 / 10-18) and write them here
-- [ ] `git init` + first commit **today**; push to GitHub (private now, public at submission). Commit history = proof of fresh code
+- [x] `git init` + first commit (2026-09-21)
+- [ ] Push to GitHub (private now, public at submission). Commit history = proof of fresh code
 - [ ] GCP project; enable Agent Platform (Vertex AI) API, Speech-to-Text, Cloud Run, Firestore, Web Risk, Secret Manager, FCM
 - [ ] Re-verify model IDs in section 6 against the Agent Platform model pages; set `.env`; load Gemini API + ADK skills into Antigravity
 - [ ] `pip install -r backend/requirements.txt`; run `risk_engine.py --no-llm` smoke test, then once **with** the LLM to prove the model ID and `global` location work
@@ -264,17 +266,17 @@ gantt
 - [ ] Paste `docs/AI_STUDIO_UI_PROMPT.md` into AI Studio Build; iterate screens with **mock API**; make sure it did not add a Node server
 - [ ] Export code into `frontend/`; set `VITE_API_BASE`; switch mock → real when P2 is live
 
-### P2 · `/check` + `/precheck` API (9/22–9/24)
-- [ ] `backend/app/main.py`: FastAPI `/check`, `/precheck`, `/report`, `/stats`, CORS
-- [ ] Wire `build_evidence()` → `analyze()`; add evidence-flag bonus (intl number +10, lookalike URL +15)
+### P2 · `/check` + `/precheck` API (9/22–9/24) — `[~]` = code and offline tests done, needs a run with real credentials
+- [x] `backend/app/main.py`: FastAPI `/check`, `/precheck`, `/report`, `/stats`, `/healthz`, CORS; `storage.py` (memory / Firestore)
+- [x] Wire `build_evidence()` → `analyze()`; add evidence-flag bonus (intl number +10, lookalike URL +15)
 - [x] Rework `rule_score` (section 6.2) + regression tests from the 2026-09-19 smoke cases — done 2026-09-19
-- [ ] v3 fusion rule in `analyze()` / `LiveTracker` (hard combos not vetoable; otherwise the LLM may downgrade) — still `max(rule, LLM)` today
-- [ ] Gemini-written `reasons` / why-sentence; canned action line + hotlines
-- [ ] Image path: Gemini vision → doc type + OCR text → engine
-- [ ] Audio file path: `gemini-3.5-transcribe` → transcript → engine
-- [ ] Web Risk lookup for URLs + hand-made bank lookalike list; Firestore community hit count
-- [ ] Phone numbers: **HMAC-SHA256 with key in Secret Manager** (plain salted hash is brute-forceable over the phone-number space)
-- [ ] Dockerfile (with `ffmpeg`); deploy to Cloud Run (asia-northeast1)
+- [x] v3 fusion rule in `analyze()` / `LiveTracker`: hard combos are final; otherwise `score = c·LLM + (1−c)·rules` (c = LLM confidence). Tested with injected verdicts only
+- [~] Gemini-written `reasons` (from `LlmVerdict`) with canned per-link sentences as the rules-only fallback; canned action line + hotlines — LLM side unverified
+- [~] Image path: Gemini vision → doc type + OCR text → engine; official document → HIGH by rule. Code + stubbed tests done, **real Gemini call never run**
+- [~] Audio file path: `gemini-3.5-transcribe` → transcript → engine. Stubbed tests only; **request shape for the transcribe model is a guess — check the Transcribe guide**
+- [~] Web Risk lookup (`USE_WEBRISK=1`) + bank lookalike list (`BRANDS` in `input_layer.py`); community hit count by phone HMAC. Firestore backend and Web Risk call unverified
+- [x] Phone numbers: HMAC-SHA256 keyed by `HASH_KEY` (mounted from Secret Manager in `infra/deploy.sh`), hashed on E.164
+- [~] `backend/Dockerfile` (with `ffmpeg`) + `infra/deploy.sh` written, **never built or deployed** (no docker / gcloud on the dev machine yet)
 
 ### P3 · Live Guard hardening (9/25–9/27)
 - [ ] Promote spike to `/ws/live`: STT winner → rolling 30 s window; STT session rotation; client WS auto-reconnect
