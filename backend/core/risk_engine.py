@@ -17,10 +17,11 @@ Usage:
   python risk_engine.py --lang vi --text "Tôi là công an, tài khoản của anh liên quan đường dây rửa tiền" --no-llm
 """
 from __future__ import annotations
-import argparse, json, os, re, sys, unicodedata
+import argparse, json, os, re, sys, time, unicodedata
 from collections import deque
 from dataclasses import dataclass, field
 from enum import IntEnum
+from typing import Literal
 from pathlib import Path
 from pydantic import BaseModel
 
@@ -106,7 +107,8 @@ LANG_PACKS = {
 # ---------- LLM structured output ----------
 class LlmVerdict(BaseModel):
     stage: int            # 0..5 highest kill-chain stage reached
-    scam_type: str        # fake_police | family_impersonation | fake_billing | refund | investment | safe
+    # closed set = the API contract; without it the model invents labels ("police_impersonation")
+    scam_type: Literal["fake_police", "family_impersonation", "fake_billing", "refund", "investment", "safe", "unknown"]
     confidence: float     # 0..1
     reasons: list[str]    # short, in the user's language
 
@@ -124,23 +126,24 @@ def llm_verdict(text: str, lang: str) -> LlmVerdict | None:
         from google.genai import types
     except ImportError:
         return None
-    try:
-        client = genai.Client()  # reads GEMINI_API_KEY or Agent Platform env vars
-        resp = client.models.generate_content(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
-            contents=f"<transcript>\n{text}\n</transcript>",
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT.format(lang=lang),
-                response_mime_type="application/json",
-                response_schema=LlmVerdict,
-                temperature=0.1,
-                thinking_config=types.ThinkingConfig(thinking_level="low"),  # 3.x cannot switch thinking off
-            ),
-        )
-        return resp.parsed
-    except Exception as e:  # no credentials / quota / network: degrade to rules only, never fail the check
-        print(f"[risk_engine] LLM unavailable, rules only: {type(e).__name__}: {str(e)[:200]}", file=sys.stderr)
-        return None
+    config = types.GenerateContentConfig(
+        system_instruction=SYSTEM_PROMPT.format(lang=lang),
+        response_mime_type="application/json",
+        response_schema=LlmVerdict,
+        temperature=0.1,
+        thinking_config=types.ThinkingConfig(thinking_level="low"),  # 3.x cannot switch thinking off
+    )
+    for attempt in (1, 2):  # one quick retry: 503 "high demand" spikes are common and short
+        try:
+            client = genai.Client()  # reads GEMINI_API_KEY or Agent Platform env vars
+            resp = client.models.generate_content(model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+                                                  contents=f"<transcript>\n{text}\n</transcript>", config=config)
+            return resp.parsed
+        except Exception as e:  # no credentials / quota / network: degrade to rules only, never fail the check
+            if attempt == 2 or getattr(e, "code", None) not in (429, 500, 503):
+                print(f"[risk_engine] LLM unavailable, rules only: {type(e).__name__}: {str(e)[:200]}", file=sys.stderr)
+                return None
+            time.sleep(1.5)
 
 # ---------- Rule layer ----------
 # One link on its own is weak evidence ("LINE", "キャッシュカード" come up in normal calls all day).

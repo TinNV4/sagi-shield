@@ -31,7 +31,7 @@ python core/gen_dataset.py gen  --lang vi --n 100 --out eval/vi.jsonl  # needs G
 python core/gen_dataset.py eval --data eval/ja_seed.jsonl --lang ja --no-llm
 ```
 
-`--no-llm` everywhere means "rules only, no network". Use it by default — the LLM path has never been run against real credentials.
+`--no-llm` everywhere means "rules only, no network". Use it by default; the repo-root `.env` (loaded automatically) holds the key for real LLM runs — with an API key, `GOOGLE_GENAI_USE_ENTERPRISE` must be `false`.
 
 ## Architecture
 
@@ -57,7 +57,8 @@ Fusion (`fuse()`): a hard combo is final; otherwise `score = c·LLM + (1−c)·r
 
 ### Known gaps (tracked in PLAN sections 7 and 11)
 
-- **Nothing that talks to Google has ever been executed**: `llm_verdict`, `services.*`, `FirestoreStore`, `backend/Dockerfile`, `infra/deploy.sh`. The request shape for `gemini-3.5-transcribe` in `services.transcribe_audio` is a guess.
+- Verified with a real free-tier key (2026-09-21): `llm_verdict` (structured output + `thinking_level`), fusion on benign / news / injection samples, `services.describe_image`. **Never executed:** `transcribe_audio` with real speech, `webrisk_threats`, `FirestoreStore`, `backend/Dockerfile`, `infra/deploy.sh`. Gemini calls take 3–15 s and often 503 on the free tier (one retry built in).
+- Keep one long-lived `genai.Client` (`services._client()`): a throwaway `genai.Client().models...` is closed by GC before the request is sent.
 - The spike page and on-device STT have never been tried in a browser; ja-JP / vi-VN pack availability is unknown.
 - Not written yet: `/family/*` + FCM (P4), `/agent/recovery` (F6), rate limiting and PII-masked request logs (P5), `frontend/` beyond `lib/audioCapture.js`.
 - API `lang` accepts only `ja` / `vi` (the language packs); the UI's English mode must still send one of those.

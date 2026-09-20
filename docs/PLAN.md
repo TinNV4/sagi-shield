@@ -290,12 +290,14 @@ gantt
 - [x] Wire `build_evidence()` → `analyze()`; add evidence-flag bonus (intl number +10, lookalike URL +15)
 - [x] Rework `rule_score` (section 6.2) + regression tests from the 2026-09-19 smoke cases — done 2026-09-19
 - [x] v3 fusion rule in `analyze()` / `LiveTracker`: hard combos are final; otherwise `score = c·LLM + (1−c)·rules` (c = LLM confidence). Tested with injected verdicts only
-- [~] Gemini-written `reasons` (from `LlmVerdict`) with canned per-link sentences as the rules-only fallback; canned action line + hotlines — LLM side unverified
-- [~] Image path: Gemini vision → doc type + OCR text → engine; official document → HIGH by rule. Code + stubbed tests done, **real Gemini call never run**
-- [~] Audio file path: `gemini-3.5-transcribe` → transcript → engine. Stubbed tests only; **request shape for the transcribe model is a guess — check the Transcribe guide**
+- [x] Gemini-written `reasons` (from `LlmVerdict`) with canned per-link sentences as the rules-only fallback; canned action line + hotlines — verified with real calls 2026-09-21
+- [x] Image path: Gemini vision → doc type + OCR text → engine; official document → HIGH by rule — real call on a self-made 逮捕状 prop returned `arrest_warrant` + full OCR (5 s)
+- [~] Audio file path: `gemini-3.5-transcribe` → transcript → engine. Request shape accepted by the API (tone-only WAV → empty transcript); **not yet tried with real speech**
 - [~] Web Risk lookup (`USE_WEBRISK=1`) + bank lookalike list (`BRANDS` in `input_layer.py`); community hit count by phone HMAC. Firestore backend and Web Risk call unverified
 - [x] Phone numbers: HMAC-SHA256 keyed by `HASH_KEY` (mounted from Secret Manager in `infra/deploy.sh`), hashed on E.164
 - [~] `backend/Dockerfile` (with `ffmpeg`) + `infra/deploy.sh` written, **never built or deployed** (no docker / gcloud on the dev machine yet)
+
+**First real LLM run (2026-09-21, free-tier API key, `gemini-3.8-flash`, `thinking_level=low`):** fake police 90 HIGH · real police lost-property call 3 LOW · TV news about scams 3 LOW · injection + hard combo 90 HIGH · injection without hard combo 93 HIGH · bank reminder 2 LOW · ore-ore the rules miss 90 HIGH. **Latency 3–15 s per call and frequent 503 "high demand"** (one retry added) → fine for Quick Check, too slow for the live path: try `gemini-3.5-flash-lite` for tier-1 live scoring, measure p50/p95 in P5.
 
 ### P3 · Live Guard hardening (9/25–9/27)
 - [x] `/ws/live` text mode: rolling window, rules per line, LLM only from MEDIUM (masked window, ≤ 1 call / 5 s, off the receive loop), silence-timeout + manual reset, latched HIGH, `speak` once (offline tests, LLM stubbed)
