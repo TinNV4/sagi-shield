@@ -1,0 +1,13 @@
+.env
+__pycache__/
+node_modules/
+dist/
+backend/eval/*.jsonl
+# police-published audio/transcripts: private evaluation only, never commit (PLAN section 8)
+backend/eval/real_heldout/
+.pytest_cache/
+.deepeval/
+# local agent tooling (third-party skills) — not part of the submission
+.agents/
+.claude/
+skills-lock.json

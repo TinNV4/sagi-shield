@@ -1,0 +1,15 @@
+# Majors pinned on 2026-09-19 (google-genai README: pin < 3.0.0; ADK 2.x broke the 1.x agent API)
+google-genai>=2.24,<3
+google-adk>=2.9,<3
+google-cloud-speech>=2.40,<3
+google-cloud-webrisk
+google-cloud-firestore
+firebase-admin
+fastapi
+python-multipart
+uvicorn[standard]
+pydantic>=2
+phonenumbers
+tldextract
+pillow
+# stretch (Milestone B): google-cloud-bigquery
