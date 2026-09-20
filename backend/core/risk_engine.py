@@ -21,7 +21,14 @@ import argparse, json, os, re, sys, unicodedata
 from collections import deque
 from dataclasses import dataclass, field
 from enum import IntEnum
+from pathlib import Path
 from pydantic import BaseModel
+
+try:  # local dev: pick up the repo-root .env (Cloud Run injects real env vars, which win)
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+except ImportError:
+    pass
 
 # ---------- Scam kill chain (shared across markets) ----------
 class Stage(IntEnum):
@@ -132,7 +139,7 @@ def llm_verdict(text: str, lang: str) -> LlmVerdict | None:
         )
         return resp.parsed
     except Exception as e:  # no credentials / quota / network: degrade to rules only, never fail the check
-        print(f"[risk_engine] LLM unavailable, rules only: {type(e).__name__}", file=sys.stderr)
+        print(f"[risk_engine] LLM unavailable, rules only: {type(e).__name__}: {str(e)[:200]}", file=sys.stderr)
         return None
 
 # ---------- Rule layer ----------

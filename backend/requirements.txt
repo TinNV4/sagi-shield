@@ -9,6 +9,7 @@ fastapi
 python-multipart
 uvicorn[standard]
 pydantic>=2
+python-dotenv
 phonenumbers
 tldextract
 pillow
