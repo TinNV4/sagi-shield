@@ -1,0 +1,73 @@
+<!doctype html>
+<!-- Sagi Shield spike (PLAN P0.5, branch 3): on-device speech recognition in Chrome -> text -> /ws/live.
+     Audio never leaves this machine. Run the API (cd backend && USE_LLM=0 uvicorn app.main:app --port 8080)
+     and open http://localhost:8080/spike/live_text.html in Chrome 139+. Put a phone on speaker next to the mic. -->
+<meta charset="utf-8">
+<title>Sagi Shield - on-device STT spike</title>
+<style>
+  body { font: 18px system-ui, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; }
+  #meter { font-size: 56px; font-weight: 700; padding: 16px; border-radius: 12px; text-align: center; background: #e8f5e9; }
+  #meter.MEDIUM { background: #fff8e1; } #meter.HIGH { background: #c62828; color: #fff; }
+  #log { white-space: pre-wrap; color: #555; font-size: 15px; border-top: 1px solid #ddd; margin-top: 16px; padding-top: 8px; }
+  button, select { font-size: 18px; padding: 10px 18px; margin-right: 8px; }
+</style>
+<select id="lang"><option value="ja">日本語 (ja-JP)</option><option value="vi">Tiếng Việt (vi-VN)</option></select>
+<button id="start">Start</button><button id="stop" disabled>Stop</button><button id="safe">I am safe now</button>
+<p id="mode">checking on-device support…</p>
+<div id="meter">–</div>
+<p id="advice"></p>
+<div id="log"></div>
+<script>
+const $ = (id) => document.getElementById(id);
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const LOCALE = { ja: "ja-JP", vi: "vi-VN" };
+let rec, ws, running = false, local = false;
+const log = (s) => { $("log").textContent = `${new Date().toLocaleTimeString()}  ${s}\n` + $("log").textContent; };
+
+async function checkLocal() {
+  const langs = [LOCALE[$("lang").value]];
+  if (!SR) return $("mode").textContent = "SpeechRecognition is not available in this browser.";
+  if (!SR.available) { local = false; return $("mode").textContent = "No on-device API here (needs Chrome 139+): would fall back to CLOUD recognition."; }
+  let status = await SR.available({ langs, processLocally: true });
+  if (status === "downloadable" || status === "downloading") {
+    $("mode").textContent = `Language pack ${langs[0]}: ${status} - installing…`;
+    await SR.install({ langs, processLocally: true });
+    status = await SR.available({ langs, processLocally: true });
+  }
+  local = status === "available";
+  $("mode").textContent = local ? `ON-DEVICE recognition for ${langs[0]}: audio stays on this machine.`
+                                : `On-device ${langs[0]}: ${status}. Would fall back to CLOUD recognition - note this result in the bake-off.`;
+}
+
+function render(m) {
+  if (m.event === "session_reset") { $("meter").className = ""; $("meter").textContent = "–"; $("advice").textContent = ""; return log("session reset"); }
+  $("meter").className = m.risk_level;
+  $("meter").textContent = `${m.risk_score}  ${m.risk_level}  · stage ${m.stage}`;
+  $("advice").textContent = m.advice;
+  if (m.speak) { const u = new SpeechSynthesisUtterance(m.speak); u.lang = LOCALE[$("lang").value]; u.rate = 0.9; speechSynthesis.speak(u); }
+  log(`${m.risk_level} ${m.risk_score}  [${m.trigger_phrase}]  ${m.transcript_tail}`);
+}
+
+$("start").onclick = async () => {
+  await checkLocal();
+  speechSynthesis.speak(new SpeechSynthesisUtterance(""));  // unlock TTS on this user gesture
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/live?lang=${$("lang").value}&input=text`);
+  ws.onmessage = (e) => render(JSON.parse(e.data));
+  rec = new SR();
+  rec.lang = LOCALE[$("lang").value]; rec.continuous = true; rec.interimResults = false;
+  if (local) rec.processLocally = true;
+  rec.onresult = (e) => {
+    for (let i = e.resultIndex; i < e.results.length; i++)
+      if (e.results[i].isFinal && ws.readyState === 1)
+        ws.send(JSON.stringify({ type: "transcript", text: e.results[i][0].transcript, final: true }));
+  };
+  rec.onerror = (e) => log(`recognition error: ${e.error}`);
+  rec.onend = () => { if (running) rec.start(); };          // Chrome ends sessions on silence: keep listening
+  running = true; rec.start();
+  $("start").disabled = true; $("stop").disabled = false;
+};
+$("stop").onclick = () => { running = false; rec?.stop(); ws?.close(); $("start").disabled = false; $("stop").disabled = true; };
+$("safe").onclick = () => { speechSynthesis.cancel(); ws?.readyState === 1 && ws.send(JSON.stringify({ type: "reset" })); };
+$("lang").onchange = checkLocal;
+checkLocal();
+</script>

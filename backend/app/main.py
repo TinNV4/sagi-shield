@@ -16,6 +16,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core"))
@@ -23,6 +24,7 @@ from input_layer import URL_RE, analyze_phone, build_evidence, normalize_text, p
 from risk_engine import LANG_PACKS, analyze, level  # noqa: E402
 
 from . import services  # noqa: E402
+from .live import router as live_router  # noqa: E402
 from .storage import get_store  # noqa: E402
 
 MAX_IMAGE, MAX_AUDIO, MAX_TEXT = 8 * 2**20, 20 * 2**20, 20_000
@@ -46,6 +48,10 @@ app = FastAPI(title="Sagi Shield API")
 app.add_middleware(CORSMiddleware, allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
                    allow_methods=["*"], allow_headers=["*"])
 store = get_store()
+app.include_router(live_router)
+SPIKE = Path(__file__).resolve().parents[2] / "frontend" / "spike"  # dev only: not copied into the Docker image
+if SPIKE.is_dir():
+    app.mount("/spike", StaticFiles(directory=SPIKE), name="spike")
 
 
 def use_llm() -> bool:

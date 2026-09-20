@@ -37,8 +37,10 @@ API CONTRACT (types in src/api/types.ts)
 - POST /check  (multipart: text?, image?, audio?, phone?, url?, lang) -> CheckResult
 - POST /precheck { reason_text, amount?, recipient_type?: "person"|"company"|"government"|"unknown",
                    who_asked?: "police"|"bank"|"family"|"company"|"stranger"|"nobody", lang } -> CheckResult
-- WS /ws/live?lang=xx&mode=kiosk|manual : client sends binary PCM16 16kHz mono chunks (100 ms),
-  ONLY while voice activity is detected (+1 s hangover);
+- WS /ws/live?lang=xx&mode=kiosk|manual&input=text : PRIVACY RULE - audio never leaves the device.
+  The client runs speech recognition ON-DEVICE and sends JSON text only:
+    { type: "transcript", text, final: true }   // one per finalized line; do not send interim results
+    { type: "reset" }                            // when the user taps "I am safe now"
   server sends JSON, one of:
     { risk_score, risk_level, stage, trigger_phrase, transcript_tail, advice, speak?: string, session_id }
     { event: "session_reset" }   // call ended (silence timeout) -> reset meter, stages and latch
@@ -72,8 +74,7 @@ SCREENS
      Dim the screen colors after 1 min idle (burn-in friendly), wake on speech.
    - Exit kiosk only via Settings with a long-press (3 s) — so it is not closed by accident.
    BOTH MODES
-   - Voice activity detection runs IN THE BROWSER; audio is sent only while speech is detected.
-     Show the state: "silence (nothing is sent)" vs "speech detected".
+   - Show the state: "listening (on this device)" vs "text being checked".
    - Circular risk meter (0-100) with color + icon + word (safe/caution/danger), updates live.
    - Kill-chain progress bar with 5 steps: Authority → Threat → Secrecy → Move to app → Money.
      Reached steps light up. Steps never go backwards until a session_reset event.
@@ -87,11 +88,14 @@ SCREENS
      max volume, rate 0.9, voice matching the UI language; repeat every 8 s until dismissed, max 5 times.
      Put this in src/lib/speak.ts with warmUp() (called on the first user gesture — browsers block
      TTS before one), speak(text, lang), stop(). Settings toggle "声で警告する / Spoken warning" (default ON).
-   - Use the audio capture module at src/lib/audioCapture.ts:
-     startLiveGuard(wsUrl, { onRisk, onReset, onVadChange, onStatus }) -> { stop(), pause(ms) }
-     (AudioWorklet, PCM16 16kHz, echoCancellation false, noiseSuppression false, VAD gate).
-     For VAD use a simple energy-based detector behind an interface `Vad` so I can swap in
-     @ricky0123/vad-web (Silero) later.
+   - Speech recognition module at src/lib/liveGuard.ts:
+     startLiveGuard(wsUrl, lang, { onRisk, onReset, onStatus }) -> { stop(), pause(ms), reset() }
+     Uses the Web Speech API in ON-DEVICE mode: check SpeechRecognition.available({ langs, processLocally: true }),
+     call SpeechRecognition.install(...) when the pack is "downloadable", set recognition.processLocally = true,
+     continuous = true, interimResults = false, restart in onend while running, auto-reconnect the WebSocket.
+     If on-device recognition is unavailable, do NOT silently use cloud recognition: show a clear notice
+     ("This device cannot transcribe locally") and an explicit opt-in switch.
+     Show a permanent privacy line on this screen: "Audio never leaves this device. Only text is checked."
 
 3. Quick Check: tabs or segmented control — Text | Screenshot | Recording | Phone number | Link.
    Paste box, image picker (camera or gallery, preview), audio file picker, phone and URL inputs.

@@ -171,3 +171,13 @@ def test_reporting_caps_rules_but_not_the_llm():
     assert level(t.update({}, reporting=False)) == "MEDIUM"          # sticky for the session
     assert level(t.update({}, llm_score=95, llm_stage=5)) == "MEDIUM"  # one LLM window is smoothed...
     assert level(t.update({}, llm_score=95, llm_stage=5)) == "HIGH"    # ...a second one gets through
+
+
+def test_hard_combo_needs_its_links_close_together():
+    t = LiveTracker()
+    t.update(rule_stages("LINEで写真送るね", "ja"))
+    for _ in range(LiveTracker.HARD_WINDOW):
+        t.update({})
+    far = t.update(rule_stages("そういえば昨日警察の人が交通安全の話をしててね", "ja"))
+    assert level(far) == "MEDIUM"                                           # soft: two links, minutes apart
+    assert level(t.update({}, llm_score=0, llm_confidence=0.95)) == "LOW"   # ...so the LLM may lower it

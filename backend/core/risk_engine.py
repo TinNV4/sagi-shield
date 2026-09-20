@@ -18,6 +18,7 @@ Usage:
 """
 from __future__ import annotations
 import argparse, json, os, re, sys, unicodedata
+from collections import deque
 from dataclasses import dataclass, field
 from enum import IntEnum
 from pydantic import BaseModel
@@ -63,6 +64,7 @@ LANG_PACKS = {
             "MEDIUM": "注意してください。公式の電話番号にかけ直して確認してください。",
             "LOW": "大きな危険は見つかりませんでした。不安なら公式番号で確認してください。",
         },
+        "speak": "この通話は詐欺の可能性があります。電話を切ってください。",
         "hotlines": ["#9110", "188"],
     },
     "vi": {
@@ -89,6 +91,7 @@ LANG_PACKS = {
             "MEDIUM": "Cần cảnh giác. Hãy tự gọi lại số chính thức của cơ quan/ngân hàng để xác minh.",
             "LOW": "Chưa thấy dấu hiệu nguy hiểm rõ ràng. Nếu lo lắng, hãy xác minh qua số chính thức.",
         },
+        "speak": "Cuộc gọi này có dấu hiệu lừa đảo. Hãy cúp máy ngay.",
         "hotlines": ["113"],
     },
 }
@@ -160,14 +163,13 @@ def is_reporting(text: str, lang: str) -> bool:
     text = unicodedata.normalize("NFKC", text)
     return any(re.search(p, text, re.IGNORECASE) for p in LANG_PACKS[lang].get("reporting", []))
 
-def rule_score(hits: dict[Stage, list[str]], reporting: bool = False) -> int:
+def rule_score(hits: dict[Stage, list[str]], reporting: bool = False, combos: bool = True) -> int:
     if not hits:
         return 0
     seen = set(hits)
     score = sum(STAGE_WEIGHT[s] for s in seen)
-    for combo, floor in HARD_COMBOS:
-        if combo <= seen:
-            score = max(score, floor)
+    if combos:
+        score = max(score, hard_floor(hits))
     score = min(100, score)
     return min(score, REPORTING_CAP) if reporting else score
 
@@ -208,9 +210,12 @@ class LiveTracker:
     """State for ONE live call. The kill chain unfolds over minutes while each scoring window holds
     ~30 s, so stage hits accumulate for the whole call and the rule score is computed on the
     accumulated set. It can only grow -> stages never go backwards. The noisy per-window LLM verdict
-    is EMA-smoothed and fused like analyze(). Latch: after LATCH_WINDOWS consecutive HIGH updates it
+    is EMA-smoothed and fused like analyze(). Hard combos (final, not vetoable) only count when their
+    links fall within the last HARD_WINDOW updates: "LINE" in minute 1 and "police" in minute 20 of
+    a friendly call must stay a soft, LLM-vetoable signal. Latch: after LATCH_WINDOWS consecutive HIGH updates it
     stays HIGH until reset() (silence timeout = call ended)."""
     LATCH_WINDOWS = 2
+    HARD_WINDOW = 12
     alpha: float = 0.6
     ema: float = 0.0
     conf: float = 0.0
@@ -221,6 +226,7 @@ class LiveTracker:
     reporting: bool = False
     hits: dict[Stage, list[str]] = field(default_factory=dict)
     history: list[float] = field(default_factory=list)
+    recent: deque = field(default_factory=lambda: deque(maxlen=LiveTracker.HARD_WINDOW))
 
     def update(self, window_hits: dict[Stage, list[str]], llm_score: float | None = None,
                llm_stage: int = 0, llm_confidence: float = 1.0, reporting: bool = False) -> float:
@@ -233,8 +239,10 @@ class LiveTracker:
             self.llm_seen = True
             self.ema = self.alpha * llm_score + (1 - self.alpha) * self.ema
             self.conf = self.alpha * llm_confidence + (1 - self.alpha) * self.conf
-        r_score = rule_score(self.hits, self.reporting)
-        hard = bool(hard_floor(self.hits)) and not self.reporting
+        self.recent.append(set(window_hits))
+        near = hard_floor(dict.fromkeys(set().union(*self.recent))) if not self.reporting else 0
+        r_score = max(rule_score(self.hits, self.reporting, combos=False), near)
+        hard = bool(near)
         score = fuse(r_score, self.ema if self.llm_seen else None, self.conf, hard)
         self.max_stage = max(self.max_stage, rule_stage(self.hits) if score >= 40 else 0, llm_stage)
         self.streak = self.streak + 1 if score >= 70 else 0
@@ -249,6 +257,7 @@ class LiveTracker:
         self.latched, self.max_stage, self.reporting = False, 0, False
         self.hits.clear()
         self.history.clear()
+        self.recent.clear()
 
 def analyze(text: str, lang: str = "ja", use_llm: bool = True, verdict: LlmVerdict | None = None,
             bonus: int = 0) -> dict:
