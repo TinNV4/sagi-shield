@@ -21,7 +21,7 @@ from starlette.responses import JSONResponse
 
 log = logging.getLogger("sagi.access")
 WINDOW_S, MAX_CLIENTS = 60, 10_000
-FREE_PATHS = ("/healthz", "/stats", "/family/alerts", "/spike")  # cheap reads: polled by the UI, no model behind them
+FREE_PATHS = ("/health", "/stats", "/family/alerts", "/spike")  # cheap reads: polled by the UI, no model behind them
 _SALT = secrets.token_bytes(16)
 _hits: dict[str, deque] = defaultdict(deque)
 

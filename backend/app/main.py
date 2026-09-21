@@ -74,10 +74,12 @@ def check_lang(lang: str) -> str:
 def raise_to(result: dict, floor: int, lang: str, reason: str, scam_type: str | None = None) -> dict:
     """Apply a rule that sits outside the text engine: lift the score and lead with its reason."""
     if floor > result["risk_score"]:
+        if result["risk_level"] == "LOW":  # the text looked fine, the rule says otherwise: drop "no sign of a scam"
+            result["reasons"] = []
         lv = level(floor)
         result.update(risk_score=floor, risk_level=lv, advice=LANG_PACKS[lang]["advice"][lv])
-        if scam_type and result["scam_type"] in ("safe", "unknown"):
-            result["scam_type"] = scam_type
+        if result["scam_type"] in ("safe", "unknown"):
+            result["scam_type"] = scam_type or "unknown"
     result["reasons"] = ([reason] + [r for r in result["reasons"] if r != reason])[:2]
     return result
 
@@ -88,7 +90,8 @@ def finish(result: dict, flags: list[str], community_hits: int) -> dict:
     return result
 
 
-@app.get("/healthz")
+@app.get("/health")
+@app.get("/healthz", include_in_schema=False)  # local alias; Cloud Run reserves paths ending in "z"
 def healthz():
     return {"ok": True, "llm": use_llm(), "store": type(store).__name__}
 

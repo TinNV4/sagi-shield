@@ -127,6 +127,17 @@ def test_report_needs_consent_and_feeds_community_hits_and_stats(client):
     assert s["by_type"] == {"fake_police": 2} and s["by_region"] == {"長野県": 2} and s["trend"][0]["count"] == 2
 
 
+def test_rule_verdict_never_keeps_a_safe_label(client, monkeypatch):
+    # seen on Cloud Run: Web Risk hit -> HIGH, but scam_type stayed "safe" next to "no sign of a scam"
+    monkeypatch.setenv("USE_WEBRISK", "1")
+    monkeypatch.setattr(services, "webrisk_threats", lambda url: ["SOCIAL_ENGINEERING"])
+    monkeypatch.setattr(main, "analyze", lambda *a, **k: {"risk_score": 2, "risk_level": "LOW", "scam_type": "safe", "stage": 0,
+                                                          "reasons": ["no sign of a scam"], "advice": "", "hotlines": []})
+    out = client.post("/check", json={"lang": "ja", "text": "見てください", "url": "http://bad.example"}).json()
+    assert out["risk_level"] == "HIGH" and out["scam_type"] == "unknown" and out["reasons"] == [main.MSG["webrisk"]["ja"]]
+    assert client.get("/health").json()["ok"] and client.get("/healthz").json()["ok"]
+
+
 def test_katakana_long_vowel_survives_normalisation(client):
     # regression: every "ー" used to become "-", so キャッシュカード / マネーロンダリング never matched through /check
     from input_layer import normalize_text

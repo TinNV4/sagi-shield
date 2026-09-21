@@ -107,7 +107,7 @@ CHANNEL_HINTS = {  # scripted fallback only; the agent decides by itself
 
 
 def new_state() -> dict:
-    return {"channel": None, "done": [], "draft": "", "ui_lang": "ja", "market": "ja", "turns": []}  # turns: [[role, masked text]]
+    return {"channel": None, "done": [], "draft": "", "ui_lang": "ja", "market": "ja", "turns": []}  # turns: [{role, text}], masked (Firestore has no nested arrays)
 
 
 def checklist(state: dict, market: str, ui_lang: str) -> list[dict]:
@@ -158,7 +158,7 @@ def save_police_statement(statement: str, tool_context) -> dict:
 
 
 def _transcript(turns: list) -> str:
-    return "\n".join(f"{role}: {text}" for role, text in turns) or "(nothing yet)"
+    return "\n".join(f"{t['role']}: {t['text']}" for t in turns) or "(nothing yet)"
 
 
 def _instruction(ctx) -> str:  # callable -> ADK does not run {placeholder} templating on it
@@ -266,7 +266,7 @@ async def recovery(body: RecoveryIn):
             reply, state = await asyncio.wait_for(run_agent(message, state), AGENT_TIMEOUT_S)
         except Exception:
             reply = scripted_reply(message, state)
-        state["turns"] = (state["turns"] + [["user", message[:MAX_TURN_CHARS]], ["assistant", reply[:MAX_TURN_CHARS]]])[-MAX_TURNS:]
+        state["turns"] = (state["turns"] + [{"role": "user", "text": message[:MAX_TURN_CHARS]}, {"role": "assistant", "text": reply[:MAX_TURN_CHARS]}])[-MAX_TURNS:]
     await asyncio.to_thread(STORE.save_recovery, body.session_id, state)
     out = {"reply": reply, "checklist": checklist(state, body.lang, state["ui_lang"])}
     if state.get("draft"):

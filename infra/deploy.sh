@@ -21,4 +21,4 @@ gcloud run deploy "$SERVICE" --project "$PROJECT" --region "$REGION" --source . 
 
 URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(status.url)')"
 echo "Deployed: $URL"
-curl -fsS "$URL/healthz" && echo
+curl -fsS "$URL/health" && echo

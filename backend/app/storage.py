@@ -108,6 +108,9 @@ class MemoryStore:
         return dict(doc) if doc and doc["expires_at"] > time.time() else None
 
     def save_recovery(self, session_id: str, data: dict) -> None:
+        for value in data.values():  # fail here, in tests, on what Firestore would refuse in production
+            if isinstance(value, list) and any(isinstance(item, (list, tuple)) for item in value):
+                raise ValueError("Firestore does not support nested arrays")
         self.recovery.pop(session_id, None)
         self.recovery[session_id] = {**data, "expires_at": time.time() + RECOVERY_TTL_S}
         while len(self.recovery) > MAX_RECOVERY:

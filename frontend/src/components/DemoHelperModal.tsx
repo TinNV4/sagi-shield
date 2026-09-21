@@ -59,7 +59,7 @@ export const DemoHelperModal: React.FC<DemoHelperModalProps> = ({
     setHealthStatus((prev) => ({ ...prev, loading: true }));
     try {
       if (!API_BASE) throw new Error('VITE_API_BASE is not set');
-      const res = await fetch(`${API_BASE}/healthz`);
+      const res = await fetch(`${API_BASE}/health`);
       if (res.ok) {
         const data = await res.json();
         setHealthStatus({

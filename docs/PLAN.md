@@ -268,10 +268,10 @@ gantt
 - [ ] Confirm on the Hack2skill dashboard / Discord which dates are binding (10-04 vs 10-11 / 10-18) and write them here
 - [x] `git init` + first commit (2026-09-21)
 - [ ] Push to GitHub (private now, public at submission). Commit history = proof of fresh code
-- [ ] GCP project; enable Agent Platform (Vertex AI) API, Speech-to-Text, Cloud Run, Firestore, Web Risk, Secret Manager, FCM
+- [x] GCP project `sagi-shield-560661` via `infra/setup.ps1`: Agent Platform, Cloud Run, Firestore (Tokyo, TTL on `recovery_sessions.expires_at`), Web Risk, Secret Manager, least-privilege service account `sagi-api`. Not enabled yet: Speech-to-Text (opt-in fallback only), FCM
 - [ ] Re-verify model IDs in section 6 against the Agent Platform model pages; set `.env`; load Gemini API + ADK skills into Antigravity
 - [ ] `pip install -r backend/requirements.txt`; run `risk_engine.py --no-llm` smoke test, then once **with** the LLM to prove the model ID and `global` location work
-- [ ] **Deploy a hello-world FastAPI + WebSocket echo to Cloud Run now**: request timeout 3600 s (the hard max — client must reconnect), `min-instances=1`, session affinity on, HTTP/2 end-to-end **off**. Test WS from a phone.
+- [x] Real API on Cloud Run (2026-09-21): `https://sagi-shield-api-209791011329.asia-northeast1.run.app`, timeout 3600 s, session affinity, `min-instances=0` until demo week (then 1). `/ws/live` verified from a script: scripted fake-police call reaches latched HIGH + `speak` on line 5 (~12 s). Still to check: client reconnect after the 60-min cut
 
 ### P0.5 · Live spike + STT bake-off (9/20–9/21) — **highest risk, do first**
 - [ ] `spike/live_spike.py`: ugly end-to-end mic → WS → STT → rules → printed score. No UI.
@@ -287,7 +287,7 @@ gantt
 - [x] `VITE_API_BASE` set → RealApi, empty → MockApi + DEMO badge. Verified in a browser against the local API: onboarding → Quick Check → result screen (rules only). **Not yet verified in a browser:** Live Guard with a microphone, Family/Guardian screens, PWA install
 
 ### P2 · `/check` + `/precheck` API (9/22–9/24) — `[~]` = code and offline tests done, needs a run with real credentials
-- [x] `backend/app/main.py`: FastAPI `/check`, `/precheck`, `/report`, `/stats`, `/healthz`, CORS; `storage.py` (memory / Firestore)
+- [x] `backend/app/main.py`: FastAPI `/check`, `/precheck`, `/report`, `/stats`, `/health` (Cloud Run reserves `/healthz`), CORS; `storage.py` (memory / Firestore)
 - [x] Wire `build_evidence()` → `analyze()`; add evidence-flag bonus (intl number +10, lookalike URL +15)
 - [x] Rework `rule_score` (section 6.2) + regression tests from the 2026-09-19 smoke cases — done 2026-09-19
 - [x] v3 fusion rule in `analyze()` / `LiveTracker`: hard combos are final; otherwise `score = c·LLM + (1−c)·rules` (c = LLM confidence). Tested with injected verdicts only
@@ -296,7 +296,7 @@ gantt
 - [~] Audio file path: `gemini-3.5-transcribe` → transcript → engine. Request shape accepted by the API (tone-only WAV → empty transcript); **not yet tried with real speech**
 - [~] Web Risk lookup (`USE_WEBRISK=1`) + bank lookalike list (`BRANDS` in `input_layer.py`); community hit count by phone HMAC. Firestore backend and Web Risk call unverified
 - [x] Phone numbers: HMAC-SHA256 keyed by `HASH_KEY` (mounted from Secret Manager in `infra/deploy.sh`), hashed on E.164
-- [~] `backend/Dockerfile` (with `ffmpeg`) + `infra/deploy.sh` written, **never built or deployed** (no docker / gcloud on the dev machine yet)
+- [x] `backend/Dockerfile` + `infra/deploy.sh` built and deployed through Cloud Build. Found on the way: Cloud Run reserves `/healthz` → `/health`; repeated `--set-env-vars` keeps only the last; Firestore refuses nested arrays
 
 **First real LLM run (2026-09-21, free-tier API key, `gemini-3.8-flash`, `thinking_level=low`):** fake police 90 HIGH · real police lost-property call 3 LOW · TV news about scams 3 LOW · injection + hard combo 90 HIGH · injection without hard combo 93 HIGH · bank reminder 2 LOW · ore-ore the rules miss 90 HIGH. **Latency 3–15 s per call and frequent 503 "high demand"** (one retry added) → fine for Quick Check, too slow for the live path: try `gemini-3.5-flash-lite` for tier-1 live scoring, measure p50/p95 in P5.
 
@@ -314,14 +314,14 @@ gantt
 - [ ] FCM push on HIGH: `notifier.py` written, **never run** (needs a Firebase project + web push token from the UI). Demo guardian on **Android or desktop Chrome** — iOS web push needs Home Screen install and is known to drop subscriptions
 - [x] Guardian view: alert stored before any push; UI polls `/family/alerts` every 5 s; live HIGH and "Notify my family" both create alerts; summary = first reason sentence (Gemini-written when the LLM ran), never the transcript. Firestore realtime listener → Milestone B
 - [ ] `/report` opt-in → Firestore; `/stats` aggregates; seed ~200 synthetic reports for demo (label them as synthetic in the UI)
-- [x] F6 recovery agent (`app/agent.py`, google-adk 2.9): three state-changing tools (payment channel / step done / police statement), numbers masked before the model, scripted fallback when the model is down. Stateless per instance: state + masked turns live in the store (`recovery_sessions`, 24 h; **set a Firestore TTL policy on `expires_at` at deploy**). Real run 2026-09-21 (free tier): channel + statement tools called correctly, 14–26 s per turn; `mark_step_done` **not yet seen with the real model** (quota ran out)
+- [x] F6 recovery agent (`app/agent.py`, google-adk 2.9): three state-changing tools (payment channel / step done / police statement), numbers masked before the model, scripted fallback when the model is down. Stateless per instance: state + masked turns live in the store (`recovery_sessions`, 24 h; **set a Firestore TTL policy on `expires_at` at deploy**). Real run 2026-09-21 (free tier): channel + statement tools called correctly, 14–26 s per turn; all three tools verified on Cloud Run (Agent Platform), state round-trips through Firestore; ~22 s per turn - try `gemini-3.5-flash-lite` for the agent
 
 ### P5 · Eval & freeze A (9/30)
 - [ ] `gen_dataset.py gen` → 100 JP + 100 VN synthetic (40% hard negatives) — *dev set*
 - [ ] Held-out real set: police transcripts (scam, private) + real benign set + injection samples — *test set, reported in deck*
 - [ ] Ablation table: **rules-only / LLM-only / hybrid** on the test set
 - [ ] Targets: recall ≥ 90% on real scam transcripts; **false-alarm rate ≤ 1 per 20 benign calls** (live, per call — not per window); 0 latches in the TV test; `/check` p50 < 4 s; live alert < 10 s after the trigger phrase
-- [ ] PII masking in logs, rate limit, error states
+- [~] `app/guard.py`: per-client rate limit on HTTP + WS handshakes, access log without bodies / query strings / IPs (uvicorn's log off). Open: UI error states (429, offline), **budget alert on the billing account**
 - [ ] **FEATURE FREEZE A at end of day.** Only bug fixes until 10-04.
 
 ### P6 · Ship Milestone A (10/1–10/2, buffer 10/3–10/4)

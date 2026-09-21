@@ -92,14 +92,14 @@ def test_state_lives_in_the_store_not_in_the_process(client, monkeypatch):
     seen = []
 
     async def fake_agent(message, state):
-        seen.append([list(t) for t in state["turns"]])
+        seen.append(list(state["turns"]))
         return "はい。", state
 
     monkeypatch.setenv("USE_LLM", "1")
     monkeypatch.setattr(agent, "run_agent", fake_agent)
     ask(client, "090-1234-5678 から電話がありました")
     ask(client, "次は？")
-    assert seen[0] == [] and seen[1][0][0] == "user" and seen[1][1] == ["assistant", "はい。"]
+    assert seen[0] == [] and seen[1][0]["role"] == "user" and seen[1][1] == {"role": "assistant", "text": "はい。"}
     saved = main.store.get_recovery("sess-0123456789abcdef")
     assert "1234-5678" not in str(saved) and len(saved["turns"]) == 4  # only masked text is ever persisted
 
