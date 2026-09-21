@@ -213,6 +213,16 @@ class RealApi implements SagiApi {
     // decides when a masked window may go to Gemini; while offline, lines are dropped, not queued.
     const wsUrl = `${this.baseUrl.replace(/^http/, 'ws')}/ws/live?lang=${apiLang(lang)}&mode=${mode}&input=text` +
       (getFamilyId() ? `&family_id=${encodeURIComponent(getFamilyId()!)}` : '');
+    // Cross-call memory lives on this device: a flag + expiry, never any text. A set-up call ("my number changed")
+    // asks for nothing; the money request comes a day later, and the server must know the first call happened.
+    const PRECURSOR_KEY = 'sagi_precursor_until';
+    const priorParam = () => {
+      try {
+        return Number(localStorage.getItem(PRECURSOR_KEY) || 0) > Date.now() ? '&prior=precursor' : '';
+      } catch {
+        return '';
+      }
+    };
     let ws: WebSocket | null = null;
     let isClosed = false;
     let reconnectDelay = 1000;
@@ -220,7 +230,7 @@ class RealApi implements SagiApi {
 
     const connect = () => {
       if (isClosed) return;
-      ws = new WebSocket(wsUrl);
+      ws = new WebSocket(wsUrl + priorParam());
       ws.onopen = () => {
         reconnectDelay = 1000;
         callbacks.onStatus('connected');
@@ -230,7 +240,14 @@ class RealApi implements SagiApi {
         try {
           const data: LiveWsServerMessage = JSON.parse(event.data);
           if ('event' in data && data.event === 'session_reset') callbacks.onReset();
-          else if ('risk_level' in data) callbacks.onRisk(data);
+          else if ('risk_level' in data) {
+            if ((data as {precursor?: boolean}).precursor) {
+              try {
+                localStorage.setItem(PRECURSOR_KEY, String(Date.now() + 48 * 3600 * 1000));
+              } catch {}
+            }
+            callbacks.onRisk(data);
+          }
         } catch (e) {
           console.error('WS parse error:', e);
         }

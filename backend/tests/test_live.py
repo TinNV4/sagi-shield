@@ -90,3 +90,26 @@ def test_unsupported_modes_are_refused(client):
         with pytest.raises(Exception):
             with client.websocket_connect(f"/ws/live?{q}") as ws:
                 ws.receive_json()
+
+
+def test_periodic_gate_consults_the_model_even_when_the_rules_are_silent(client, monkeypatch):
+    # real recordings: a call the model scores 97 gets 0-50 from the rules - a rules-only gate never asks the judge
+    asked = []
+
+    def verdict(text, lang, backend=None, model=None):
+        asked.append(text)
+        return live.engine.LlmVerdict(stage=5, scam_type="family_impersonation", confidence=0.9, reasons=["x"], risk=95)
+
+    monkeypatch.setenv("USE_LLM", "1")
+    monkeypatch.setenv("LIVE_PERIODIC_S", "0")
+    monkeypatch.setattr(live.engine, "llm_verdict", verdict)
+    chat = ["もしもし、久しぶり。", "元気にしてた？", "ちょっと相談があってね。", "会社でトラブルがあって、助けてほしいんだ。", "詳しくはこれから話すよ。"]
+    with client.websocket_connect("/ws/live?lang=ja&gate=rules") as ws:
+        for line in chat:
+            say(ws, line)
+    assert asked == []                                  # strict privacy: nothing left the rules, nothing sent
+    with client.websocket_connect("/ws/live?lang=ja") as ws:
+        for line in chat:
+            say(ws, line)
+        levels = [ws.receive_json()["risk_level"] for _ in range(len(asked))]
+    assert asked and "<PHONE>" not in asked[0] and levels    # the masked window reached the judge on the clock

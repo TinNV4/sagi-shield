@@ -22,7 +22,7 @@ from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core"))
 from input_layer import URL_RE, analyze_phone, build_evidence, normalize_text, phone_hmac, prepare_image  # noqa: E402
-from risk_engine import LANG_PACKS, analyze, level  # noqa: E402
+from risk_engine import LANG_PACKS, analyze, level, precursor_hits as engine_precursor  # noqa: E402
 
 from . import services  # noqa: E402
 from .agent import router as agent_router  # noqa: E402
@@ -55,6 +55,8 @@ MSG = {
                  "vi": "Số này đã bị {n} người dùng khác báo cáo là lừa đảo."},
     "phone_no_reports": {"ja": "この番号への報告はまだありません。安全という意味ではありません。",
                          "vi": "Chưa có báo cáo nào về số này. Điều đó không có nghĩa là số này an toàn."},
+    "precursor": {"ja": "「番号が変わった」「風邪で声が違う」は、後日お金を求める詐欺の前ぶれによくある言い方です。以前から知っている番号にかけ直して確認してください。",
+                  "vi": "\"Con đổi số rồi\", \"con bị cảm nên giọng khác\" là lời mở đầu quen thuộc của kẻ gian trước khi hỏi tiền. Hãy gọi lại số cũ bạn đã lưu để xác nhận."},
     "stranger": {"ja": "知らない人から頼まれた支払いは、家族や公式窓口に確認してからにしてください。",
                  "vi": "Người lạ yêu cầu chuyển tiền: hãy hỏi người thân hoặc kênh chính thức trước."},
 }
@@ -175,6 +177,11 @@ async def check(request: Request):
             if threats:
                 flags += [f"url_webrisk_{t}" for t in threats]
                 raise_to(result, 90, lang, MSG["webrisk"][lang])
+    if len(engine_precursor(ev.text, lang)) >= 2 and result["risk_level"] == "LOW":
+        # not a verdict - a set-up call asks for nothing - but the one piece of advice that defeats it
+        flags.append("precursor_call")
+        result["reasons"] = ([MSG["precursor"][lang]] + result["reasons"])[:2]
+        result["scam_type"] = "unknown" if result["scam_type"] == "safe" else result["scam_type"]
     # URL shape is evidence even when no model looked at it (flags come from input_layer; the URL is never fetched)
     if "url_lookalike" in ev.flags:
         raise_to(result, 70, lang, MSG["url_lookalike"][lang], "fake_billing")

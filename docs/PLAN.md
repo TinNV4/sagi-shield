@@ -301,7 +301,7 @@ gantt
 **First real LLM run (2026-09-21, free-tier API key, `gemini-3.8-flash`, `thinking_level=low`):** fake police 90 HIGH · real police lost-property call 3 LOW · TV news about scams 3 LOW · injection + hard combo 90 HIGH · injection without hard combo 93 HIGH · bank reminder 2 LOW · ore-ore the rules miss 90 HIGH. **Latency 3–15 s per call and frequent 503 "high demand"** (one retry added) → fine for Quick Check, too slow for the live path: try `gemini-3.5-flash-lite` for tier-1 live scoring, measure p50/p95 in P5.
 
 ### P3 · Live Guard hardening (9/25–9/27)
-- [x] `/ws/live` text mode: rolling window, rules per line, LLM only from MEDIUM (masked window, ≤ 1 call / 5 s, off the receive loop), silence-timeout + manual reset, latched HIGH, `speak` once (offline tests, LLM stubbed)
+- [x] `/ws/live` text mode: rolling window, rules per line, LLM on a ~20 s clock (`gate=periodic`, default since real recordings showed rules stay below MEDIUM on natural speech) or only from MEDIUM (`gate=rules`), masked window, off the receive loop, silence-timeout + manual reset, latched HIGH, `speak` once (offline tests, LLM stubbed)
 - [ ] Client WS auto-reconnect; (fallback only) `input=audio` with STT session rotation
 - [ ] Rules every chunk, Gemini (`thinking_level="low"`) every 5 s or on rule hit; feed `LiveTracker.update(window_hits, llm_score, llm_stage, reporting)`; call `reset()` on the silence timeout; add the 2-window latch
 - [ ] Frontend: VAD gate in `audioCapture.js`, Screen Wake Lock, kiosk mode (auto-start on load, auto-restart on error)

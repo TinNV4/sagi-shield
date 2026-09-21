@@ -13,7 +13,7 @@ A tablet or an old phone sits next to the landline. It listens to speaker calls,
 
 | Feature | How |
 |---|---|
-| **Live Guard** | Speech-to-text **on the device** (Web Speech API, `processLocally`). Only finalized, number-masked text goes to the server: rules on every line, Gemini only once the rules reach MEDIUM. HIGH latches after two consecutive windows → full-screen alarm + spoken alert + family alert. |
+| **Live Guard** | Speech-to-text **on the device** (Web Speech API, `processLocally`). Only finalized, number-masked text goes to the server: rules on every line, and the masked rolling window goes to Gemini about every 20 s (or, with `gate=rules`, only once the rules reach MEDIUM). A set-up call ("my number changed, I have a cold") is remembered **on the device** for 48 h, so the money request that follows a day later raises the alarm. HIGH latches after two consecutive windows → full-screen alarm + spoken alert + family alert. |
 | **Quick Check** | Text, screenshot (Gemini vision: a "warrant" or police ID sent by chat is HIGH by rule), audio file (`gemini-3.5-transcribe`, Chirp 3 fallback), phone number (overseas caller, community reports), link (URL shape + Web Risk; the link is never opened). |
 | **Before You Pay** | Three questions before a transfer: who asked, who receives, why. "Police asked me to move my savings" is HIGH by rule. |
 | **Recovery agent** | "I already paid": an ADK 2.x agent walks the victim through the first hour (freeze the transfer, police, evidence, family) and drafts the police statement. Steps and phone numbers are server-owned - the model cannot invent a hotline. |
@@ -43,7 +43,7 @@ never used for tuning ([docs/EVAL.md](docs/EVAL.md) has the method, the dev / te
 ## Privacy by design
 
 1. **Tier 0** - audio stays on the device; rules run on masked text.
-2. **Tier 1** - the masked rolling window (phone / account numbers replaced) reaches Gemini only from MEDIUM, at most every 5 s.
+2. **Tier 1** - the masked rolling window (phone / account numbers replaced) reaches Gemini about every 20 s during a call. Real police recordings showed why: natural speech rarely matches rule patterns, so a rules-only gate never consulted the model on real calls. Strict mode (`gate=rules`) keeps the old behaviour: text leaves the rules only from MEDIUM.
 3. Nothing is stored from a call. Reports keep an HMAC of the number (key in Secret Manager), never the number.
 4. Transcripts, OCR text and URLs are untrusted data: structured output, no instructions followed, URLs never fetched.
 5. The access log has no bodies, query strings or IP addresses.
@@ -52,7 +52,7 @@ never used for tuning ([docs/EVAL.md](docs/EVAL.md) has the method, the dev / te
 
 ```
 PWA (React + Vite, served by the API)
-  ├─ on-device STT ──text──▶ WS /ws/live ─▶ rules ─▶ Gemini 3.5 Flash-Lite (from MEDIUM)
+  ├─ on-device STT ──text──▶ WS /ws/live ─▶ rules ─▶ Gemini 3.5 Flash-Lite (every ~20 s; 3.8 Flash confirms an alarm the rules cannot back)
   ├─ POST /check  ─▶ input layer (mask, URL flags, EXIF strip) ─▶ rules + Gemini
   │                  ├─ image  ─▶ Gemini 3.8 Flash (vision)
   │                  ├─ audio  ─▶ gemini-3.5-transcribe ─▶ Chirp 3 fallback
