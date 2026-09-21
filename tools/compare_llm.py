@@ -24,6 +24,8 @@ CASES = [  # (name, lang, expected level, text) - the hard ones: rules alone get
     ("family_real", "ja", "LOW", "お母さん、由美だよ。来月の旅行の代金、立て替えてくれた分を明日そっちの口座に振り込んでおくね。ありがとう。"),
     ("vi_news", "vi", "LOW", "Bản tin: công an cảnh báo thủ đoạn giả danh cán bộ công an gọi điện thông báo tài khoản liên quan rửa tiền rồi yêu cầu chuyển tiền. Người dân cần cảnh giác."),
     ("vi_investment", "vi", "HIGH", "Chị ơi em bên sàn đầu tư quốc tế, lãi 30% một tuần cam kết không rủi ro. Chị tải app qua link em gửi Zalo rồi chuyển khoản 50 triệu để giữ suất hôm nay nhé, đừng nói với ai kẻo hết suất."),
+    ("vi_deepfake_video", "vi", "HIGH", "Mẹ ơi con gọi video cho mẹ thấy mặt con rồi đó, tại sóng yếu quá nên bị ngắt. Con đang kẹt tiền viện phí cho bạn, mẹ chuyển gấp 30 triệu vào số tài khoản bạn con nhé, con nhắn số ngay đây. Mẹ đừng gọi lại, máy con sắp hết pin."),
+    ("ja_deepfake_video", "ja", "HIGH", "さっきビデオ通話で顔見せたでしょ、電波が悪くて切れちゃった。事故の示談金で今日中に150万円いるんだ。この口座に振り込んで。電話はしないで、今は出られないから。"),
     ("vi_bank_otp", "vi", "HIGH", "Em là nhân viên ngân hàng, thẻ của anh đang bị trừ tiền bất thường. Anh đọc giúp em mã OTP vừa gửi về máy để em khóa giao dịch ngay ạ."),
 ]
 for call in json.loads((ROOT / "tools" / "test_calls.json").read_text(encoding="utf-8")):

@@ -45,7 +45,7 @@ show("LINK tab: official site", {"lang": "ja", "url": "https://www.npa.go.jp/", 
 show("SCREENSHOT tab: fake arrest warrant", {"lang": "ja"}, {"image": ("warrant.png", picture(["逮 捕 状", "被疑者 山田 花子", "罪名 詐欺・資金洗浄", "東京地方裁判所 裁判官"]), "image/png")})
 show("SCREENSHOT tab: harmless chat", {"lang": "ja"}, {"image": ("chat.png", picture(["お母さん、今日の夕飯なに？", "カレーだよ。7時に帰ってきてね", "了解！"]), "image/png")})
 # report a number three times, then check it again -> community signal
-for _ in range(3):
+for n in range(3):  # three different reporters: community_hits counts distinct ones
     urllib.request.urlopen(urllib.request.Request(BASE + "/report", method="POST", headers={"Content-Type": "application/json"},
-        data=json.dumps({"scam_type": "fake_police", "phone": "+81 50 5555 0142", "keywords": ["警察"], "prefecture": "東京都", "consent": True}).encode()), timeout=30).read()
+        data=json.dumps({"scam_type": "fake_police", "phone": "+81 50 5555 0142", "keywords": ["警察"], "prefecture": "東京都", "consent": True, "reporter_id": f"check-tabs-{n}"}).encode()), timeout=30).read()
 show("PHONE tab: a number the community reported 3x", {"lang": "ja", "phone": "+81 50 5555 0142"})

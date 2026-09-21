@@ -336,6 +336,7 @@ gantt
 ### Milestone B (10/5–10/17) — only if 10-18 is confirmed
 - [ ] B1 Field tests: real landline + tablet in a living room, 3+ people, TV on; tune thresholds; fix what breaks
 - [ ] B2 F6 recovery agent (if not done) → VN Live Guard → BigQuery/Looker, in that order
+- [ ] **Roadmap - deepfake video calls:** cloned face + voice of a relative in a short video call that drops "because of weak signal", then a chat message asking for money (the five signs published by Vietnam's Authority of Information Security). Today: awareness card in the app (`DeepfakeNotice`, How-it-works + results of type family_impersonation), a home tip, and the judge's family_impersonation playbook covers the story when the user pastes or retells it. Next: on-device liveness / lip-sync cues on a shared video frame, the "call back on the saved number" flow as a one-tap action, guardian confirmation ("did you just video-call mom?")
 - [ ] B3 Re-record the video with the final build; tighten the deck with field-test numbers
 - [ ] **Freeze B on 10-12. Submit by 10-16/17, not in the last hour.**
 

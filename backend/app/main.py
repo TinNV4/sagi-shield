@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core"))
-from input_layer import URL_RE, analyze_phone, build_evidence, normalize_text, prepare_image  # noqa: E402
+from input_layer import URL_RE, analyze_phone, build_evidence, normalize_text, phone_hmac, prepare_image  # noqa: E402
 from risk_engine import LANG_PACKS, analyze, level  # noqa: E402
 
 from . import services  # noqa: E402
@@ -29,7 +29,7 @@ from .agent import router as agent_router  # noqa: E402
 from .guard import GuardMiddleware  # noqa: E402
 from .live import router as live_router  # noqa: E402
 from .notifier import alert_family  # noqa: E402
-from .storage import STORE  # noqa: E402
+from .storage import STORE, _today as storage_today  # noqa: E402
 
 MAX_IMAGE, MAX_AUDIO, MAX_TEXT = 8 * 2**20, 20 * 2**20, 20_000
 FLAG_BONUS = {"international_number": 10, "url_lookalike": 15}
@@ -220,14 +220,20 @@ class Report(BaseModel):
     prefecture: str | None = Field(default=None, max_length=40)
     consent: bool
     lang: str = "ja"
+    reporter_id: str | None = Field(default=None, max_length=64)  # random id kept by the app; never an account
 
 
 @app.post("/report")
-def report(body: Report):
+def report(body: Report, request: Request):
     if not body.consent:
         raise HTTPException(400, "consent is required")
     info = analyze_phone(body.phone, check_lang(body.lang)) if body.phone else None
-    store.add_report(body.scam_type, info.hash if info else None, [k[:40] for k in body.keywords], body.prefecture)
+    # community_hits counts distinct reporters, so one person cannot flag an honest number alone. The reporter key is
+    # an HMAC of the app's random id; without one, of address + date (rotates daily: not a persistent identifier).
+    forwarded = request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+    origin = body.reporter_id or f"{forwarded or (request.client.host if request.client else '')}:{storage_today()}"
+    store.add_report(body.scam_type, info.hash if info else None, [k[:40] for k in body.keywords], body.prefecture,
+                     reporter=phone_hmac("reporter:" + origin))
     return {"ok": True}
 
 

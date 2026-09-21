@@ -31,6 +31,7 @@ export const HomeScreen: React.FC<HomeScreenProps> = ({onNavigate}) => {
     t('home.tips.1'),
     t('home.tips.2'),
     t('home.tips.3'),
+    t('home.tips.4'),
   ];
   const [tipIndex, setTipIndex] = useState(0);
 

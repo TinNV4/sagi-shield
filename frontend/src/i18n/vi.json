@@ -47,7 +47,8 @@
       "Công an không bao giờ gửi lệnh bắt hoặc làm việc qua Zalo, Messenger, video call.",
       "Mọi cuộc gọi bảo 'tài khoản dính án ma túy/rửa tiền' đều là lừa đảo 100%.",
       "Cơ quan thuế và bảo hiểm xã hội không bao giờ yêu cầu ra cây ATM để nhận tiền hoàn lại.",
-      "Nếu người xưng là con cháu bảo đổi số và cần tiền gấp, hãy gọi lại số cũ để xác minh."
+      "Nếu người xưng là con cháu bảo đổi số và cần tiền gấp, hãy gọi lại số cũ để xác minh.",
+      "Thấy mặt người thân trong cuộc gọi video vẫn có thể là deepfake. Cúp máy, gọi lại số đã lưu."
     ],
     "install_app": "Cài đặt ứng dụng Sagi Shield",
     "ios_modal_title": "Cài đặt trên iPhone / iPad",
@@ -598,5 +599,18 @@
     "choice_individual_badge": "Dành cho điện thoại cá nhân",
     "choice_individual_desc": "Đầy đủ tính năng trên điện thoại cá nhân: bật Live Guard khi cần, Kiểm tra nhanh tin nhắn/ảnh/link đáng ngờ, Danh sách kiểm tra trước khi chuyển tiền và mạng lưới bảo vệ gia đình.",
     "choice_individual_btn": "Use as an individual"
+  },
+  "deepfake": {
+    "title": "Cảnh giác cuộc gọi video deepfake",
+    "intro": "Kẻ gian dùng AI để giả khuôn mặt và giọng nói của người thân, bạn bè trong cuộc gọi video rồi hỏi vay tiền gấp. Thấy mặt quen chưa chắc đã là người quen.",
+    "signs": [
+      "Cuộc gọi rất ngắn, chỉ vài giây.",
+      "Khuôn mặt ít cảm xúc; tư thế lúng túng, thiếu tự nhiên.",
+      "Màu da lạ, ánh sáng kỳ quặc, hình ảnh trông giả.",
+      "Tiếng không khớp với hình, nhiều tạp âm hoặc không có tiếng.",
+      "Ngắt máy giữa chừng, viện cớ mất sóng hay sóng yếu."
+    ],
+    "action": "Bình tĩnh, cúp máy và gọi lại số bạn đã lưu từ trước. Đừng chuyển tiền chỉ vì một cuộc gọi video.",
+    "source": "Theo khuyến cáo 5 dấu hiệu nhận biết của Cục An toàn thông tin. Sagi Shield hiện chưa phân tích hình ảnh cuộc gọi video."
   }
 }

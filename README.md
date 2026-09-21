@@ -35,6 +35,11 @@ never used for tuning ([docs/EVAL.md](docs/EVAL.md) has the method, the dev / te
 | alarm (HIGH) | rules only | 29.4% | 0.0% |
 | alarm (HIGH) | **rules + Gemini** | **91.2%** | **0.0%** |
 
+## Roadmap
+
+- **Deepfake video calls** (a cloned face and voice of a relative asking for money): today an awareness card and the judge's playbook; next, on-device liveness cues and a one-tap "call back on the saved number" flow with guardian confirmation.
+- Bank-embedded 振込前チェック API, Vietnamese Live Guard at full parity, real held-out evaluation with police-published calls, fine-tuning once consented real data exists.
+
 ## Privacy by design
 
 1. **Tier 0** - audio stays on the device; rules run on masked text.

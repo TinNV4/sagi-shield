@@ -12,6 +12,7 @@ import {
   Sparkles,
   Zap,
 } from 'lucide-react';
+import {DeepfakeNotice} from '../components/DeepfakeNotice';
 import {useI18n} from '../i18n';
 
 interface HowItWorksScreenProps {
@@ -127,6 +128,9 @@ export const HowItWorksScreen: React.FC<HowItWorksScreenProps> = ({onBack}) => {
           </span>
         </div>
       </div>
+
+      {/* Video calls are not analyzed yet: awareness instead of detection */}
+      <DeepfakeNotice />
     </div>
   );
 };

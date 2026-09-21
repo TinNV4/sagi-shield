@@ -55,12 +55,15 @@ class MemoryStore:
         self.alerts: dict[str, list[dict]] = {}
         self.recovery: dict[str, dict] = {}  # insertion-ordered: oldest first
 
-    def add_report(self, scam_type: str, phone_hash: str | None, keywords: list[str], prefecture: str | None) -> None:
+    def add_report(self, scam_type: str, phone_hash: str | None, keywords: list[str], prefecture: str | None,
+                   reporter: str | None = None) -> None:
         self.reports.append({"scam_type": scam_type, "phone_hash": phone_hash, "keywords": keywords[:10],
-                             "prefecture": prefecture, "date": _today()})
+                             "prefecture": prefecture, "date": _today(), "reporter": reporter})
 
     def count_phone(self, phone_hash: str) -> int:
-        return sum(1 for r in self.reports if r["phone_hash"] == phone_hash)
+        """Distinct reporters of this number (reports without a reporter key count once each)."""
+        mine = [r for r in self.reports if r["phone_hash"] == phone_hash]
+        return len({r.get("reporter") or id(r) for r in mine})
 
     def record_check(self, risk_level: str) -> None:
         self.checks["total"] += 1
@@ -123,13 +126,14 @@ class FirestoreStore:
         self.fs = firestore
         self.db = firestore.Client()
 
-    def add_report(self, scam_type, phone_hash, keywords, prefecture) -> None:
-        self.db.collection("reports").add({"scam_type": scam_type, "phone_hash": phone_hash,
-                                           "keywords": keywords[:10], "prefecture": prefecture, "date": _today()})
+    def add_report(self, scam_type, phone_hash, keywords, prefecture, reporter=None) -> None:
+        self.db.collection("reports").add({"scam_type": scam_type, "phone_hash": phone_hash, "keywords": keywords[:10],
+                                           "prefecture": prefecture, "date": _today(), "reporter": reporter})
 
     def count_phone(self, phone_hash: str) -> int:
-        q = self.db.collection("reports").where(filter=self.fs.FieldFilter("phone_hash", "==", phone_hash))
-        return int(q.count().get()[0][0].value)
+        """Distinct reporters of this number (capped read: beyond 200 reports the answer is "many" either way)."""
+        q = self.db.collection("reports").where(filter=self.fs.FieldFilter("phone_hash", "==", phone_hash)).limit(200)
+        return len({(d.to_dict().get("reporter") or d.id) for d in q.stream()})
 
     def record_check(self, risk_level: str) -> None:
         inc = {"total": self.fs.Increment(1)}

@@ -84,3 +84,16 @@ python core/gen_dataset.py ablation --datasets eval/ja_final.jsonl eval/vi_final
 ```
 
 A second, hand-written check of 15 hard cases (news reports, prompt injection, keyword-free ore-ore, Vietnamese OTP / investment scams) is in `tools/compare_llm.py`: 15/15 on Cloud Run, median 1.3 s.
+
+## After speech recognition (TTS → transcription → judge)
+
+40 calls from the final set, spoken by local Windows voices and transcribed by the product's transcription chain (`gemini-3.5-transcribe`; the general Gemini model takes over when it is rate-limited, which happened for about half of the calls in this run). Recall / false-positive rate:
+
+| Input to the judge | MEDIUM | HIGH |
+|---|---|---|
+| clean transcript | 100.0% / 6.2% | 87.5% / 0.0% |
+| heard transcript | 100.0% / 6.2% | 87.5% / 6.2% |
+
+Transcription: 0 of 40 came back empty; character similarity to the spoken script: median 97%, worst 85%.
+Verdict level changed on 1 of 40 calls: `ja-s41-0023` MEDIUM→HIGH.
+Synthetic voices are cleaner than a speakerphone across a room: read this as an upper bound.

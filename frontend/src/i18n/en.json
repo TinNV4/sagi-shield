@@ -47,7 +47,8 @@
       "Police will NEVER show arrest warrants over LINE, WhatsApp, or video calls.",
       "Claims that 'your bank account was used in a crime' are classic fake-police traps.",
       "Government offices will never direct you to an ATM to receive refund benefits.",
-      "If someone says 'my phone number changed, I need money', call their original number."
+      "If someone says 'my phone number changed, I need money', call their original number.",
+      "A relative's face on a video call can still be a deepfake. Hang up and call back on the saved number."
     ],
     "install_app": "Install Sagi Shield App",
     "ios_modal_title": "Install on iPhone / iPad",
@@ -598,5 +599,18 @@
     "choice_individual_badge": "For Personal Smartphones",
     "choice_individual_desc": "Full mobile app access for everyday personal protection: on-demand Live Guard, Quick Check text/image scanner, Before You Pay safety checklist, and family guardian network.",
     "choice_individual_btn": "Use as an individual"
+  },
+  "deepfake": {
+    "title": "Watch out for deepfake video calls",
+    "intro": "Scammers use AI to copy the face and voice of a relative or friend in a video call, then ask for money urgently. Seeing a familiar face does not prove who is calling.",
+    "signs": [
+      "The call is very short - a few seconds.",
+      "The face shows little emotion; posture and movement look awkward.",
+      "Odd skin tone or lighting; the picture looks artificial.",
+      "Sound does not match the picture, lots of noise, or no sound at all.",
+      "They hang up midway, blaming a weak signal."
+    ],
+    "action": "Stay calm, hang up and call back on the number you already have saved. Never send money because of a video call alone.",
+    "source": "Based on the five warning signs published by Vietnam's Authority of Information Security. Sagi Shield does not analyze video calls yet."
   }
 }

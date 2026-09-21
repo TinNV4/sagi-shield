@@ -18,6 +18,7 @@ import {api} from '../api/client';
 import {CheckResult} from '../api/types';
 import {KillChainBar} from '../components/KillChainBar';
 import {RiskMeter} from '../components/RiskMeter';
+import {DeepfakeNotice} from '../components/DeepfakeNotice';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
 
@@ -228,6 +229,9 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
           </div>
         )}
       </div>
+
+      {/* "It's me" scams now come as video calls with a cloned face */}
+      {result.scam_type === 'family_impersonation' && <DeepfakeNotice compact />}
 
       {/* Kill Chain Bar (if stage > 0) */}
       {result.stage > 0 && (

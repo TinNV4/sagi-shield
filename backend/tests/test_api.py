@@ -123,9 +123,9 @@ def test_precheck(client, payload, expected):
 def test_report_needs_consent_and_feeds_community_hits_and_stats(client):
     report = {"scam_type": "fake_police", "phone": "+44 20 7946 0000", "keywords": ["LINE"], "prefecture": "長野県"}
     assert client.post("/report", json={**report, "consent": False}).status_code == 400
-    for _ in range(2):
-        assert client.post("/report", json={**report, "consent": True}).json() == {"ok": True}
-    assert all("7946" not in str(r) for r in main.store.reports)          # only the HMAC is kept
+    for who in ("app-a", "app-b"):
+        assert client.post("/report", json={**report, "consent": True, "reporter_id": who}).json() == {"ok": True}
+    assert all("7946" not in str(r) and "app-" not in str(r) for r in main.store.reports)  # only HMACs are kept
     assert client.post("/check", json={"phone": "+442079460000"}).json()["community_hits"] == 2
     client.post("/check", json={"text": SCAM})
     s = client.get("/stats").json()
@@ -183,8 +183,11 @@ def test_phone_number_signals(client):
     assert abroad["risk_level"] == "MEDIUM" and abroad["reasons"][0] == main.MSG["intl_number"]["ja"]
     fresh = client.post("/check", json={"lang": "ja", "phone": "03-3210-0000"}).json()
     assert fresh["risk_level"] == "LOW" and fresh["scam_type"] == "unknown" and fresh["reasons"][0] == main.MSG["phone_no_reports"]["ja"]
-    for n, expected in ((1, "MEDIUM"), (2, "MEDIUM"), (3, "HIGH")):
-        client.post("/report", json={"scam_type": "fake_police", "phone": "03-3210-0000", "consent": True})
+    for _ in range(5):  # one person reporting five times is still one reporter
+        client.post("/report", json={"scam_type": "fake_police", "phone": "03-3210-0000", "consent": True, "reporter_id": "app-1"})
+    assert client.post("/check", json={"lang": "ja", "phone": "03-3210-0000"}).json()["community_hits"] == 1
+    for n, expected in ((2, "MEDIUM"), (3, "HIGH")):
+        client.post("/report", json={"scam_type": "fake_police", "phone": "03-3210-0000", "consent": True, "reporter_id": f"app-{n}"})
         out = client.post("/check", json={"lang": "ja", "phone": "03 3210 0000"}).json()  # same number, typed differently
         assert (out["community_hits"], out["risk_level"]) == (n, expected)
     assert "3" in out["reasons"][0] and "3210" not in str(out)

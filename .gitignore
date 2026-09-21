@@ -20,3 +20,5 @@ skills-lock.json
 frontend/dev-dist/
 backend/static/
 tools/test_audio/
+tools/stt_eval_audio/
+tools/stt_eval_calls.json

@@ -34,6 +34,19 @@ export interface SagiApi {
   ): LiveSocketConnection;
 }
 
+export const getReporterId = (): string => {
+  try {
+    let id = localStorage.getItem('sagi_reporter_id');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('sagi_reporter_id', id);
+    }
+    return id;
+  } catch {
+    return '';
+  }
+};
+
 /** Pair code carried by a scanned QR link. It lives in the URL *fragment* (#pair=123456): fragments are never sent
  *  to a server, so the code stays out of access logs. Read once, then removed from the address bar. */
 export const PAIR_FROM_LINK: string = (() => {
@@ -128,7 +141,8 @@ class RealApi implements SagiApi {
     const res = await fetch(`${this.baseUrl}/report`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(data),
+      // random per-install id: lets the server count distinct reporters without any account or address
+      body: JSON.stringify({...data, reporter_id: getReporterId()}),
     });
     if (!res.ok) throw new Error(`Report failed: ${res.status}`);
     return res.json();

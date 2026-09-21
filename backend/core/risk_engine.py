@@ -164,7 +164,9 @@ Known playbooks (any market):
 - fake_police: police / prosecutor / court says your account or SIM is tied to a crime -> secrecy -> chat app or video
   call "to show the warrant" -> "move your money to a safe account for inspection".
 - family_impersonation: "it's me" with a new number or a cold, lost something / accident / debt, needs cash today, a
-  colleague will collect it, don't tell dad. Often NO official words at all.
+  colleague will collect it, don't tell dad. Often NO official words at all. Newer variant: a very short VIDEO call
+  showing the relative's face (deepfake), cut off "because the signal is weak", followed by a chat message asking
+  for an urgent transfer - a familiar face on video proves nothing.
 - refund: city office / tax / pension says a refund is waiting, deadline today, go to an ATM with your phone.
 - fake_billing: unpaid fee / parcel / subscription; pay now or be sued; COD to a personal account before delivery.
 - investment: guaranteed return, insider group, deposit into an app, pay a fee to withdraw.

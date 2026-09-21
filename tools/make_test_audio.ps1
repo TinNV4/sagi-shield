@@ -5,9 +5,10 @@
 #   pwsh tools/make_test_audio.ps1 -Engine fci   -> also *_fci.wav for calls that name an `fci_voice`, through an
 #        OpenAI-compatible /v1/audio/speech endpoint (OPENAI_BASE_URL / OPENAI_API_KEY / FCI_TTS_MODEL in .env).
 #        More natural than the Windows voices - a harder, more realistic test for the recognizer. Test data only.
-param([string]$OutDir = "$PSScriptRoot/test_audio", [int]$PauseMs = 900, [ValidateSet("windows", "fci")][string]$Engine = "windows")
+param([string]$OutDir = "$PSScriptRoot/test_audio", [int]$PauseMs = 900, [ValidateSet("windows", "fci")][string]$Engine = "windows",
+      [string]$CallsFile = "$PSScriptRoot/test_calls.json")  # another script file, e.g. tools/stt_eval_calls.json (not "$Calls": PowerShell names are case-insensitive)
 Add-Type -AssemblyName System.Speech
-$calls = Get-Content "$PSScriptRoot/test_calls.json" -Raw -Encoding utf8 | ConvertFrom-Json
+$calls = Get-Content $CallsFile -Raw -Encoding utf8 | ConvertFrom-Json
 New-Item -ItemType Directory -Force $OutDir | Out-Null
 $format = [System.Speech.AudioFormat.SpeechAudioFormatInfo]::new(16000, [System.Speech.AudioFormat.AudioBitsPerSample]::Sixteen, [System.Speech.AudioFormat.AudioChannel]::Mono)
 
