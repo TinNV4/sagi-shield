@@ -27,6 +27,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from input_layer import build_evidence  # app.main put backend/core on sys.path
+from risk_engine import safety_settings
 
 from .storage import STORE
 
@@ -208,6 +209,7 @@ def _adk():
             generate_content_config=types.GenerateContentConfig(
                 temperature=0.3,
                 thinking_config=types.ThinkingConfig(thinking_level="low"),
+                safety_settings=safety_settings(),  # victims quote the threats they received
                 http_options=types.HttpOptions(retry_options=types.HttpRetryOptions(attempts=2)),  # free tier 503s
             ),
         )

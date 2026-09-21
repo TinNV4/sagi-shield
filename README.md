@@ -38,3 +38,14 @@ backend/    core engine + FastAPI app (app/), tests, Dockerfile
 infra/      Cloud Run deploy script
 frontend/   AI Studio Build export goes here; lib/audioCapture.js ready
 ```
+
+## Testing with recorded calls
+
+No real victims or police recordings are used. `tools/test_calls.json` holds six scripted calls (Japanese and
+Vietnamese, scam and benign); `pwsh tools/make_test_audio.ps1` turns them into WAV files with the voices installed
+on a Windows machine (offline). Then either:
+
+- `python tools/check_audio.py https://<service-url>` - uploads each file to `/check` and compares the level;
+- Live Guard → **Test tools** - plays a file through the same on-device recognizer as the microphone
+  (Chrome 139+), or lets you type what the caller says line by line;
+- or simply play a file on another device next to the microphone - that is the real product setup.

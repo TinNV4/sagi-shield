@@ -25,7 +25,9 @@ import {OnDeviceSpeechSetupModal} from '../components/OnDeviceSpeechSetupModal';
 import {RiskMeter} from '../components/RiskMeter';
 import {useI18n} from '../i18n';
 import {
+  audioFileSource,
   checkOnDeviceSpeechSupport,
+  FileAudioSource,
   LiveGuardController,
   SpeechSupportDetails,
   startLiveGuard,
@@ -203,12 +205,14 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
   }, [resetIdleTimer, speakEnabled, lang]);
 
   // Start Guard Action
-  const startGuard = useCallback(() => {
+  const startGuard = useCallback((audioTrack?: MediaStreamTrack) => {
     speech.warmUp();
     acquireWakeLock();
 
     const controller = startLiveGuard(lang, isKioskMode ? 'kiosk' : 'manual', {
       allowCloudFallback,
+      audioTrack,
+      onSpeechError: (err) => audioTrack && setTestError(err),
       onSpeechMode: (m) => setShowCloudOptInNotice(m === 'blocked'),
       onRisk: handleRiskUpdate,
       onReset: handleSessionReset,
@@ -239,6 +243,44 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
     setIsPaused(false);
 
   }, [acquireWakeLock, lang, isKioskMode, allowCloudFallback, handleRiskUpdate, handleSessionReset, resetIdleTimer]);
+
+  // ---- Test tools: a recorded call (file) or typed lines instead of the microphone ----
+  const [testLine, setTestLine] = useState('');
+  const [testFileName, setTestFileName] = useState<string | null>(null);
+  const [testError, setTestError] = useState<string | null>(null);
+  const testSourceRef = useRef<FileAudioSource | null>(null);
+
+  const sendTestLine = () => {
+    if (!guardControllerRef.current || !testLine.trim()) return;
+    guardControllerRef.current.sendLine(testLine);
+    setLastTranscript(testLine.trim());
+    setTestLine('');
+  };
+
+  const playTestFile = async (file: File) => {
+    setTestError(null);
+    testSourceRef.current?.stop();
+    if (guardControllerRef.current) guardControllerRef.current.stop();
+    try {
+      const source = await audioFileSource(file);
+      testSourceRef.current = source;
+      setTestFileName(file.name);
+      startGuard(source.track);
+      source.ended.then(() => {
+        setTestFileName(null);
+        // let the recognizer flush its last phrase, then go back to the microphone
+        setTimeout(() => {
+          if (testSourceRef.current !== source) return;
+          source.stop();
+          testSourceRef.current = null;
+          if (guardControllerRef.current) guardControllerRef.current.stop();
+          startGuard();
+        }, 4000);
+      });
+    } catch (e) {
+      setTestError(String(e));
+    }
+  };
 
   // Stop Guard Action
   const stopGuard = useCallback(() => {
@@ -566,6 +608,51 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
           </div>
         )}
 
+        {/* TEST TOOLS: feed a recorded call or typed lines through the same pipeline as the microphone */}
+        <details className="rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 bg-white/60 dark:bg-slate-900/60 p-3 text-sm">
+          <summary className="cursor-pointer font-bold text-gray-700 dark:text-gray-200">{t('live.test_title')}</summary>
+          <div className="mt-3 space-y-3">
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t('live.test_desc')}</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                id="live-test-audio"
+                type="file"
+                accept="audio/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) playTestFile(f);
+                  e.target.value = '';
+                }}
+                className="text-xs"
+              />
+              {testFileName && (
+                <span className="text-xs font-mono text-emerald-700 dark:text-emerald-300">▶ {testFileName}</span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <input
+                id="live-test-line"
+                type="text"
+                value={testLine}
+                onChange={(e) => setTestLine(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') sendTestLine();
+                }}
+                placeholder={t('live.test_line_placeholder')}
+                className="flex-1 p-2 rounded-xl bg-gray-50 dark:bg-slate-800 border border-gray-300 dark:border-gray-700 text-sm"
+              />
+              <button
+                onClick={sendTestLine}
+                disabled={!isRunning || !testLine.trim()}
+                className="px-3 py-2 rounded-xl bg-[#1B4D3E] text-white text-xs font-bold disabled:bg-gray-300"
+              >
+                {t('live.test_send')}
+              </button>
+            </div>
+            {testError && <p className="text-xs font-semibold text-red-600">{testError}</p>}
+          </div>
+        </details>
+
         {/* Circular Risk Meter (0 - 100) */}
         <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur rounded-3xl p-4 sm:p-6 border border-gray-200 dark:border-gray-800 shadow-sm flex flex-col items-center">
           <RiskMeter score={score} level={level} size={220} showDetails={true} />
@@ -597,7 +684,7 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
             {!isRunning ? (
               <button
                 id="manual-start-guard-btn"
-                onClick={startGuard}
+                onClick={() => startGuard()}
                 className="w-full min-h-[72px] rounded-3xl bg-emerald-700 hover:bg-emerald-800 active:scale-98 text-white text-xl sm:text-2xl font-black shadow-xl flex items-center justify-center gap-3 transition"
               >
                 <Mic className="w-7 h-7 text-yellow-300 animate-pulse" />

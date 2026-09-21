@@ -321,6 +321,7 @@ gantt
 - [ ] Held-out real set: police transcripts (scam, private) + real benign set + injection samples — *test set, reported in deck*
 - [ ] Ablation table: **rules-only / LLM-only / hybrid** on the test set
 - [ ] Targets: recall ≥ 90% on real scam transcripts; **false-alarm rate ≤ 1 per 20 benign calls** (live, per call — not per window); 0 latches in the TV test; `/check` p50 < 4 s; live alert < 10 s after the trigger phrase
+- [x] Audio upload verified on Cloud Run with six synthetic ja/vi calls (`tools/`): 6/6 as expected. Gemini blocks fake-police audio for SAFETY (not configurable) → Chirp 3 fallback; unanalyzed files return 503 instead of a false LOW
 - [~] `app/guard.py`: per-client rate limit on HTTP + WS handshakes, access log without bodies / query strings / IPs (uvicorn's log off). Open: UI error states (429, offline), **budget alert on the billing account**
 - [ ] **FEATURE FREEZE A at end of day.** Only bug fixes until 10-04.
 

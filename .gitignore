@@ -14,3 +14,4 @@ skills-lock.json
 .playwright-mcp/
 frontend/dev-dist/
 backend/static/
+tools/test_audio/

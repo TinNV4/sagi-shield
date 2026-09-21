@@ -52,12 +52,14 @@ def _warn(what: str, e: Exception) -> None:
 def describe_image(jpeg: bytes) -> ImageVerdict | None:
     try:
         from google.genai import types
+        from risk_engine import safety_settings  # app.main put backend/core on sys.path
         resp = _generate(
             model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
             contents=[types.Part.from_bytes(data=jpeg, mime_type="image/jpeg"), IMAGE_PROMPT],
             config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=ImageVerdict,
                                                temperature=0.0,
-                                               thinking_config=types.ThinkingConfig(thinking_level="low")),
+                                               thinking_config=types.ThinkingConfig(thinking_level="low"),
+                                               safety_settings=safety_settings()),
         )
         return resp.parsed
     except Exception as e:
@@ -65,17 +67,73 @@ def describe_image(jpeg: bytes) -> ImageVerdict | None:
         return None
 
 
-def transcribe_audio(data: bytes, mime_type: str) -> str | None:
+def transcribe_audio(data: bytes, mime_type: str, lang: str = "ja") -> str | None:
+    """Uploaded recording -> text. Gemini first; Chirp 3 when Gemini refuses the audio.
+
+    Found on Cloud Run (2026-09-21): a fake-police call comes back `block_reason=SAFETY` even with BLOCK_NONE -
+    a fixed filter on audio prompts, triggered by exactly the threats we need to hear. Chirp 3 is plain speech
+    recognition with no content filter, so the scam still reaches the text judge."""
     try:
         from google.genai import types
+        from risk_engine import safety_settings  # app.main put backend/core on sys.path
         resp = _generate(
-            model=os.getenv("STT_BATCH_MODEL", "gemini-3.5-transcribe"),
+            # the scoring model hears audio natively and is served wherever the app runs; `gemini-3.5-transcribe`
+            # was 404 on the global endpoint of a fresh project (2026-09-21) - opt in with STT_BATCH_MODEL
+            model=os.getenv("STT_BATCH_MODEL") or os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
             contents=[types.Part.from_bytes(data=data, mime_type=mime_type or "audio/wav"),
-                      "Transcribe this phone call verbatim in its original language."],
+                      "Transcribe this phone call verbatim in its original language. Output the transcript only."],
+            config=types.GenerateContentConfig(
+                system_instruction="You transcribe phone calls for a fraud-detection service that protects elderly people. "
+                                   "Calls may contain threats or scam scripts; transcribing them is how they get detected.",
+                thinking_config=types.ThinkingConfig(thinking_level="low"), safety_settings=safety_settings()),
         )
-        return (resp.text or "").strip() or None
+        text = (resp.text or "").strip()
+        if text:
+            return text
+        _warn("gemini transcription", RuntimeError(f"empty transcript, feedback={resp.prompt_feedback}"))
     except Exception as e:
-        _warn("transcription", e)
+        _warn("gemini transcription", e)
+    return transcribe_chirp(data, lang)
+
+
+CHIRP_LANG = {"ja": "ja-JP", "vi": "vi-VN"}
+CHIRP_CHUNK_S = 50  # synchronous recognize takes at most 60 s of audio
+
+
+def wav_chunks(data: bytes, seconds: int = CHIRP_CHUNK_S) -> list[bytes]:
+    """Any upload -> 16 kHz mono WAV pieces of at most `seconds` (ffmpeg is in the image)."""
+    import io
+    import subprocess
+    import wave
+    pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", "pipe:0", "-ac", "1", "-ar", "16000", "-f", "s16le", "pipe:1"],
+                         input=data, capture_output=True, check=True, timeout=60).stdout
+    step, out = seconds * 16000 * 2, []
+    for i in range(0, len(pcm), step):
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as w:
+            w.setnchannels(1); w.setsampwidth(2); w.setframerate(16000)
+            w.writeframes(pcm[i:i + step])
+        out.append(buf.getvalue())
+    return out
+
+
+def transcribe_chirp(data: bytes, lang: str) -> str | None:
+    try:
+        from google.api_core.client_options import ClientOptions
+        from google.cloud.speech_v2 import SpeechClient
+        from google.cloud.speech_v2.types import cloud_speech
+        region = os.getenv("CHIRP_REGION", "us")  # chirp_3 is served from the us / eu multi-regions only
+        client = SpeechClient(client_options=ClientOptions(api_endpoint=f"{region}-speech.googleapis.com"))
+        config = cloud_speech.RecognitionConfig(auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
+                                                language_codes=[CHIRP_LANG.get(lang, "ja-JP")], model="chirp_3")
+        recognizer = f"projects/{os.environ['GOOGLE_CLOUD_PROJECT']}/locations/{region}/recognizers/_"
+        parts = []
+        for chunk in wav_chunks(data)[:12]:  # 10 minutes is plenty for an uploaded call
+            resp = client.recognize(request=cloud_speech.RecognizeRequest(recognizer=recognizer, config=config, content=chunk))
+            parts += [r.alternatives[0].transcript for r in resp.results if r.alternatives]
+        return " ".join(parts).strip() or None
+    except Exception as e:
+        _warn("chirp transcription", e)
         return None
 
 

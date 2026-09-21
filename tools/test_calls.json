@@ -1,0 +1,78 @@
+[
+  {
+    "name": "ja_scam_fake_police",
+    "culture": "ja-JP",
+    "voice": "Microsoft Ichiro",
+    "expect": "HIGH",
+    "lines": [
+      "もしもし、こちらは警視庁捜査二課の田中と申します。",
+      "実は、あなた名義の口座が犯罪に使われていることが分かりました。",
+      "このままですと、あなたにも逮捕状が出る可能性があります。",
+      "捜査上の秘密ですので、このことはご家族にも誰にも言わないでください。",
+      "このあと、LINEのビデオ通話で警察手帳と逮捕状をお見せします。",
+      "資金の調査をしますので、預金を全額、こちらが指定する安全な口座に移してください。"
+    ]
+  },
+  {
+    "name": "ja_scam_ore_ore",
+    "culture": "ja-JP",
+    "voice": "Microsoft Ichiro",
+    "expect": "HIGH",
+    "lines": [
+      "もしもし、母さん？俺だよ、俺。",
+      "風邪をひいて声が変なんだ。それと携帯を水に落として、番号が変わったから。",
+      "実は会社の大事な書類をなくしてしまって、今日中に三百万円が必要なんだ。",
+      "上司にはまだ言っていないから、父さんにも誰にも言わないでほしい。",
+      "このあと同僚が家まで取りに行くから、現金を渡してくれないかな。"
+    ]
+  },
+  {
+    "name": "ja_benign_lost_property",
+    "culture": "ja-JP",
+    "voice": "Microsoft Haruka",
+    "expect": "LOW",
+    "lines": [
+      "お世話になっております。中央警察署の落とし物係の佐藤と申します。",
+      "昨日、駅前でお財布の落とし物が届きまして、中に入っていた診察券からご連絡しました。",
+      "お手数ですが、身分証明書をお持ちのうえ、平日の九時から五時の間に窓口までお越しください。",
+      "ご不明な点がありましたら、警察署の代表番号までお電話ください。失礼いたします。"
+    ]
+  },
+  {
+    "name": "ja_benign_family",
+    "culture": "ja-JP",
+    "voice": "Microsoft Haruka",
+    "expect": "LOW",
+    "lines": [
+      "もしもし、お母さん？私、由美。元気にしてる？",
+      "今度の日曜日、子どもたちを連れて遊びに行こうと思うんだけど、都合はどう？",
+      "お昼は一緒に食べようね。何か買っていくものがあったら言ってね。",
+      "じゃあまた日曜日に。体に気をつけてね。"
+    ]
+  },
+  {
+    "name": "vi_scam_fake_police",
+    "culture": "vi-VN",
+    "voice": "Microsoft An",
+    "expect": "HIGH",
+    "lines": [
+      "A lô, tôi là cán bộ công an thuộc cơ quan cảnh sát điều tra.",
+      "Tài khoản ngân hàng của chị có liên quan đến một đường dây rửa tiền và ma túy.",
+      "Chúng tôi đã có lệnh bắt tạm giam. Đây là thông tin mật, chị tuyệt đối không được nói với ai, kể cả người nhà.",
+      "Chị hãy kết bạn Zalo với tôi để tôi gửi lệnh bắt và hướng dẫn cài ứng dụng.",
+      "Để chứng minh trong sạch, chị cần chuyển toàn bộ tiền tiết kiệm vào tài khoản an toàn của cơ quan điều tra."
+    ]
+  },
+  {
+    "name": "vi_benign_delivery",
+    "culture": "vi-VN",
+    "voice": "Microsoft An",
+    "expect": "LOW",
+    "lines": [
+      "A lô, em là nhân viên giao hàng. Em đang có một đơn hàng của chị.",
+      "Khoảng mười lăm phút nữa em tới, chị có ở nhà không ạ?",
+      "Đơn này đã thanh toán rồi, chị chỉ cần ra nhận giúp em thôi ạ.",
+      "Dạ vâng, em cảm ơn chị. Em tới sẽ gọi lại ạ."
+    ]
+  }
+]

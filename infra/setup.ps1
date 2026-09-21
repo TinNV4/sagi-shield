@@ -6,7 +6,7 @@ $ErrorActionPreference = "Continue"
 $sa = "sagi-api@$Project.iam.gserviceaccount.com"
 
 gcloud services enable run.googleapis.com aiplatform.googleapis.com firestore.googleapis.com webrisk.googleapis.com `
-    secretmanager.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com --project $Project
+    secretmanager.googleapis.com cloudbuild.googleapis.com artifactregistry.googleapis.com speech.googleapis.com --project $Project
 
 # Firestore (native) next to Cloud Run; recovery chats are deleted for real by a TTL policy
 if (-not (gcloud firestore databases describe --project $Project --format="value(name)" 2>$null)) {
@@ -25,7 +25,7 @@ if (-not (gcloud iam service-accounts describe $sa --project $Project --format="
     gcloud iam service-accounts create sagi-api --display-name="Sagi Shield API" --project $Project
 }
 # Web Risk has no IAM role of its own: a service account of the project may call it once the API is enabled
-foreach ($role in "roles/aiplatform.user", "roles/datastore.user") {
+foreach ($role in "roles/aiplatform.user", "roles/datastore.user", "roles/speech.client") {
     gcloud projects add-iam-policy-binding $Project --member="serviceAccount:$sa" --role=$role --condition=None --format=none
 }
 gcloud secrets add-iam-policy-binding sagi-hash-key --member="serviceAccount:$sa" --role="roles/secretmanager.secretAccessor" --project $Project --format=none

@@ -72,8 +72,14 @@ def test_validation(client):
     assert client.post("/check", data={"lang": "ja"}, files={"image": ("x.png", b"not an image")}).status_code == 422
 
 
-def test_image_without_llm_is_flagged_not_failed(client):
-    body = client.post("/check", data={"lang": "ja"}, files={"image": ("x.png", png(), "image/png")}).json()
+def test_unanalyzed_file_is_never_reported_as_low(client):
+    # seen on Cloud Run: transcription 404 -> "LOW, no danger found" for a scam call nobody had listened to
+    res = client.post("/check", data={"lang": "ja"}, files={"image": ("x.png", png(), "image/png")})
+    assert res.status_code == 503
+    res = client.post("/check", data={"lang": "ja"}, files={"audio": ("x.wav", b"RIFF....", "audio/wav")})
+    assert res.status_code == 503
+    # with other evidence the check still runs, and says what it could not look at
+    body = client.post("/check", data={"lang": "ja", "text": "こんにちは"}, files={"image": ("x.png", png(), "image/png")}).json()
     assert body["risk_level"] == "LOW" and "image_not_analyzed" in body["evidence_flags"]
 
 
@@ -88,7 +94,7 @@ def test_warrant_image_is_high_by_rule(client, monkeypatch):
 
 def test_audio_transcript_feeds_the_engine(client, monkeypatch):
     monkeypatch.setenv("USE_LLM", "1")
-    monkeypatch.setattr(services, "transcribe_audio", lambda data, mime: SCAM)
+    monkeypatch.setattr(services, "transcribe_audio", lambda data, mime, lang: SCAM)
     monkeypatch.setattr(main, "analyze", rules_only)
     body = client.post("/check", data={"lang": "ja"}, files={"audio": ("c.wav", b"RIFF", "audio/wav")}).json()
     assert body["risk_level"] == "HIGH" and "audio_not_analyzed" not in body["evidence_flags"]
@@ -136,6 +142,16 @@ def test_rule_verdict_never_keeps_a_safe_label(client, monkeypatch):
     out = client.post("/check", json={"lang": "ja", "text": "見てください", "url": "http://bad.example"}).json()
     assert out["risk_level"] == "HIGH" and out["scam_type"] == "unknown" and out["reasons"] == [main.MSG["webrisk"]["ja"]]
     assert client.get("/health").json()["ok"] and client.get("/healthz").json()["ok"]
+
+
+def test_gemini_refusing_the_audio_falls_back_to_chirp(monkeypatch):
+    # seen on Cloud Run: block_reason=SAFETY on a fake-police recording, even with BLOCK_NONE
+    class Blocked:
+        text, prompt_feedback = None, "block_reason=SAFETY"
+
+    monkeypatch.setattr(services, "_generate", lambda **kw: Blocked())
+    monkeypatch.setattr(services, "transcribe_chirp", lambda data, lang: f"chirp:{lang}")
+    assert services.transcribe_audio(b"RIFF", "audio/wav", "vi") == "chirp:vi"
 
 
 def test_katakana_long_vowel_survives_normalisation(client):

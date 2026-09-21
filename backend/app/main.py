@@ -133,12 +133,15 @@ async def check(request: Request):
         raw = await audio.read()
         if len(raw) > MAX_AUDIO:
             raise HTTPException(413, "audio too large")
-        transcript = services.transcribe_audio(raw, audio.content_type) if use_llm() else None
+        transcript = services.transcribe_audio(raw, audio.content_type, lang) if use_llm() else None
         if transcript:
             text = f"{text}\n{transcript}"
         else:
             flags.append("audio_not_analyzed")
 
+    if not (text.strip() or phone or url) and any(f.endswith("_not_analyzed") for f in flags):
+        # nothing was actually looked at: "LOW, no danger found" would be a lie about a file we could not read
+        raise HTTPException(503, "The file could not be analyzed right now. Please try again, or paste the text instead.")
     ev = build_evidence(lang=lang, text=text[:MAX_TEXT] or None, phone=phone, url=url)
     flags += ev.flags
     bonus = sum(v for k, v in FLAG_BONUS.items() if k in ev.flags)

@@ -14,6 +14,8 @@ export interface LiveGuardController {
   pause: (ms: number) => void;
   resume: () => void;
   reset: () => void;
+  /** Test tool: push one transcript line as if the recognizer had heard it. */
+  sendLine: (text: string) => void;
   isPaused: () => boolean;
   canProcessLocally: boolean;
 }
@@ -24,6 +26,10 @@ export interface LiveGuardOptions extends LiveSocketCallbacks {
   allowCloudFallback?: boolean;
   /** local = on-device; cloud = user opted in to the browser's cloud recognizer; blocked = not listening */
   onSpeechMode?: (mode: SpeechMode) => void;
+  /** Test tool: recognize this track (a played audio file) instead of the microphone. Same pipeline otherwise. */
+  audioTrack?: MediaStreamTrack;
+  /** Recognizer errors worth showing in test mode (e.g. the browser cannot take a track). */
+  onSpeechError?: (error: string) => void;
 }
 
 export interface SpeechSupportDetails {
@@ -82,6 +88,35 @@ export async function installLanguagePack(
   return ok;
 }
 
+export interface FileAudioSource {
+  track: MediaStreamTrack;
+  ended: Promise<void>;
+  stop: () => void;
+}
+
+/**
+ * Plays an audio file and exposes it as a MediaStreamTrack, so a recorded call can go through the very same
+ * on-device recognizer as the microphone (SpeechRecognition.start(track), Chrome 139+). The file is decoded
+ * and played in this page only; nothing is uploaded.
+ */
+export async function audioFileSource(file: File, audible = true): Promise<FileAudioSource> {
+  const ctx = new AudioContext();
+  const el = new Audio(URL.createObjectURL(file));
+  const node = ctx.createMediaElementSource(el);
+  const dest = ctx.createMediaStreamDestination();
+  node.connect(dest);
+  if (audible) node.connect(ctx.destination);
+  const stop = () => {
+    el.pause();
+    URL.revokeObjectURL(el.src);
+    ctx.close().catch(() => {});
+  };
+  const ended = new Promise<void>((resolve) => el.addEventListener('ended', () => resolve(), {once: true}));
+  await ctx.resume();
+  await el.play();
+  return {track: dest.stream.getAudioTracks()[0], ended, stop};
+}
+
 /**
  * Starts the live protection session:
  * Connects WebSocket (or MockApi live simulation) and initializes on-device speech recognition.
@@ -116,6 +151,9 @@ export function startLiveGuard(
       : null;
 
   let canProcessLocally = false;
+  // With a test track: recognize the file. If this browser's start() ignores the argument it would silently
+  // listen to the microphone instead, so the UI labels the mode and shows recognizer errors.
+  const startRec = () => (options.audioTrack ? recognition.start(options.audioTrack) : recognition.start());
 
   if (!SpeechRec && options.onSpeechMode) options.onSpeechMode('blocked');
   if (SpeechRec) {
@@ -149,18 +187,20 @@ export function startLiveGuard(
           return;
         }
         console.warn('SpeechRecognition warning:', event.error);
+        if (options.onSpeechError) options.onSpeechError(String(event.error));
       };
 
       recognition.onend = () => {
         // Auto-restart while running to maintain continuous guard
+        if (options.audioTrack && options.audioTrack.readyState === 'ended') return; // the file is over
         if (isRunning && !isPausedState) {
           try {
-            recognition.start();
+            startRec();
           } catch (e) {
             setTimeout(() => {
               if (isRunning && !isPausedState) {
                 try {
-                  recognition.start();
+                  startRec();
                 } catch {}
               }
             }, 1000);
@@ -178,8 +218,10 @@ export function startLiveGuard(
         if (options.onSpeechMode) options.onSpeechMode(mode);
         if (mode !== 'blocked' && !isPausedState) {
           try {
-            recognition.start();
-          } catch {}
+            startRec();
+          } catch (e) {
+            if (options.onSpeechError) options.onSpeechError(String(e));
+          }
         }
       });
     } catch (err) {
@@ -219,7 +261,7 @@ export function startLiveGuard(
       if (pauseTimeout) clearTimeout(pauseTimeout);
       if (isRunning && recognition) {
         try {
-          recognition.start();
+          startRec();
         } catch {}
       }
       options.onStatus('listening');
@@ -227,6 +269,11 @@ export function startLiveGuard(
 
     reset: () => {
       socketConn.sendReset();
+    },
+
+    sendLine: (text: string) => {
+      const line = text.trim();
+      if (line) socketConn.sendTranscript(line);
     },
 
     isPaused: () => isPausedState,

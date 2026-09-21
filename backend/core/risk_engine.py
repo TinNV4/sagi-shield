@@ -106,6 +106,16 @@ LANG_PACKS = {
 }
 
 # ---------- LLM structured output ----------
+def safety_settings():
+    """Scam calls ARE threats, intimidation and talk of arrests: with default thresholds Gemini blocks the very
+    content this product exists to analyze (seen 2026-09-21: block_reason=SAFETY on a fake-police call). The model
+    only classifies / transcribes here and its output is schema-constrained, so input filtering is turned off."""
+    from google.genai import types
+    return [types.SafetySetting(category=c, threshold="BLOCK_NONE") for c in (
+        "HARM_CATEGORY_HARASSMENT", "HARM_CATEGORY_HATE_SPEECH", "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "HARM_CATEGORY_DANGEROUS_CONTENT")]
+
+
 class LlmVerdict(BaseModel):
     stage: int            # 0..5 highest kill-chain stage reached
     # closed set = the API contract; without it the model invents labels ("police_impersonation")
@@ -133,6 +143,7 @@ def llm_verdict(text: str, lang: str) -> LlmVerdict | None:
         response_schema=LlmVerdict,
         temperature=0.1,
         thinking_config=types.ThinkingConfig(thinking_level="low"),  # 3.x cannot switch thinking off
+        safety_settings=safety_settings(),
     )
     for attempt in (1, 2):  # one quick retry: 503 "high demand" spikes are common and short
         try:
