@@ -261,3 +261,25 @@ def test_second_model_can_stand_in_for_the_rules():
     real_speech = "市役所の者です。医療費の払い戻しがありますので、今日中にお手続きをお願いします"  # few rule hits, like STT output
     assert analyze(real_speech, "ja", use_llm=False, verdict=sure, confirm=lambda: agree)["risk_level"] == "HIGH"
     assert analyze(real_speech, "ja", use_llm=False, verdict=sure, confirm=lambda: calm)["risk_level"] == "MEDIUM"
+
+
+def test_official_sounding_legitimate_call_needs_two_models_to_stand_down():
+    from risk_engine import LlmVerdict, LiveTracker, hard_floor, rule_stages
+    bank = "みずほ銀行の不正検知部門です。お客様の口座が犯罪に悪用された疑いがあり、警察と連携して確認しております。ご本人のお振込みでしたら問題ございません。ご不明な点はカード裏面の番号へお電話ください。"
+    hits = rule_stages(bank, "ja")
+    assert hard_floor(hits) == 90 and hard_floor(hits, reviewable=False) == 0
+    safe = LlmVerdict(stage=0, scam_type="safe", confidence=0.95, reasons=[], risk=5)
+    scam = LlmVerdict(stage=2, scam_type="fake_police", confidence=0.9, reasons=[], risk=90)
+    assert analyze(bank, "ja", use_llm=False, verdict=safe)["risk_level"] == "HIGH"                          # one model is not enough
+    assert analyze(bank, "ja", use_llm=False, verdict=safe, confirm=lambda: scam)["risk_level"] == "HIGH"   # they disagree
+    assert analyze(bank, "ja", use_llm=False, verdict=safe, confirm=lambda: None)["risk_level"] == "HIGH"   # second model down
+    out = analyze(bank, "ja", use_llm=False, verdict=safe, confirm=lambda: safe)
+    assert out["risk_level"] == "MEDIUM"                                                                      # never LOW: still "verify"
+    line = "警察です。口座が犯罪に使われています。LINEで逮捕状を送ります。今すぐ振り込んでください。"
+    assert analyze(line, "ja", use_llm=False, verdict=safe, confirm=lambda: safe)["risk_level"] == "HIGH"   # police + LINE stays final
+    t = LiveTracker()
+    for _ in range(2):
+        score = t.update(rule_stages(bank, "ja"))
+    assert score >= 70
+    t2 = LiveTracker(); t2.review_veto = True
+    assert 40 <= t2.update(rule_stages(bank, "ja"), llm_score=5, llm_confidence=0.95) < 70

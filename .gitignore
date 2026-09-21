@@ -8,6 +8,7 @@ backend/eval/*.jsonl
 !backend/eval/vi.jsonl
 !backend/eval/*_test.jsonl
 !backend/eval/*_final.jsonl
+!backend/eval/*_hardneg.jsonl
 # police-published audio/transcripts: private evaluation only, never commit (PLAN section 8)
 backend/eval/real_heldout/
 .pytest_cache/

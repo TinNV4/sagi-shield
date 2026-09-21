@@ -33,7 +33,11 @@ never used for tuning ([docs/EVAL.md](docs/EVAL.md) has the method, the dev / te
 | any warning (MEDIUM) | rules only | 64.7% | 49.0% |
 | any warning (MEDIUM) | **rules + Gemini** | **100%** | **4.1%** |
 | alarm (HIGH) | rules only | 29.4% | 0.0% |
-| alarm (HIGH) | **rules + Gemini** | **91.2%** | **0.0%** |
+| alarm (HIGH) | **rules + Gemini** | **97.1%** | **0-2%** |
+
+On real recordings published by the Nagano police (private check, never committed): 15 of 15 scam cases warned, 14 of 15
+alarmed. On 93 minutes of real non-scam speech: 0 false alarms. On 79 legitimate calls written to sound like scams: 6.3%
+alarmed. Details, method and limits: [docs/EVAL.md](docs/EVAL.md).
 
 ## Roadmap
 

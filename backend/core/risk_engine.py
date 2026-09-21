@@ -336,6 +336,12 @@ HARD_COMBOS = [
     ({Stage.AUTHORITY, Stage.FEAR, Stage.MONEY}, 90),  # official + threat/lure + money
     ({Stage.ISOLATION, Stage.MONEY}, 80),              # "tell no one" + transfer (family impersonation)
 ]
+# "No legitimate version" is false for this one: a bank's real fraud desk says "bank", "suspicious use" and "transfer"
+# in one breath (8 of 11 alarms on 79 hard-negative legitimate calls, 2026-09-21). It stays a floor of 90 unless TWO
+# different models both call the text safe - then it drops to a MEDIUM "verify via the official number", never to LOW.
+# Fooling one model with injected text is conceivable; this takes two, and still leaves a warning on screen.
+REVIEWABLE_COMBOS = [{Stage.AUTHORITY, Stage.FEAR, Stage.MONEY}]
+REVIEWED_SCORE = 45
 # Text ABOUT scams (news, warnings) contains the whole chain. Rules alone then stop at MEDIUM;
 # the LLM can still raise it, so a scammer cannot silence the alert by saying these words.
 REPORTING_CAP = 55
@@ -369,10 +375,16 @@ def rule_reasons(hits: dict[Stage, list[str]], lang: str) -> list[str]:
     texts = LANG_PACKS[lang].get("reasons", {})
     return [texts[s] for s in sorted(hits, reverse=True) if s in texts][:2]
 
-def hard_floor(hits: dict[Stage, list[str]]) -> int:
-    """Floor of the strongest never-legit combo present, 0 if none."""
+def hard_floor(hits: dict[Stage, list[str]], reviewable: bool = True) -> int:
+    """Floor of the strongest never-legit combo present, 0 if none. reviewable=False: only the combos that no
+    model may overrule."""
     seen = set(hits)
-    return max((floor for combo, floor in HARD_COMBOS if combo <= seen), default=0)
+    return max((floor for combo, floor in HARD_COMBOS if combo <= seen and (reviewable or combo not in REVIEWABLE_COMBOS)), default=0)
+
+
+def calm(v: "LlmVerdict | None") -> bool:
+    """A confident "this is not a scam"."""
+    return v is not None and v.scam_type == "safe" and v.stage <= 1 and llm_score(v) <= 20 and v.confidence >= 0.8
 
 def fuse(r_score: float, l_score: float | None, confidence: float = 0.0, hard: bool = False) -> float:
     """Rules + LLM. A hard combo is final (the LLM, which reads attacker-controlled text, cannot veto
@@ -418,6 +430,7 @@ class LiveTracker:
     prior_precursor: bool = False   # a set-up call was heard earlier (this socket, or the device says so); survives reset()
     precursor: bool = False         # this call itself looks like a set-up call (PRECURSOR_MIN_MARKS distinct markers)
     precursor_marks: set = field(default_factory=set)
+    review_veto: bool = False       # two models called a reviewable combo legitimate (this call only)
     hits: dict[Stage, list[str]] = field(default_factory=dict)
     history: list[float] = field(default_factory=list)
     recent: deque = field(default_factory=lambda: deque(maxlen=LiveTracker.HARD_WINDOW))
@@ -434,12 +447,14 @@ class LiveTracker:
             self.ema = self.alpha * llm_score + (1 - self.alpha) * self.ema
             self.conf = self.alpha * llm_confidence + (1 - self.alpha) * self.conf
         self.recent.append(set(window_hits))
-        near = hard_floor(dict.fromkeys(set().union(*self.recent))) if not self.reporting else 0
+        near = hard_floor(dict.fromkeys(set().union(*self.recent)), reviewable=not self.review_veto) if not self.reporting else 0
         r_score = max(rule_score(self.hits, self.reporting, combos=False), near)
         if self.prior_precursor and Stage.MONEY in self.hits and not self.reporting:
             r_score = max(r_score, PRECURSOR_FLOOR)  # yesterday "my number changed", today "I need money": the classic two-call scam
         hard = bool(near)
         score = fuse(r_score, self.ema if self.llm_seen else None, self.conf, hard)
+        if self.review_veto and hard_floor(self.hits) and not hard:
+            score = max(score, REVIEWED_SCORE)
         self.max_stage = max(self.max_stage, rule_stage(self.hits) if score >= 40 else 0, llm_stage)
         self.streak = self.streak + 1 if score >= 70 else 0
         if self.streak >= self.LATCH_WINDOWS:
@@ -459,7 +474,7 @@ class LiveTracker:
         # Must run BEFORE `latched` is cleared.
         self.prior_precursor, self.precursor = self.prior_precursor or (self.precursor and not self.latched), False
         self.ema, self.conf, self.llm_seen, self.streak = 0.0, 0.0, False, 0
-        self.latched, self.max_stage, self.reporting = False, 0, False
+        self.latched, self.max_stage, self.reporting, self.review_veto = False, 0, False, False
         self.precursor_marks.clear()
         self.hits.clear()
         self.history.clear()
@@ -476,7 +491,12 @@ def analyze(text: str, lang: str = "ja", use_llm: bool = True, verdict: LlmVerdi
         confirm = lambda: second_opinion(text, lang)  # noqa: E731  (an injected verdict brings its own `confirm`, or none)
     v = verdict or (llm_verdict(text, lang) if use_llm and text.strip() else None)
     hard = bool(hard_floor(hits)) and not reporting
+    reviewed = False
+    if hard and not hard_floor(hits, reviewable=False) and calm(v) and confirm is not None and calm(confirm()):
+        hard, reviewed = False, True  # two models agree the official-sounding call is legitimate
     score = fuse(r_score, llm_score_confirmed(v, r_score, confirm) if v else None, v.confidence if v else 0.0, hard)
+    if reviewed:
+        score = max(score, REVIEWED_SCORE)  # the rules saw authority + fear + money: still say "verify"
     score = round(min(100, score + bonus))
     lv = level(score)
     return {

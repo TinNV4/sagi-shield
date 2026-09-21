@@ -99,6 +99,11 @@ async def live(ws: WebSocket):
         if v and session == state["session"]:  # the call may have been reset while we waited
             state["scam_type"], state["reasons"] = v.scam_type, v.reasons
             tracker.precursor = tracker.precursor or engine.is_setup_call(v)  # the model hears what regexes miss
+            if engine.calm(v) and engine.hard_floor(tracker.hits) and not engine.hard_floor(tracker.hits, reviewable=False):
+                # authority + fear + money, and the fast judge says legitimate (a bank's fraud desk sounds like this):
+                # only a second, different model may lift the floor
+                second = await asyncio.to_thread(engine.second_opinion, text, lang)
+                tracker.review_veto = engine.calm(second)
             rules_now = engine.rule_score(tracker.hits, tracker.reporting, combos=False)
             # one flaky verdict would stay in the EMA and latch: an uncorroborated alarm needs a second model to agree
             llm = await asyncio.to_thread(engine.llm_score_confirmed, v, rules_now, lambda: engine.second_opinion(text, lang))

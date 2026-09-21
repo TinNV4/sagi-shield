@@ -77,6 +77,34 @@ Before the periodic gate, none of these calls reached the model in the live path
 0-50 and the old gate waited for MEDIUM. On 49 legitimate synthetic calls the set-up flag fired once (2%); its only
 effect is a soft floor on a later money request, which the model can veto.
 
+## False alarms: real non-scam speech and hard-negative calls
+
+**Real speech, not a scam.** 14 public-domain Japanese LibriVox recordings from archive.org (2-14 minutes each, 93
+minutes in total; sources and licences in `tools/benign_audio_sources.json`), uploaded to the deployed `/check`:
+**0 of 14 above LOW** - every file scored 0. This is the "radio / audiobook next to the always-on kiosk" case with real
+voices and microphones, not phone calls; real *benign phone calls* remain unmeasured (no free corpus exists).
+Reproduce: `python tools/eval_benign_audio.py download`, then `score <url>`.
+
+**Legitimate calls that sound like scams.** 79 synthetic calls written to be alarming but legitimate (a bank's fraud
+desk confirming a card payment, police asking a witness to come in, a real refund notice that says "no ATM needed",
+a son really asking for a loan from his usual number, an overdue utility bill...): `gen --hard-negatives --scam-ratio 0`,
+committed as `backend/eval/*_hardneg.jsonl`.
+
+| Judge | warned (MEDIUM or above) | alarmed (HIGH) |
+|---|---|---|
+| rules only | 27 (34.2%) | 8 (10.1%) |
+| rules + Gemini, before the fix | 17 (21.5%) | 11 (13.9%) |
+| rules + Gemini, after the fix | 16 (20.3%) | **5 (6.3%)** |
+
+What it exposed: 8 of the 11 alarms came from one "hard combo" - authority + fear + money - that the model was not
+allowed to overrule, although it called those calls safe with 0.95 confidence. A bank's real fraud desk says exactly
+those three things. That combo is now *reviewable*: it still floors the score at 90 unless **two different models**
+both call the text safe, and then it drops to a MEDIUM "verify via the official number", never to LOW ("police + move
+to LINE" and "tell no one + send money" stay final). Recall on the held-out scam set did not move (MEDIUM 100%,
+HIGH 97.1%). The 5 remaining alarms are model verdicts on calls such as "my son asks to borrow money": from the words
+alone that is indistinguishable from the scam, and "hang up and call the number you already have" is the right advice
+either way. This set was used to find and fix the fault, so its second row is a development number.
+
 ## Threshold MEDIUM (any warning shown)
 
 | Lang | System | Recall | Precision | False-positive rate | TP | FP | TN | FN |
