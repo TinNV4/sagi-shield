@@ -77,6 +77,30 @@ Before the periodic gate, none of these calls reached the model in the live path
 0-50 and the old gate waited for MEDIUM. On 49 legitimate synthetic calls the set-up flag fired once (2%); its only
 effect is a soft floor on a later money request, which the model can veto.
 
+**Full replay (2026-09-22, 34 of 35 recordings, deployed service, 1.5 s per sentence - about twice the speed of
+speech):** per recording 17 alarmed, 5 warned, 12 quiet (the quiet ones are rapport-only opening calls of multi-call
+cases); **per scam case (14): 13 warned, 11 alarmed.** In the 7-call case the model marked a set-up call and the money
+call alarmed at sentence 8 of 33. Every recording is a scam, so this run says nothing about false alarms.
+
+Some alarms in that run came in the last lines of the call. A gate study on the seven weakest recordings, **same cached
+transcripts, local server, 2.5 s per sentence**, shows that was mostly the replay speed, not the gate:
+
+| Recording (sentences) | fast replay, clock gate | speech pace, clock gate | speech pace, clock + 6 unseen lines |
+|---|---|---|---|
+| `n6` (135) | alarm at 104 of 108 | alarm at 26 | alarm at 22 |
+| `n8-2` (46) | alarm at 51 of 53 | alarm at 42 | alarm at 16 |
+| `n8-1` (158) | alarm at 23 of 137 | alarm at 29 | alarm at 28 |
+| `n7-1` (112) | alarm at 48 of 55 | alarm at 36 | alarm at 38 |
+| `n2` (56) | MEDIUM 51 | alarm at 39 | alarm at 39 |
+| fake carrier (94) | MEDIUM 63 | alarm at 90 (score 72) | MEDIUM 66 |
+| `s1` refund (14) | LOW 28 | MEDIUM 59 | MEDIUM 69 |
+
+The clock gate looks at the last 12 sentences every 20 s: at 1.5 s per sentence more than a window passes between two
+looks, so lines were never judged. The extra trigger (`LIVE_PERIODIC_LINES`, a look after 6 unseen sentences) closes
+that hole for fast talkers and short calls; at normal pace it changes little. Single runs: the fake-carrier call sits
+on the alarm threshold (66-72) and flips between runs, and the transcript differs by transcriber (the first column used
+other transcripts), so read the columns as "no systematic difference at speech pace", not as a ranking.
+
 ## False alarms: real non-scam speech and hard-negative calls
 
 **Real speech, not a scam.** 14 public-domain Japanese LibriVox recordings from archive.org (2-14 minutes each, 93

@@ -20,7 +20,8 @@ the deck is exported.
 7. **Evidence** - the ablation table: rules only 64.7% recall / 49.0% false alarms → rules + Gemini 100% / 4.1%
    (alarm level: 29.4% → 97.1%, 0% false alarms), on a held-out set written by a different model family. Real police
    recordings: 15 of 15 scam cases warned, 14 of 15 alarmed. 93 minutes of real non-scam speech: 0 false alarms.
-   Live path on real recordings: [fill from docs/EVAL.md].
+   Live path (sentence by sentence over the socket): 13 of 14 cases warned, 11 of 14 alarmed; a remembered set-up call
+   brings the alarm on the money call to sentence 8 of 33.
 8. **What real data taught us** (Innovation 25%) - three faults no synthetic test showed: the transcriber looped on
    noisy audio and the judge called garbage "safe"; rules almost never fire on real speech, so the LLM gate starved;
    two-call scams need memory across calls. Each fix is in the repo with a regression test.
