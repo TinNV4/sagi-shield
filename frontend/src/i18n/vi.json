@@ -451,7 +451,9 @@
     "reset_cache_alert": "Đã đặt lại dữ liệu tạm thời và bộ nhớ đệm.",
     "lang_ja": "Tiếng Nhật",
     "lang_vi": "Tiếng Việt",
-    "lang_en": "Tiếng Anh"
+    "lang_en": "Tiếng Anh",
+    "strict_privacy": "Bảo mật nghiêm ngặt cho chế độ canh gác",
+    "strict_privacy_desc": "Tắt (khuyên dùng): trong cuộc gọi, phần chữ đã che số được AI kiểm tra khoảng 20 giây một lần - cuộc gọi lừa đảo thật thường không có từ khóa rõ ràng. Bật: chỉ gửi chữ sau khi bộ quy tắc trên máy thấy dấu hiệu đáng ngờ; khả năng phát hiện yếu hơn. Dù chọn cách nào, âm thanh cũng không rời khỏi thiết bị."
   },
   "types": {
     "fake_police": "Giả mạo Công an / Viện kiểm sát",

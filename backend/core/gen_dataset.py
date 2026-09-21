@@ -21,6 +21,29 @@ BENIGN = {
     "ja": ["銀行からの正規の引き落とし案内", "病院の予約確認", "宅配の再配達連絡", "息子からの普通の近況電話", "市役所の健診案内"],
     "vi": ["ngân hàng nhắc lịch trả góp thật", "phòng khám xác nhận lịch hẹn", "shipper gọi giao hàng", "con gọi hỏi thăm bình thường", "phường thông báo họp tổ dân phố"],
 }
+# Legitimate calls that SOUND like scams: the false-alarm stress test (gen --hard-negatives)
+BENIGN_HARD = {
+    "ja": ["銀行の不正検知部門が、本人のカード利用を確認する電話（折り返しはカード裏面の番号へと案内する）",
+           "警察署が、交通事故の目撃者として来署をお願いする電話（金銭の話は一切ない）",
+           "市役所が、還付金の通知書を郵送したことを知らせる電話（ATM操作は不要と明言する）",
+           "息子が本当に引っ越し費用を借りたいと頼む電話（いつもの番号からで、急がせず、父にも相談してと言う）",
+           "電力会社が未払い料金について、コンビニ払込票で支払うよう案内する電話",
+           "病院が入院費の請求額と窓口での支払い方法を説明する電話",
+           "証券会社の担当者が、顧客が自分で注文した株の約定を確認する電話",
+           "携帯電話会社が、契約更新月と店頭での手続きを案内する電話",
+           "孫が、スマホを機種変更して番号が変わったことを伝えるだけの電話（何も頼まない）",
+           "消費生活センターが、相談者に折り返して詐欺の手口を説明する電話"],
+    "vi": ["bộ phận chống gian lận của ngân hàng gọi xác nhận một giao dịch thẻ do chính khách thực hiện (dặn gọi lại số in sau thẻ nếu cần)",
+           "công an phường mời lên trụ sở làm việc vì là nhân chứng vụ va chạm giao thông (không nhắc gì đến tiền)",
+           "bảo hiểm xã hội báo đã gửi giấy hoàn tiền qua bưu điện, nói rõ không cần thao tác ATM hay chuyển khoản",
+           "con trai thật sự hỏi vay tiền đặt cọc nhà, gọi từ số quen, không hối thúc, bảo mẹ bàn với bố",
+           "điện lực nhắc tiền điện quá hạn và hướng dẫn đóng tại quầy hoặc app chính thức",
+           "bệnh viện báo viện phí và cách thanh toán tại quầy thu ngân",
+           "nhân viên công ty chứng khoán xác nhận lệnh mua cổ phiếu do chính khách đặt",
+           "nhà mạng thông báo gói cước sắp hết hạn và mời ra cửa hàng làm thủ tục",
+           "cháu gọi báo vừa đổi điện thoại và đổi số mới, chỉ hỏi thăm, không nhờ gì",
+           "tổng đài bảo vệ người tiêu dùng gọi lại giải thích thủ đoạn lừa đảo cho người đã phản ánh"],
+}
 # Offline seed templates: {stage_max: text}. Enough for a smoke test, not for real evaluation.
 SEED = {
     "ja": [
@@ -70,7 +93,8 @@ def _write_with(generator: str):
     return lambda prompt: client.models.generate_content(model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"), contents=prompt).text or ""
 
 
-def gen(lang: str, n: int, out: str, scam_ratio: float = 0.6, generator: str = "gemini", rng_seed: int = 7, workers: int = 6):
+def gen(lang: str, n: int, out: str, scam_ratio: float = 0.6, generator: str = "gemini", rng_seed: int = 7, workers: int = 6,
+        hard_negatives: bool = False):
     from concurrent.futures import ThreadPoolExecutor
     import risk_engine  # noqa: F401  (loads the repo-root .env)
     ask, rng = _write_with(generator), random.Random(rng_seed)
@@ -85,8 +109,10 @@ def gen(lang: str, n: int, out: str, scam_ratio: float = 0.6, generator: str = "
             extra = f"Scam kill chain: authority -> fear -> isolation -> channel switch -> money. Conversation {stop}. Make it subtle, avoid obvious keywords half of the time."
             label, scenario = "scam", t
         else:
-            t, label, scenario = "safe", "safe", rng.choice(BENIGN[lang])
-            extra = "Hard negative: may mention banks, police, money or accounts in a LEGITIMATE way."
+            t, label, scenario = "safe", "safe", rng.choice((BENIGN_HARD if hard_negatives else BENIGN)[lang])
+            extra = ("This call is LEGITIMATE but must sound alarming at first: it involves an institution, money, an account or urgency. "
+                     "The legitimate caller never asks for a transfer, a PIN, an OTP, secrecy or a chat app." if hard_negatives
+                     else "Hard negative: may mention banks, police, money or accounts in a LEGITIMATE way.")
         jobs.append((i, label, t, GEN_PROMPT.format(language=language, label=label, scenario=scenario,
                                                     persona=rng.choice(PERSONAS[lang]), extra=extra)))
 
@@ -212,13 +238,15 @@ if __name__ == "__main__":
     ap.add_argument("--out", default="eval/dataset.jsonl")
     ap.add_argument("--data", default="eval/dataset.jsonl")
     ap.add_argument("--no-llm", action="store_true")
+    ap.add_argument("--hard-negatives", action="store_true", help="gen: legitimate calls that sound like scams (use with --scam-ratio 0)")
+    ap.add_argument("--scam-ratio", type=float, default=0.6)
     ap.add_argument("--seed", type=int, default=7, help="gen: sampling seed (use another one for a held-out test set)")
     ap.add_argument("--generator", default="gemini", choices=["gemini", "fci"], help="gen: who writes the transcripts")
     ap.add_argument("--datasets", nargs="+", default=[], help="ablation: one or more .jsonl files")
     ap.add_argument("--report", default="../docs/EVAL.md", help="ablation: markdown output")
     ap.add_argument("--model", default=None, help="ablation: judge model (default GEMINI_MODEL)")
     a = ap.parse_args()
-    if a.cmd == "gen": gen(a.lang, a.n, a.out, generator=a.generator, rng_seed=a.seed)
+    if a.cmd == "gen": gen(a.lang, a.n, a.out, scam_ratio=a.scam_ratio, generator=a.generator, rng_seed=a.seed, hard_negatives=a.hard_negatives)
     elif a.cmd == "ablation": ablation(a.datasets, a.report, a.model)
     elif a.cmd == "seed": seed(a.lang, a.out)
     else: evaluate(a.data, a.lang, not a.no_llm)

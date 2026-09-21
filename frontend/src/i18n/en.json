@@ -451,7 +451,9 @@
     "reset_cache_alert": "Cache and local preferences have been reset.",
     "lang_ja": "Japanese",
     "lang_vi": "Vietnamese",
-    "lang_en": "English"
+    "lang_en": "English",
+    "strict_privacy": "Strict privacy for Live Guard",
+    "strict_privacy_desc": "Off (recommended): during a call, text with numbers hidden is checked by AI about every 20 seconds - real scam calls often contain no obvious keyword. On: text is sent only after the on-device rules notice a warning sign; detection is weaker. Audio never leaves this device either way."
   },
   "types": {
     "fake_police": "Fake Police / Prosecutor Scam",

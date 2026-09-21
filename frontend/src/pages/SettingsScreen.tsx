@@ -15,6 +15,7 @@ import {
   Volume2,
   Sparkles,
 } from 'lucide-react';
+import {StrictPrivacyToggle} from '../components/StrictPrivacyToggle';
 import {TrustedContactSetting} from '../components/TrustedContact';
 import {Language, useI18n} from '../i18n';
 import * as speech from '../lib/speak';
@@ -236,6 +237,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
       {/* WHO TO CALL BACK: the verification step that defeats "it's me" and deepfake calls */}
       <TrustedContactSetting />
+
+      {/* LIVE GUARD TEXT GATE: periodic AI check (default) vs rules-first (strict privacy) */}
+      <StrictPrivacyToggle />
 
       {/* ALERT GUARDIANS TOGGLE */}
       <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 shadow-xs flex items-center justify-between">

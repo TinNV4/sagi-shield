@@ -77,3 +77,16 @@ def test_model_flag_counts_only_for_a_call_that_asked_for_nothing():
     assert not engine.is_setup_call(V(stage=5, scam_type="fake_police", confidence=0.9, reasons=[], risk=95, precursor=True))  # a scam in progress
     assert not engine.is_setup_call(V(stage=0, scam_type="safe", confidence=0.9, reasons=[], risk=5, precursor=True))          # an ordinary family call
     assert not engine.is_setup_call(V(stage=1, scam_type="unknown", confidence=0.8, reasons=[], risk=30))
+
+
+def test_a_call_that_ended_in_an_alarm_is_not_remembered_as_a_setup_call():
+    t = engine.LiveTracker()
+    t.precursor = True                       # the first lines of a fake-police call looked like a set-up
+    for _ in range(2):
+        t.update(engine.rule_stages("警察です。口座が犯罪に使われています。LINEで逮捕状を送ります。", "ja"))
+    assert t.latched
+    t.reset()
+    assert not t.prior_precursor             # it was the scam itself, and it was handled
+    t.precursor = True                       # a quiet set-up call, no alarm
+    t.reset()
+    assert t.prior_precursor

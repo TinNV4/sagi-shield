@@ -454,9 +454,12 @@ class LiveTracker:
         return self.precursor
 
     def reset(self) -> None:
+        # the next call remembers a set-up call - but a call that ended in an alarm was the scam itself, already handled:
+        # the opening lines of every scam look like a set-up call (seen replaying a real fake-police recording).
+        # Must run BEFORE `latched` is cleared.
+        self.prior_precursor, self.precursor = self.prior_precursor or (self.precursor and not self.latched), False
         self.ema, self.conf, self.llm_seen, self.streak = 0.0, 0.0, False, 0
         self.latched, self.max_stage, self.reporting = False, 0, False
-        self.prior_precursor, self.precursor = self.prior_precursor or self.precursor, False  # the next call remembers
         self.precursor_marks.clear()
         self.hits.clear()
         self.history.clear()

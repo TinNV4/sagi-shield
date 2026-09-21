@@ -1,0 +1,100 @@
+[
+ {
+  "id": "eijitsu_syohin_um_librivox",
+  "file": "eijitsusyohin_01_natsume_64kb.mp3",
+  "kb": 2920,
+  "secs": 373,
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/"
+ },
+ {
+  "id": "inakakyoshi_1311_librivox",
+  "file": "inakakyoshi_01_tayama_64kb.mp3",
+  "kb": 3821,
+  "secs": 489,
+  "license": "http://creativecommons.org/publicdomain/mark/1.0/"
+ },
+ {
+  "id": "haru_no_ushio_1305_librivox",
+  "file": "harunoushio_01_ito_64kb.mp3",
+  "kb": 5787,
+  "secs": 740,
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/"
+ },
+ {
+  "id": "romandourou_1212_librivox",
+  "file": "romandourou_06_dazai_64kb.mp3",
+  "kb": 6674,
+  "secs": 854,
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/"
+ },
+ {
+  "id": "warerano_ichidan_to_kare_1305_librivox",
+  "file": "wareranoichidantokare_6_ishikawa_64kb.mp3",
+  "kb": 2202,
+  "secs": 281,
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/"
+ },
+ {
+  "id": "gan_1311_librivox",
+  "file": "gan_01_mori_64kb.mp3",
+  "kb": 4572,
+  "secs": 585,
+  "license": "http://creativecommons.org/publicdomain/mark/1.0/"
+ },
+ {
+  "id": "yonen_dowa1_um_librivox",
+  "file": "yonendowa1_01_okasantachi_niimi_64kb.mp3",
+  "kb": 1719,
+  "secs": 220,
+  "license": "http://creativecommons.org/publicdomain/mark/1.0/"
+ },
+ {
+  "id": "meian_1403_librivox",
+  "file": "meian_001_natsume_64kb.mp3",
+  "kb": 2256,
+  "secs": 288,
+  "license": "http://creativecommons.org/publicdomain/mark/1.0/"
+ },
+ {
+  "id": "kouyahijiri_1303_librivox",
+  "file": "kouyahijiri_01_izumi_64kb.mp3",
+  "kb": 2454,
+  "secs": 314,
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/"
+ },
+ {
+  "id": "furusato_1308_librivox",
+  "file": "furusato_00_shimazaki_64kb.mp3",
+  "kb": 1239,
+  "secs": 149,
+  "license": "http://creativecommons.org/publicdomain/mark/1.0/"
+ },
+ {
+  "id": "utaandon_1405_librivox",
+  "file": "utaandon_01_izumi_64kb.mp3",
+  "kb": 2307,
+  "secs": 295,
+  "license": "http://creativecommons.org/publicdomain/mark/1.0/"
+ },
+ {
+  "id": "futon_ek_1303_librivox",
+  "file": "futon_01_tayama_64kb.mp3",
+  "kb": 4150,
+  "secs": 531,
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/"
+ },
+ {
+  "id": "good-bye_um_librivox",
+  "file": "goodbye_01_dazai_64kb.mp3",
+  "kb": 1810,
+  "secs": 231,
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/"
+ },
+ {
+  "id": "akai_rosoku_um_librivox",
+  "file": "akairosokutoningyo_01_ogawa_64kb.mp3",
+  "kb": 2022,
+  "secs": 258,
+  "license": "http://creativecommons.org/publicdomain/zero/1.0/"
+ }
+]

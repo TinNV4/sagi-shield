@@ -32,7 +32,8 @@ async def replay(url: str, name: str, lines: list[str], prior: bool, pace: float
                     continue
                 seen["msgs"] += 1
                 seen["max"] = max(seen["max"], m["risk_score"])
-                seen["precursor"] = seen["precursor"] or bool(m.get("precursor"))
+                if "precursor" in m:
+                    seen["precursor"] = bool(m["precursor"])  # the last word counts: false once the call became an alarm
                 seen["speak"] = seen["speak"] or bool(m.get("speak"))
                 if order[m["risk_level"]] == 2 and seen["high_at_line"] is None:
                     seen["high_at_line"] = sent["n"]
@@ -53,19 +54,42 @@ def main() -> None:
     ap.add_argument("--pace", type=float, default=2.5, help="seconds between lines (speech is ~1 sentence / 3-4 s)")
     ap.add_argument("--gate", default="periodic", choices=["periodic", "rules"])
     ap.add_argument("--no-memory", action="store_true", help="do not carry the set-up-call flag between calls")
+    ap.add_argument("--by-case", action="store_true", help="files named case-N.ext belong to one scam: memory is reset when the case changes")
+    ap.add_argument("--out", help="write one JSON row per call (levels and flags only)")
     a = ap.parse_args()
     import risk_engine  # noqa: F401  (.env)
     from app import services
-    prior = False
+    prior, last_case, rows = False, None, []
+    if a.out and pathlib.Path(a.out).exists():  # resume: a long run must survive one bad handshake
+        rows = json.loads(pathlib.Path(a.out).read_text(encoding="utf-8"))
+    done = {r["file"]: r for r in rows}
     for name in a.files:
+        # n1-1 ... n1-7 are successive calls of ONE scam; k1-1 ... k1-4 are four unrelated fake-police calls
+        case = name if name.startswith("k") else re.sub(r"-\d+\.\w+$", "", name)
+        if a.by_case and case != last_case:
+            prior, last_case = False, case  # a different victim / device
+        if name in done:
+            prior = prior or done[name]["setup_call"]
+            continue
         path = pathlib.Path(a.dir) / name
         heard = services.transcribe_audio(path.read_bytes(), "audio/mpeg" if name.endswith(".mp3") else "audio/wav", "ja") or ""
         t = time.time()
-        r = asyncio.run(replay(a.url, name, sentences(heard), prior and not a.no_memory, a.pace, a.gate))
+        for attempt in (1, 2, 3):
+            try:
+                r = asyncio.run(replay(a.url, name, sentences(heard), prior and not a.no_memory, a.pace, a.gate))
+                break
+            except Exception as e:  # cold start / handshake timeout on Cloud Run
+                print(f"  {name}: {type(e).__name__}, retry {attempt}")
+                time.sleep(10 * attempt)
+        else:
+            continue
         level = "HIGH" if r["high_at_line"] is not None else "MEDIUM" if r["max"] >= 40 else "LOW"
         print(f"{name:12} lines={r['lines']:3} prior={str(prior and not a.no_memory):5} -> {level:6} max={r['max']:3} "
               f"alarm_at_line={r['high_at_line']} spoken={r['speak']} setup_call={r['precursor']} ({time.time() - t:.0f}s)")
         prior = prior or r["precursor"]
+        rows.append({"file": name, "case": case, "level": level, "max": r["max"], "alarm_at_line": r["high_at_line"], "lines": r["lines"], "setup_call": r["precursor"]})
+        if a.out:
+            pathlib.Path(a.out).write_text(json.dumps(rows, indent=1), encoding="utf-8")
 
 
 if __name__ == "__main__":

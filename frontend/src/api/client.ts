@@ -226,11 +226,16 @@ class RealApi implements SagiApi {
     let ws: WebSocket | null = null;
     let isClosed = false;
     let reconnectDelay = 1000;
+    let setThisCall = false; // did THIS call set the set-up flag? (only then may it clear it again)
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connect = () => {
       if (isClosed) return;
-      ws = new WebSocket(wsUrl + priorParam());
+      let gate = '';
+      try {
+        gate = localStorage.getItem('sagi_llm_gate') === 'rules' ? '&gate=rules' : ''; // Settings > strict privacy
+      } catch {}
+      ws = new WebSocket(wsUrl + priorParam() + gate);
       ws.onopen = () => {
         reconnectDelay = 1000;
         callbacks.onStatus('connected');
@@ -241,11 +246,16 @@ class RealApi implements SagiApi {
           const data: LiveWsServerMessage = JSON.parse(event.data);
           if ('event' in data && data.event === 'session_reset') callbacks.onReset();
           else if ('risk_level' in data) {
-            if ((data as {precursor?: boolean}).precursor) {
-              try {
+            const setup = (data as {precursor?: boolean}).precursor;
+            try {
+              if (setup === true) {
                 localStorage.setItem(PRECURSOR_KEY, String(Date.now() + 48 * 3600 * 1000));
-              } catch {}
-            }
+                setThisCall = true;
+              } else if (setup === false && setThisCall) {
+                localStorage.removeItem(PRECURSOR_KEY); // the call turned into an alarm: it was the scam, not a set-up
+                setThisCall = false;
+              }
+            } catch {}
             callbacks.onRisk(data);
           }
         } catch (e) {

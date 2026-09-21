@@ -79,7 +79,9 @@ async def live(ws: WebSocket):
                "transcript_tail": window[-1] if window else "", "advice": pack["advice"][lv],
                "session_id": state["session"]}
         if tracker.precursor:
-            msg["precursor"] = True  # the device stores the flag; nothing about the call is kept here
+            # the device stores the flag; nothing about the call is kept here. False = this call became an alarm:
+            # it was the scam itself, not a set-up call - the device drops the flag it stored a minute ago
+            msg["precursor"] = not tracker.latched
         first_high = lv == "HIGH" and not state["spoken"]
         if first_high:
             state["spoken"], msg["speak"] = True, pack["speak"]
