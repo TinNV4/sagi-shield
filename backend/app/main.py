@@ -190,13 +190,15 @@ def report(body: Report):
 
 class FamilyCode(BaseModel):
     member_name: str = Field(default="", max_length=40)
+    family_id: str | None = Field(default=None, max_length=64)  # existing family: issue a fresh code
 
 
 @app.post("/family/code")
 def family_code(body: FamilyCode):
     """Protected person's device: start a family. Keep family_id secret; show pair_code (valid 15 min)."""
-    fam = store.create_family(body.member_name)
-    return {"family_id": fam["family_id"], "pair_code": fam["pair_code"], "expires_in": 900}
+    fam = (store.refresh_code(body.family_id) if body.family_id else None) or store.create_family(body.member_name)
+    return {"family_id": fam["family_id"], "pair_code": fam["pair_code"], "expires_in": 900,
+            "guardians": [g["name"] for g in fam["guardians"]]}
 
 
 class FamilyLink(BaseModel):

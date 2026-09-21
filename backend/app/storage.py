@@ -73,6 +73,12 @@ class MemoryStore:
         self.families[fam["family_id"]] = fam
         return fam
 
+    def refresh_code(self, family_id: str) -> dict | None:
+        fam = self.families.get(family_id)
+        if fam:
+            fam.update(pair_code=_new_family("")["pair_code"], code_expires=time.time() + PAIR_CODE_TTL_S)
+        return fam
+
     def link_guardian(self, pair_code: str, guardian_name: str, fcm_token: str | None) -> dict | None:
         for fam in self.families.values():
             if fam["pair_code"] == pair_code and fam["code_expires"] > time.time():
@@ -125,6 +131,13 @@ class FirestoreStore:
     def create_family(self, member_name: str) -> dict:
         fam = _new_family(member_name)
         self.db.collection("families").document(fam["family_id"]).set(fam)
+        return fam
+
+    def refresh_code(self, family_id: str) -> dict | None:
+        fam = self.get_family(family_id)
+        if fam:
+            fam.update(pair_code=_new_family("")["pair_code"], code_expires=time.time() + PAIR_CODE_TTL_S)
+            self.db.collection("families").document(family_id).set(fam)
         return fam
 
     def link_guardian(self, pair_code: str, guardian_name: str, fcm_token: str | None) -> dict | None:

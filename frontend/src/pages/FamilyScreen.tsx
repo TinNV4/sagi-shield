@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useState} from 'react';
 import {
   Bell,
   Check,
@@ -11,6 +11,7 @@ import {
   UserCheck,
   Users,
 } from 'lucide-react';
+import {api} from '../api/client';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
 
@@ -27,10 +28,23 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
 }) => {
   const {t} = useI18n();
 
-  const [pairCode] = useState('782-904');
+  const [pairCode, setPairCode] = useState('--- ---');
+  const [realGuardians, setRealGuardians] = useState<string[]>([]);
+
+  // A fresh single-use code (valid 15 min) every time this screen opens; the family itself persists.
+  useEffect(() => {
+    api
+      .createFamilyCode()
+      .then((d) => {
+        setPairCode(`${d.pair_code.slice(0, 3)}-${d.pair_code.slice(3)}`);
+        setRealGuardians(d.guardians);
+      })
+      .catch(() => setPairCode('--- ---'));
+  }, []);
+
   const [copiedCode, setCopiedCode] = useState(false);
 
-  const linkedGuardians = [
+  const mockGuardians = [
     {
       id: 'g-1',
       name: t('family.mock_son_name'),
@@ -48,6 +62,17 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
       active: true,
     },
   ];
+
+  const linkedGuardians = api.isMock
+    ? mockGuardians
+    : realGuardians.map((name, i) => ({
+        id: `g-${i}`,
+        name: name || t('family.role_primary'),
+        role: t('family.role_primary'),
+        device: '',
+        linked_at: '',
+        active: true,
+      }));
 
   const handleCopyCode = () => {
     speech.warmUp();
@@ -175,9 +200,11 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
                       {g.role}
                     </span>
                   </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {t('family.device_label', {device: g.device, date: g.linked_at})}
-                  </div>
+                  {g.device && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {t('family.device_label', {device: g.device, date: g.linked_at})}
+                    </div>
+                  )}
                 </div>
               </div>
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-xs" title={t('family.status_connected')} />

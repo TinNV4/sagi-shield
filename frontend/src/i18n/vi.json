@@ -360,7 +360,10 @@
     "time_days_ago": "{{days}} ngày trước",
     "time_day_ago": " ngày trước",
     "stage_label": "Giai đoạn {{stage}} · {{type}}",
-    "btn_call_member": "Gọi ngay cho {{name}}"
+    "btn_call_member": "Gọi ngay cho {{name}}",
+    "link_title": "Nhập mã 6 số hiển thị trên thiết bị của người thân",
+    "link_btn": "Liên kết",
+    "link_fail": "Mã không đúng hoặc đã hết hạn. Hãy yêu cầu mã mới."
   },
   "community": {
     "title": "Bản đồ lừa đảo cộng đồng",

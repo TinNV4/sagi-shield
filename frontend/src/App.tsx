@@ -253,7 +253,10 @@ function AppContent() {
             result={activeCheckResult}
             onBack={handleGoBack}
             onGoRecovery={() => navigateTo('recovery')}
-            onNotifyFamily={() => navigateTo('family')}
+            onNotifyFamily={() => {
+              api.notifyFamily(activeCheckResult, lang).catch(() => {});
+              navigateTo('family');
+            }}
           />
         )}
 

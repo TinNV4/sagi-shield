@@ -11,7 +11,7 @@ import {
   ShieldAlert,
   Users,
 } from 'lucide-react';
-import {api} from '../api/client';
+import {api, getFamilyId} from '../api/client';
 import {FamilyAlertItem} from '../api/types';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
@@ -26,6 +26,20 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   const [alerts, setAlerts] = useState<FamilyAlertItem[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const prevAlertCountRef = useRef<number>(0);
+  const [linked, setLinked] = useState<boolean>(api.isMock || !!getFamilyId());
+  const [codeInput, setCodeInput] = useState('');
+  const [linkError, setLinkError] = useState(false);
+
+  const handleLink = async () => {
+    setLinkError(false);
+    try {
+      await api.linkFamily(codeInput);
+      setLinked(true);
+      fetchAlerts();
+    } catch {
+      setLinkError(true);
+    }
+  };
 
   const fetchAlerts = async (silent = false) => {
     if (!silent) setIsRefreshing(true);
@@ -102,6 +116,32 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
           </button>
         </div>
       </div>
+
+      {!linked && (
+        <div id="guardian-link-card" className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-600/30 space-y-3">
+          <label htmlFor="guardian-code-input" className="block text-base font-bold text-gray-900 dark:text-white">
+            {t('guardian.link_title')}
+          </label>
+          <input
+            id="guardian-code-input"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={7}
+            value={codeInput}
+            onChange={(e) => setCodeInput(e.target.value)}
+            placeholder="123-456"
+            className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 font-mono text-2xl tracking-widest text-center"
+          />
+          <button
+            onClick={handleLink}
+            disabled={codeInput.replace(/\D/g, '').length !== 6}
+            className="w-full min-h-[56px] rounded-xl bg-[#1B4D3E] text-white text-lg font-bold disabled:opacity-40"
+          >
+            {t('guardian.link_btn')}
+          </button>
+          {linkError && <p role="alert" className="text-sm font-bold text-red-700 dark:text-red-400">{t('guardian.link_fail')}</p>}
+        </div>
+      )}
 
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2.5">

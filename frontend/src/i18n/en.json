@@ -360,7 +360,10 @@
     "time_days_ago": "{{days}}d ago",
     "time_day_ago": "d ago",
     "stage_label": "Stage {{stage}} · {{type}}",
-    "btn_call_member": "Call {{name}} Now"
+    "btn_call_member": "Call {{name}} Now",
+    "link_title": "Enter the 6-digit code shown on your family member's device",
+    "link_btn": "Link",
+    "link_fail": "That code is wrong or has expired. Ask for a new one."
   },
   "community": {
     "title": "Community Fraud Radar",

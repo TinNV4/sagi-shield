@@ -41,6 +41,13 @@ def test_pair_code_accepts_the_dashed_form_shown_in_the_ui(client):
     assert client.post("/family/link", json={"pair_code": dashed}).status_code == 200
 
 
+def test_existing_family_gets_a_fresh_code_and_keeps_its_guardians(client):
+    fam, _ = pair(client)
+    again = client.post("/family/code", json={"family_id": fam["family_id"]}).json()
+    assert again["family_id"] == fam["family_id"] and again["guardians"] == ["Taro"]
+    assert client.post("/family/link", json={"pair_code": again["pair_code"], "guardian_name": "Hana"}).status_code == 200
+
+
 def test_alerts_need_the_family_secret(client):
     assert client.get("/family/alerts", params={"family_id": "nope"}).status_code == 404
     assert client.post("/family/notify", json={"family_id": "nope", "risk_level": "HIGH"}).status_code == 404

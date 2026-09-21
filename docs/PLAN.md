@@ -172,6 +172,7 @@ flowchart TD
 | `frontend/lib/audioCapture.js` | ✅ syntax-checked, never run against a server — **needs VAD gate, pause(), WS auto-reconnect**; set `noiseSuppression: false` and test `autoGainControl` both ways in the bake-off (browser DSP can hurt far-field STT) | Mic → PCM16 16 kHz → WebSocket |
 | `backend/app/` (`main.py`, `services.py`, `storage.py`) | ✅ offline (42 tests, rules only, Google services stubbed); never run with credentials, never deployed | HTTP API of section 9 (no `/ws/live`, `/family/*`, `/agent/*` yet) |
 | `backend/app/live.py` + `frontend/spike/live_text.html` | ✅ offline (WebSocket tests); the spike page has **not been opened in a browser yet** | Live Guard text mode + on-device STT test page |
+| `frontend/` (AI Studio Build export, fixed) | ✅ typechecks and builds; Quick Check verified end-to-end in a browser; static SPA, no server, no secrets | PWA |
 | `docs/AI_STUDIO_UI_PROMPT.md` | ready (v3 screens, frontend-only) | Prompt to generate the UI in AI Studio Build |
 
 ## 8. Reuse: libraries & data
@@ -282,8 +283,8 @@ gantt
 - [ ] **Decision gate:** on-device STT good enough for the rules + LLM to fire → tier 0 is the default and the cloud STT work is dropped to fallback. Otherwise pick a cloud STT per language and make it an explicit opt-in. If ja far-field CER is too bad for rules to fire → try `gemini-3.8-live`; if vi streaming fails → VN is Quick Check only.
 
 ### P1 · UI in AI Studio Build (9/20–9/22, parallel — ideal teammate task)
-- [ ] Paste `docs/AI_STUDIO_UI_PROMPT.md` into AI Studio Build; iterate screens with **mock API**; make sure it did not add a Node server
-- [ ] Export code into `frontend/`; set `VITE_API_BASE`; switch mock → real when P2 is live
+- [x] UI generated in AI Studio Build and exported to `frontend/` (2026-09-21). It **did** add an Express + Gemini server with its own API shape, a keyword fallback and a simulated "on-device language pack installed" state → server removed, client rewired to section 9, on-device status now comes only from `SpeechRecognition.available()`
+- [x] `VITE_API_BASE` set → RealApi, empty → MockApi + DEMO badge. Verified in a browser against the local API: onboarding → Quick Check → result screen (rules only). **Not yet verified in a browser:** Live Guard with a microphone, Family/Guardian screens, PWA install
 
 ### P2 · `/check` + `/precheck` API (9/22–9/24) — `[~]` = code and offline tests done, needs a run with real credentials
 - [x] `backend/app/main.py`: FastAPI `/check`, `/precheck`, `/report`, `/stats`, `/healthz`, CORS; `storage.py` (memory / Firestore)
@@ -309,8 +310,9 @@ gantt
 - [ ] Record the re-enacted demo call on a real speaker + tablet; keep the footage as demo fallback
 
 ### P4 · Family & community (9/28–9/29)
-- [ ] Pair code / QR; FCM push on HIGH (demo guardian on **Android or desktop Chrome** — iOS web push needs Home Screen install and is known to drop subscriptions)
-- [ ] Guardian view with Firestore realtime listener (works even if push fails); Gemini summary + stage + call button
+- [x] Pairing: `/family/code` (single-use 6-digit code, 15 min, refreshable) → `/family/link`; `family_id` is the family's shared secret. QR is still a placeholder icon in the UI
+- [ ] FCM push on HIGH: `notifier.py` written, **never run** (needs a Firebase project + web push token from the UI). Demo guardian on **Android or desktop Chrome** — iOS web push needs Home Screen install and is known to drop subscriptions
+- [x] Guardian view: alert stored before any push; UI polls `/family/alerts` every 5 s; live HIGH and "Notify my family" both create alerts; summary = first reason sentence (Gemini-written when the LLM ran), never the transcript. Firestore realtime listener → Milestone B
 - [ ] `/report` opt-in → Firestore; `/stats` aggregates; seed ~200 synthetic reports for demo (label them as synthetic in the UI)
 - [ ] F6 recovery agent (ADK 2.x) if on schedule — otherwise first item of Milestone B
 

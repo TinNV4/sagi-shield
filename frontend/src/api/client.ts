@@ -22,7 +22,9 @@ export interface SagiApi {
     prefecture?: string;
     consent: boolean;
   }): Promise<{ok: boolean}>;
+  createFamilyCode(): Promise<{pair_code: string; guardians: string[]}>;
   linkFamily(pairCode: string, fcmToken?: string): Promise<{ok: boolean; guardian_name: string}>;
+  notifyFamily(result: CheckResult, lang: string): Promise<boolean>;
   getFamilyAlerts(): Promise<FamilyAlertItem[]>;
   getStats(): Promise<StatsResult>;
   connectLiveSocket(
@@ -36,6 +38,22 @@ export const API_BASE = (import.meta.env.VITE_API_BASE || '').trim().replace(/\/
 
 // The backend has language packs for ja and vi only; an English UI still checks Japanese content.
 const apiLang = (lang: string) => (lang === 'vi' ? 'vi' : 'ja');
+
+// family_id is the shared secret of one family: an identifier, not personal data. It is the only
+// thing this app persists besides UI preferences.
+export function getFamilyId(): string | null {
+  try {
+    return localStorage.getItem('sagi_family_id');
+  } catch {
+    return null;
+  }
+}
+
+function setFamilyId(id: string) {
+  try {
+    localStorage.setItem('sagi_family_id', id);
+  } catch {}
+}
 
 // ==========================================
 // REAL API IMPLEMENTATION
@@ -100,6 +118,36 @@ class RealApi implements SagiApi {
     return res.json();
   }
 
+  async createFamilyCode(): Promise<{pair_code: string; guardians: string[]}> {
+    const res = await fetch(`${this.baseUrl}/family/code`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({family_id: getFamilyId()}),
+    });
+    if (!res.ok) throw new Error('Could not create a pair code');
+    const data = await res.json();
+    setFamilyId(data.family_id);
+    return data;
+  }
+
+  async notifyFamily(result: CheckResult, lang: string): Promise<boolean> {
+    const family_id = getFamilyId();
+    if (!family_id) return false;
+    const res = await fetch(`${this.baseUrl}/family/notify`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        family_id,
+        risk_level: result.risk_level,
+        scam_type: result.scam_type,
+        stage: result.stage,
+        reasons: result.reasons.slice(0, 2),
+        lang: apiLang(lang),
+      }),
+    });
+    return res.ok;
+  }
+
   async linkFamily(pairCode: string, fcmToken?: string): Promise<{ok: boolean; guardian_name: string}> {
     const res = await fetch(`${this.baseUrl}/family/link`, {
       method: 'POST',
@@ -107,11 +155,15 @@ class RealApi implements SagiApi {
       body: JSON.stringify({pair_code: pairCode, fcm_token: fcmToken}),
     });
     if (!res.ok) throw new Error('Pairing failed');
-    return res.json();
+    const data = await res.json();
+    setFamilyId(data.family_id);
+    return data;
   }
 
   async getFamilyAlerts(): Promise<FamilyAlertItem[]> {
-    const res = await fetch(`${this.baseUrl}/family/alerts`);
+    const familyId = getFamilyId();
+    if (!familyId) return [];
+    const res = await fetch(`${this.baseUrl}/family/alerts?family_id=${encodeURIComponent(familyId)}`);
     if (!res.ok) throw new Error('Alert fetch failed');
     return res.json();
   }
@@ -129,7 +181,8 @@ class RealApi implements SagiApi {
   ): LiveSocketConnection {
     // Text-only WebSocket (PLAN 6.9). There is deliberately NO per-line HTTP fallback: the server
     // decides when a masked window may go to Gemini; while offline, lines are dropped, not queued.
-    const wsUrl = `${this.baseUrl.replace(/^http/, 'ws')}/ws/live?lang=${apiLang(lang)}&mode=${mode}&input=text`;
+    const wsUrl = `${this.baseUrl.replace(/^http/, 'ws')}/ws/live?lang=${apiLang(lang)}&mode=${mode}&input=text` +
+      (getFamilyId() ? `&family_id=${encodeURIComponent(getFamilyId()!)}` : '');
     let ws: WebSocket | null = null;
     let isClosed = false;
     let reconnectDelay = 1000;
@@ -566,6 +619,14 @@ class MockApi implements SagiApi {
     return {ok: true};
   }
 
+  async createFamilyCode(): Promise<{pair_code: string; guardians: string[]}> {
+    return {pair_code: '782904', guardians: []};
+  }
+
+  async notifyFamily(): Promise<boolean> {
+    return true;
+  }
+
   async linkFamily(pairCode: string, fcmToken?: string): Promise<{ok: boolean; guardian_name: string}> {
     await new Promise((r) => setTimeout(r, 800));
     return {ok: true, guardian_name: '長男（太郎・神奈川）'};
@@ -870,8 +931,14 @@ export const api: SagiApi = {
   report(data: any) {
     return getActiveApi().report(data);
   },
+  createFamilyCode() {
+    return getActiveApi().createFamilyCode();
+  },
   linkFamily(pairCode: string, fcmToken?: string) {
     return getActiveApi().linkFamily(pairCode, fcmToken);
+  },
+  notifyFamily(result: CheckResult, lang: string) {
+    return getActiveApi().notifyFamily(result, lang);
   },
   getFamilyAlerts() {
     return getActiveApi().getFamilyAlerts();

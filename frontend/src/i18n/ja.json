@@ -360,7 +360,10 @@
     "time_days_ago": "{{days}}日前",
     "time_day_ago": "日前",
     "stage_label": "ステージ {{stage}}・{{type}}",
-    "btn_call_member": "{{name}} さんへ今すぐ電話"
+    "btn_call_member": "{{name}} さんへ今すぐ電話",
+    "link_title": "ご家族の端末に表示されている6桁のコードを入力してください",
+    "link_btn": "連携する",
+    "link_fail": "コードが違うか、期限が切れています。新しいコードを表示してもらってください。"
   },
   "community": {
     "title": "地域防犯ダッシュボード",

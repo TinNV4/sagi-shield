@@ -181,3 +181,16 @@ def test_hard_combo_needs_its_links_close_together():
     far = t.update(rule_stages("そういえば昨日警察の人が交通安全の話をしててね", "ja"))
     assert level(far) == "MEDIUM"                                           # soft: two links, minutes apart
     assert level(t.update({}, llm_score=0, llm_confidence=0.95)) == "LOW"   # ...so the LLM may lower it
+
+
+def test_ui_sample_texts_score_as_labelled():
+    """The Quick Check one-tap samples in frontend/src/i18n must behave in a rules-only demo."""
+    import json
+    i18n = Path(__file__).resolve().parents[2] / "frontend" / "src" / "i18n"
+    if not i18n.is_dir():
+        pytest.skip("frontend not present")
+    for lang in ("ja", "vi"):
+        quick = json.loads((i18n / f"{lang}.json").read_text(encoding="utf-8"))["quick"]
+        for key in ("sample_jp_police_text", "sample_jp_refund_text", "sample_vi_police_text"):
+            assert rules(quick[key], lang)["risk_level"] == "HIGH", (lang, key)
+        assert rules(quick["sample_safe_text"], lang)["risk_level"] == "LOW"
