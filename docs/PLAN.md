@@ -188,7 +188,7 @@ flowchart TD
 | Uploads | `python-multipart` (FastAPI file uploads), `ffmpeg` in the container |
 
 Data:
-- **JP real audio + transcripts**: prefectural police pages (e.g. Nagano 「電話でお金詐欺」犯人の音声公開 with PDF transcripts, Nagasaki 犯人からの電話). **Held-out test set only — never used as generation seeds or for writing rules.** ⚠️ The pages state no reuse licence and the contest T&C forbid third-party copyrighted content without permission → **private evaluation only; never in the repo or the public video.** Report the numbers, cite the source.
+- **JP real audio + transcripts**: prefectural police pages (e.g. Nagano 「電話でお金詐欺」犯人の音声公開 - audio only: its PDFs are audio containers, not transcripts; Nagasaki 犯人からの電話). **Held-out test set only — never used as generation seeds or for writing rules.** ⚠️ The pages state no reuse licence and the contest T&C forbid third-party copyrighted content without permission → **private evaluation only; never in the repo or the public video.** Report the numbers, cite the source.
 - **Demo audio**: a re-enacted fake-police call in our own voices (or Gemini TTS), following the publicly documented script pattern, not a verbatim copy.
 - **JP scenarios**: prefectural police press releases (広報資料) → seeds for generation.
 - **Real benign set**: ~30 transcripts of legitimate calls — bank reminder, hospital, delivery, real police procedure, family chat mentioning LINE, TV drama/news clip about scams. Self-recorded or written from real scripts.
@@ -318,7 +318,7 @@ gantt
 
 ### P5 · Eval & freeze A (9/30)
 - [x] Dev set: 59 JP + 56 VN synthetic transcripts (~35% hard negatives), **written by DeepSeek-V4-Flash, judged by Gemini** so the evaluation is not circular; committed in `backend/eval/`
-- [~] Held-out real set: 36 Nagano police recordings through the deployed `/check` (private, aggregate only, `tools/eval_real_audio.py`): per recording 28/36 warned, 20/36 alarmed; per scam case 15/15 warned, 11/15 alarmed. Open: a real *benign* audio set (false alarms on real calls are unmeasured)
+- [~] Real set: 36 Nagano police recordings through the deployed `/check` (private, aggregate only): first run 28/36 warned, 20/36 alarmed; after fixing the two faults it exposed (alarm cap → second-model confirmation; looping transcriber → transcript sanity checks) 28/36 warned, 25/36 alarmed; per scam case 15/15 warned, 14/15 alarmed. Open: a real *benign* audio set (false alarms on real calls are unmeasured); cross-call memory for multi-call ore-ore scams
 - [x] Judge v2 after error analysis (risk field, playbook + few-shot prompt, corroborated alarms, cautionary reporting markers); measured on a third, untouched set: **MEDIUM 100% recall / 4.1% FPR, HIGH 91.2% / 0%** (was 94.5% / 76.7% recall on the test set). Fine-tuning Gemini on Agent Platform was considered and postponed: only synthetic data exists, and prompt + fusion fixes closed the gap
 - [x] Ablation (`docs/EVAL.md`): at MEDIUM rules 75.0% recall / 46.2% FPR → rules + LLM **96.1% / 2.6%**; at HIGH recall 35.5% → **78.9%**, FPR 2.6%. LLM-only column not run (the product never runs without rules)
 - [~] Targets: synthetic recall 96% ≥ 90% ✅; false alarms 1 in 39 benign ✅ (≤ 1 in 20); live alert ≈ 12 s into the scripted call, LLM verdict ≈ 1.5 s with flash-lite ✅; `/check` p50 ≈ 6 s ❌ (> 4 s: try flash-lite for text checks too). Not measured: real held-out calls, the TV test

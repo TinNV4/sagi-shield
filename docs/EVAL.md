@@ -31,23 +31,35 @@ What changed between judge v1 and v2, all found by reading errors on the dev set
 Spread between sets is large (FPR 4% - 14%): with ~50 legitimate calls per set one call is 2 points. Read the final
 row as "about 9 in 10 scam calls raise the alarm and false alarms are rare", not as a precise rate.
 
-## Real calls: Nagano Prefectural Police recordings (private held-out check)
+## Real calls: Nagano Prefectural Police recordings (private check)
 
 Source: 「電話でお金詐欺」犯人の音声公開, https://www.pref.nagano.lg.jp/police/jikenjiko/tokushu/onsei.html - 36 recordings of
-real scam calls (fake police, carrier impersonation, tax refund, "it's me" family impersonation, corporate-bond sale).
-The page carries no reuse licence, so the audio and its transcripts are **never committed, never used to write rules
-or prompts, never shown in the demo**; only these aggregate numbers are reported. Each file was uploaded once to the
-deployed `/check` (transcription → rules + Gemini) on 2026-09-21. All recordings are scams, so this measures recall only.
+real scam calls (fake police, carrier impersonation, tax refund, "it's me" family impersonation, corporate-bond sale):
+noisy, partly bleeped, up to 14 minutes long. The page carries no reuse licence, so the audio is **never committed,
+never used to write rules or prompts, never shown in the demo**; only aggregate numbers are reported. Each file is
+uploaded to the deployed `/check` (transcription → rules + Gemini). All recordings are scams: this measures recall only.
+The page offers no transcripts (its PDFs are audio containers), so STT accuracy itself cannot be scored here.
 
-| Unit | n | Warning (MEDIUM or above) | Alarm (HIGH) |
-|---|---|---|---|
-| per recording | 36 | 28 (78%) | 20 (56%) |
-| per scam case (a case = 1-7 successive calls; best call counts) | 15 | 15 (100%) | 11 (73%) |
+| Run on 2026-09-21 | per recording (36): warned / alarmed | per scam case (15, best call counts): warned / alarmed |
+|---|---|---|
+| first run, judge v2 | 28 (78%) / 20 (56%) | 15 (100%) / 11 (73%) |
+| after the two fixes below | 28 (78%) / 25 (69%) | 15 (100%) / 14 (93%) |
 
-The scam type named by the model matched the police's category on 27 of 36 recordings; median time per upload 5.8 s.
-Most recordings scored LOW are the opening calls of multi-call "it's me" scams, where the caller only builds rapport and
-asks for nothing yet; the alarm fires on the later call that asks for money. Real calls are harder than the synthetic
-set (HIGH recall 91% there): this is the number to quote. Reproduce with `python tools/eval_real_audio.py download` and `score <url>`.
+Two structural faults surfaced only on this real audio. Both fixes are generic - nothing in them comes from the
+wording of the calls - but the set is no longer untouched, so read the second row as "after fixing what it exposed":
+
+1. **The alarm cap.** Natural speech after STT rarely matches the rule patterns, so confident, correct verdicts
+   ("refund scam, risk 85") were held at 69 by the corroboration rule. Now a larger model gives a second opinion in
+   exactly that branch; agreement allows the alarm.
+2. **A looping transcriber.** On two long, noisy calls `gemini-3.5-transcribe` returned one short phrase repeated
+   thousands of times (50 characters per second of audio; speech is 4-7). The judge read the garbage and answered
+   "safe, risk 0" for calls it scores 93-95 when heard properly. Transcripts are now checked: small loops are
+   collapsed, loop-dominated output is dropped and the next transcriber takes over.
+
+The recordings still scored LOW are opening calls of multi-call "it's me" scams (the caller builds rapport and asks
+for nothing yet; 3-7 short calls per case). Each call is judged alone today - remembering a suspicious caller across
+calls of the same day is on the roadmap. Median time per upload 6.1 s.
+Reproduce: `python tools/eval_real_audio.py download`, then `score <url>`.
 
 ## Threshold MEDIUM (any warning shown)
 
