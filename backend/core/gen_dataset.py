@@ -97,7 +97,7 @@ def gen(lang: str, n: int, out: str, scam_ratio: float = 0.6, generator: str = "
                 text = ask(prompt).strip()
                 if "A:" in text and len(text) > 80:
                     print(f"[{i + 1}/{n}] {label}/{t}", file=sys.stderr)
-                    return {"id": f"{lang}-{i:04d}", "lang": lang, "label": label, "scam_type": t,
+                    return {"id": f"{lang}-{i:04d}" if rng_seed == 7 else f"{lang}-s{rng_seed}-{i:04d}", "lang": lang, "label": label, "scam_type": t,
                             "generator": os.getenv("FCI_MODEL") if generator == "fci" else os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
                             "text": text[text.index("A:"):]}
             except Exception as e:
@@ -211,12 +211,13 @@ if __name__ == "__main__":
     ap.add_argument("--out", default="eval/dataset.jsonl")
     ap.add_argument("--data", default="eval/dataset.jsonl")
     ap.add_argument("--no-llm", action="store_true")
+    ap.add_argument("--seed", type=int, default=7, help="gen: sampling seed (use another one for a held-out test set)")
     ap.add_argument("--generator", default="gemini", choices=["gemini", "fci"], help="gen: who writes the transcripts")
     ap.add_argument("--datasets", nargs="+", default=[], help="ablation: one or more .jsonl files")
     ap.add_argument("--report", default="../docs/EVAL.md", help="ablation: markdown output")
     ap.add_argument("--model", default=None, help="ablation: judge model (default GEMINI_MODEL)")
     a = ap.parse_args()
-    if a.cmd == "gen": gen(a.lang, a.n, a.out, generator=a.generator)
+    if a.cmd == "gen": gen(a.lang, a.n, a.out, generator=a.generator, rng_seed=a.seed)
     elif a.cmd == "ablation": ablation(a.datasets, a.report, a.model)
     elif a.cmd == "seed": seed(a.lang, a.out)
     else: evaluate(a.data, a.lang, not a.no_llm)

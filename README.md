@@ -25,14 +25,15 @@ Rules are instant, offline and cannot be talked out of a verdict (`HARD_COMBOS`:
 legitimate version). The LLM catches what keywords cannot - an ore-ore call contains no suspicious word - and
 lowers false alarms on news, dramas and real bank calls. Fusion: `score = c·LLM + (1−c)·rules`, hard combos are final.
 
-Measured on 115 synthetic ja/vi transcripts **written by a different model family than the judge** ([docs/EVAL.md](docs/EVAL.md)):
+Measured on a held-out set of 117 synthetic ja/vi calls, **written by a different model family than the judge** and
+never used for tuning ([docs/EVAL.md](docs/EVAL.md) has the method, the dev / test sets and the limits):
 
 | Threshold | System | Recall | False-positive rate |
 |---|---|---|---|
-| any warning (MEDIUM) | rules only | 75.0% | 46.2% |
-| any warning (MEDIUM) | **rules + Gemini** | **96.1%** | **2.6%** |
-| alarm (HIGH) | rules only | 35.5% | 0.0% |
-| alarm (HIGH) | **rules + Gemini** | **78.9%** | 2.6% |
+| any warning (MEDIUM) | rules only | 64.7% | 49.0% |
+| any warning (MEDIUM) | **rules + Gemini** | **100%** | **4.1%** |
+| alarm (HIGH) | rules only | 29.4% | 0.0% |
+| alarm (HIGH) | **rules + Gemini** | **91.2%** | **0.0%** |
 
 ## Privacy by design
 
@@ -64,7 +65,7 @@ Details, decisions and the phase checklist: [docs/PLAN.md](docs/PLAN.md). Workin
 cd backend
 pip install -r requirements.txt
 cp ../.env.example ../.env          # Gemini API key, or an Agent Platform project
-python -m pytest tests -q           # 80 tests, offline
+python -m pytest tests -q           # 82 tests, offline
 USE_LLM=0 uvicorn app.main:app --port 8080     # rules only; drop USE_LLM=0 to use Gemini
 
 cd ../frontend
@@ -88,7 +89,7 @@ python tools/check_audio.py https://<service-url>
 ```
 backend/core/   input_layer.py (normalize + mask) · risk_engine.py (kill chain, fusion, LiveTracker) · gen_dataset.py (data + ablation)
 backend/app/    FastAPI: main.py (/check …) · live.py (WS) · agent.py (ADK) · services.py (Google calls) · storage.py · guard.py
-backend/eval/   synthetic evaluation set · backend/tests/ 80 offline tests
+backend/eval/   synthetic evaluation set · backend/tests/ 82 offline tests
 frontend/       React + Vite PWA (ja / vi / en)
 infra/          setup + deploy scripts · tools/ test calls, post-deploy checks, model comparison · docs/ plan + evaluation
 ```

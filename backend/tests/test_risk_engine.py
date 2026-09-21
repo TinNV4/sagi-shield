@@ -222,3 +222,27 @@ def test_low_result_never_carries_a_scam_label():
     suspicious = LlmVerdict(stage=1, scam_type="fake_police", confidence=0.3, reasons=["警察を名乗る連絡"])
     out = analyze("警察署の落とし物係です。お財布が届いています。窓口までお越しください", "ja", use_llm=False, verdict=suspicious)
     assert out["risk_level"] == "LOW" and out["scam_type"] == "unknown"
+
+
+def test_llm_score_uses_risk_not_only_the_stage():
+    from risk_engine import LlmVerdict, llm_score
+    cut_short = LlmVerdict(stage=1, scam_type="refund", confidence=0.95, reasons=[], risk=85)
+    assert llm_score(cut_short) == 85                       # was 25: a scam the victim cut short is still a scam
+    out = analyze("市役所の保険課です。還付金のお知らせです", "ja", use_llm=False, verdict=cut_short)
+    assert out["risk_level"] != "LOW"
+    family = LlmVerdict(stage=5, scam_type="safe", confidence=0.9, reasons=[], risk=5)
+    assert llm_score(family) == 5                           # "I'll transfer it back tomorrow" between relatives
+    deep = LlmVerdict(stage=5, scam_type="fake_police", confidence=0.9, reasons=[], risk=40)
+    assert llm_score(deep) == 95                            # money stage reached: the stage floor holds
+    assert llm_score(cut_short, corroborated=False) == 69   # the model alone warns; the alarm needs rules or stage >= 4
+    assert llm_score(LlmVerdict(stage=5, scam_type="family_impersonation", confidence=0.9, reasons=[], risk=95), corroborated=False) == 95
+    legacy = LlmVerdict(stage=3, scam_type="unknown", confidence=0.9, reasons=[])
+    assert llm_score(legacy) == 65                          # judges that give no risk keep the old mapping
+
+
+def test_institution_warning_about_scams_is_not_an_alarm():
+    # held-out eval set: legitimate callers who add a scam warning tripped AUTHORITY + FEAR + MONEY
+    clinic = "当院からはお金の振込やATMの操作をお願いすることは一切ございません。最近警察から還付金の案内という電話があったそうですが、それは詐欺の可能性が高いです。"
+    assert analyze(clinic, "ja", use_llm=False)["risk_level"] != "HIGH"
+    told = "Hôm qua còn có người tự xưng công an gọi nói tôi liên quan vụ rửa tiền, tôi cúp máy liền. Anh có thể chuyển khoản trước hoặc trả tiền mặt tại quầy."
+    assert analyze(told, "vi", use_llm=False)["risk_level"] != "HIGH"

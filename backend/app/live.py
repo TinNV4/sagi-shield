@@ -78,7 +78,8 @@ async def live(ws: WebSocket):
         v = await asyncio.to_thread(engine.llm_verdict, text, lang, None, os.getenv("GEMINI_LIVE_MODEL", "gemini-3.5-flash-lite"))
         if v and session == state["session"]:  # the call may have been reset while we waited
             state["scam_type"], state["reasons"] = v.scam_type, v.reasons
-            await send(tracker.update({}, engine.STAGE_SCORE.get(v.stage, 0), v.stage, v.confidence))
+            rules_now = engine.rule_score(tracker.hits, tracker.reporting, combos=False)
+            await send(tracker.update({}, engine.llm_score(v, corroborated=rules_now >= 40), v.stage, v.confidence))
 
     try:
         while True:

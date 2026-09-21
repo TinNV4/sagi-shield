@@ -6,6 +6,8 @@ backend/eval/*.jsonl
 # the synthetic evaluation set behind docs/EVAL.md is committed so the table can be reproduced
 !backend/eval/ja.jsonl
 !backend/eval/vi.jsonl
+!backend/eval/*_test.jsonl
+!backend/eval/*_final.jsonl
 # police-published audio/transcripts: private evaluation only, never commit (PLAN section 8)
 backend/eval/real_heldout/
 .pytest_cache/

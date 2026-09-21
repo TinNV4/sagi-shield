@@ -319,6 +319,7 @@ gantt
 ### P5 · Eval & freeze A (9/30)
 - [x] Dev set: 59 JP + 56 VN synthetic transcripts (~35% hard negatives), **written by DeepSeek-V4-Flash, judged by Gemini** so the evaluation is not circular; committed in `backend/eval/`
 - [ ] Held-out real set: police transcripts (scam, private) + real benign set + injection samples — *test set, reported in deck*
+- [x] Judge v2 after error analysis (risk field, playbook + few-shot prompt, corroborated alarms, cautionary reporting markers); measured on a third, untouched set: **MEDIUM 100% recall / 4.1% FPR, HIGH 91.2% / 0%** (was 94.5% / 76.7% recall on the test set). Fine-tuning Gemini on Agent Platform was considered and postponed: only synthetic data exists, and prompt + fusion fixes closed the gap
 - [x] Ablation (`docs/EVAL.md`): at MEDIUM rules 75.0% recall / 46.2% FPR → rules + LLM **96.1% / 2.6%**; at HIGH recall 35.5% → **78.9%**, FPR 2.6%. LLM-only column not run (the product never runs without rules)
 - [~] Targets: synthetic recall 96% ≥ 90% ✅; false alarms 1 in 39 benign ✅ (≤ 1 in 20); live alert ≈ 12 s into the scripted call, LLM verdict ≈ 1.5 s with flash-lite ✅; `/check` p50 ≈ 6 s ❌ (> 4 s: try flash-lite for text checks too). Not measured: real held-out calls, the TV test
 - [x] Audio upload verified on Cloud Run with six synthetic ja/vi calls (`tools/`): 6/6 as expected. Gemini blocks fake-police audio for SAFETY (not configurable) → Chirp 3 fallback; unanalyzed files return 503 instead of a false LOW
