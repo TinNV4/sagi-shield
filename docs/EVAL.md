@@ -31,6 +31,24 @@ What changed between judge v1 and v2, all found by reading errors on the dev set
 Spread between sets is large (FPR 4% - 14%): with ~50 legitimate calls per set one call is 2 points. Read the final
 row as "about 9 in 10 scam calls raise the alarm and false alarms are rare", not as a precise rate.
 
+## Real calls: Nagano Prefectural Police recordings (private held-out check)
+
+Source: 「電話でお金詐欺」犯人の音声公開, https://www.pref.nagano.lg.jp/police/jikenjiko/tokushu/onsei.html - 36 recordings of
+real scam calls (fake police, carrier impersonation, tax refund, "it's me" family impersonation, corporate-bond sale).
+The page carries no reuse licence, so the audio and its transcripts are **never committed, never used to write rules
+or prompts, never shown in the demo**; only these aggregate numbers are reported. Each file was uploaded once to the
+deployed `/check` (transcription → rules + Gemini) on 2026-09-21. All recordings are scams, so this measures recall only.
+
+| Unit | n | Warning (MEDIUM or above) | Alarm (HIGH) |
+|---|---|---|---|
+| per recording | 36 | 28 (78%) | 20 (56%) |
+| per scam case (a case = 1-7 successive calls; best call counts) | 15 | 15 (100%) | 11 (73%) |
+
+The scam type named by the model matched the police's category on 27 of 36 recordings; median time per upload 5.8 s.
+Most recordings scored LOW are the opening calls of multi-call "it's me" scams, where the caller only builds rapport and
+asks for nothing yet; the alarm fires on the later call that asks for money. Real calls are harder than the synthetic
+set (HIGH recall 91% there): this is the number to quote. Reproduce with `python tools/eval_real_audio.py download` and `score <url>`.
+
 ## Threshold MEDIUM (any warning shown)
 
 | Lang | System | Recall | Precision | False-positive rate | TP | FP | TN | FN |
