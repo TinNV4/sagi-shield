@@ -1,0 +1,117 @@
+"""F6 recovery agent: contract, scripted fallback, masking and state handling. The model is stubbed - no network."""
+import os
+import sys
+from pathlib import Path
+
+import pytest
+from fastapi.testclient import TestClient
+
+os.environ.update(USE_LLM="0", STORE="memory")
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from app import main  # noqa: E402  (puts backend/core on sys.path)
+from app import agent, storage  # noqa: E402
+
+
+@pytest.fixture
+def client():
+    main.store.__init__()
+    return TestClient(main.app)
+
+
+def ask(client, message, sid="sess-0123456789abcdef", **extra):
+    res = client.post("/agent/recovery", json={"session_id": sid, "message": message, "lang": "ja", **extra})
+    assert res.status_code == 200, res.text
+    return res.json()
+
+
+def test_init_is_instant_and_matches_the_ui_contract(client, monkeypatch):
+    monkeypatch.setenv("USE_LLM", "1")
+    monkeypatch.setattr(agent, "run_agent", lambda *a: pytest.fail("the welcome must not call the model"))
+    out = ask(client, "INIT_RECOVERY")
+    assert out["reply"] and "draft_statement" not in out
+    assert [set(i) - {"tel"} for i in out["checklist"]] == [{"step", "done"}] * 4
+    assert [i.get("tel") for i in out["checklist"]] == [None, "#9110", None, None]  # never an invented bank number
+
+
+def test_hotline_follows_the_market_and_text_follows_the_ui_language(client):
+    out = client.post("/agent/recovery", json={"session_id": "sess-vi-0123456789ab", "message": "INIT_RECOVERY", "lang": "vi"}).json()
+    assert out["checklist"][1]["tel"] == "113" and "công an" in out["checklist"][1]["step"]
+    out = ask(client, "INIT_RECOVERY", sid="sess-en-0123456789ab", ui_lang="en")
+    assert out["checklist"][1]["tel"] == "#9110" and out["reply"].startswith("I'm sorry")
+
+
+def test_scripted_fallback_adapts_step_one_to_the_payment_channel(client):
+    first = ask(client, "INIT_RECOVERY")["checklist"][0]["step"]
+    out = ask(client, "電子マネーのカードを買って番号を伝えてしまいました")
+    assert out["checklist"][0]["step"] != first and "電子マネー" in out["checklist"][0]["step"]
+    assert ask(client, "どうすればいいですか")["checklist"][0] == out["checklist"][0]  # state survives the next turn
+
+
+def test_agent_state_drives_checklist_and_draft_and_numbers_are_masked(client, monkeypatch):
+    seen = {}
+
+    async def fake_agent(message, state):
+        seen["message"] = message
+        return "銀行に電話しましょう。", {**state, "channel": "bank_transfer", "done": ["stop_money"], "draft": "私は9月21日に…"}
+
+    monkeypatch.setenv("USE_LLM", "1")
+    monkeypatch.setattr(agent, "run_agent", fake_agent)
+    out = ask(client, "090-1234-5678 の人に言われて 口座番号 1234567 に振り込みました")
+    assert "1234-5678" not in seen["message"] and "1234567" not in seen["message"]
+    assert out["reply"] == "銀行に電話しましょう。" and out["draft_statement"].startswith("私は")
+    assert out["checklist"][0]["done"] and "組戻し" in out["checklist"][0]["step"]
+
+
+def test_model_failure_degrades_to_the_script_and_keeps_state(client, monkeypatch):
+    async def ok(message, state):
+        return "ok", {**state, "channel": "crypto"}
+
+    async def boom(*a):
+        raise RuntimeError("503")
+
+    monkeypatch.setenv("USE_LLM", "1")
+    monkeypatch.setattr(agent, "run_agent", ok)
+    ask(client, "ビットコインで送りました")
+    monkeypatch.setattr(agent, "run_agent", boom)
+    out = ask(client, "次は？")
+    assert out["reply"] == agent.SCRIPT["ja"]["busy"] and "取引所" in out["checklist"][0]["step"]
+
+
+def test_tools_reject_values_outside_the_contract():
+    class Ctx:
+        state = agent.new_state()
+
+    assert agent.set_payment_channel("wire_to_me", Ctx)["status"] == "error" and Ctx.state["channel"] is None
+    assert agent.mark_step_done("everything", Ctx)["status"] == "error"
+    assert agent.mark_step_done("police", Ctx)["status"] == "ok" and Ctx.state["done"] == ["police"]
+    agent.save_police_statement("x" * 9000, Ctx)
+    assert len(Ctx.state["draft"]) == 4000
+
+
+def test_state_lives_in_the_store_not_in_the_process(client, monkeypatch):
+    seen = []
+
+    async def fake_agent(message, state):
+        seen.append([list(t) for t in state["turns"]])
+        return "はい。", state
+
+    monkeypatch.setenv("USE_LLM", "1")
+    monkeypatch.setattr(agent, "run_agent", fake_agent)
+    ask(client, "090-1234-5678 から電話がありました")
+    ask(client, "次は？")
+    assert seen[0] == [] and seen[1][0][0] == "user" and seen[1][1] == ["assistant", "はい。"]
+    saved = main.store.get_recovery("sess-0123456789abcdef")
+    assert "1234-5678" not in str(saved) and len(saved["turns"]) == 4  # only masked text is ever persisted
+
+
+def test_sessions_expire_are_bounded_and_input_is_validated(client, monkeypatch):
+    monkeypatch.setattr(storage, "MAX_RECOVERY", 3)
+    for i in range(6):
+        ask(client, "INIT_RECOVERY", sid=f"sess-0123456789ab-{i}")
+    assert [k[-1] for k in main.store.recovery] == ["3", "4", "5"]
+    main.store.recovery["sess-0123456789ab-5"]["expires_at"] = 0
+    assert main.store.get_recovery("sess-0123456789ab-5") is None
+    bad = [{"session_id": "recovery-sess-1", "message": "hi"},                      # guessable id
+           {"session_id": "sess-0123456789abcdef", "message": "hi", "lang": "en"},  # lang is the market
+           {"session_id": "../families/0123456789", "message": "hi"}]
+    assert [client.post("/agent/recovery", json=b).status_code for b in bad] == [422, 422, 422]

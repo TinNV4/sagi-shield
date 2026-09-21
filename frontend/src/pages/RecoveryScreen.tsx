@@ -27,10 +27,14 @@ interface RecoveryScreenProps {
   onBack: () => void;
 }
 
+// The server owns the steps; a box the user ticked by hand stays ticked.
+const mergeTicks = (prev: RecoveryChecklistItem[], next: RecoveryChecklistItem[]) =>
+  next.map((item, i) => ({...item, done: item.done || !!prev[i]?.done}));
+
 export const RecoveryScreen: React.FC<RecoveryScreenProps> = ({onBack}) => {
   const {t, lang} = useI18n();
 
-  const [sessionId] = useState(() => 'recovery-sess-' + Date.now());
+  const [sessionId] = useState(() => crypto.randomUUID()); // the id is the only key to this chat: must be unguessable
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputMsg, setInputMsg] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -76,7 +80,7 @@ export const RecoveryScreen: React.FC<RecoveryScreenProps> = ({onBack}) => {
             time: new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
           },
         ]);
-        if (res.checklist) setChecklist(res.checklist);
+        if (res.checklist) setChecklist((prev) => mergeTicks(prev, res.checklist));
         if (res.draft_statement) setDraftStatement(res.draft_statement);
       } catch (e) {
         setIsSending(false);
@@ -118,7 +122,7 @@ export const RecoveryScreen: React.FC<RecoveryScreenProps> = ({onBack}) => {
           time: new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}),
         },
       ]);
-      if (res.checklist) setChecklist(res.checklist);
+      if (res.checklist) setChecklist((prev) => mergeTicks(prev, res.checklist));
       if (res.draft_statement) setDraftStatement(res.draft_statement);
     } catch {
       setIsSending(false);

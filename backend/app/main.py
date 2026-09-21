@@ -24,6 +24,7 @@ from input_layer import URL_RE, analyze_phone, build_evidence, normalize_text, p
 from risk_engine import LANG_PACKS, analyze, level  # noqa: E402
 
 from . import services  # noqa: E402
+from .agent import router as agent_router  # noqa: E402
 from .live import router as live_router  # noqa: E402
 from .notifier import alert_family  # noqa: E402
 from .storage import STORE  # noqa: E402
@@ -50,6 +51,7 @@ app.add_middleware(CORSMiddleware, allow_origins=os.getenv("CORS_ORIGINS", "*").
                    allow_methods=["*"], allow_headers=["*"])
 store = STORE
 app.include_router(live_router)
+app.include_router(agent_router)
 SPIKE = Path(__file__).resolve().parents[2] / "frontend" / "spike"  # dev only: not copied into the Docker image
 if SPIKE.is_dir():
     app.mount("/spike", StaticFiles(directory=SPIKE), name="spike")

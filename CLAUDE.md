@@ -55,6 +55,8 @@ The rule layer scores **co-occurrence of links, not the deepest single keyword**
 
 **Privacy tiers (PLAN 6.9) drive the Live Guard design: audio never leaves the device.** STT runs in the browser (Web Speech API, `processLocally`); `app/live.py` (`WS /ws/live?input=text`) receives finalized transcript lines only, masks numbers on arrival, runs rules on every line, and sends the masked rolling window to Gemini **only once rules reach MEDIUM** (≤ 1 call / 5 s, off the receive loop). Do not add a code path that uploads audio by default — server-side STT is an explicit opt-in fallback and is not implemented. `frontend/spike/live_text.html` (served at `/spike/` in dev) is the on-device STT test page.
 
+**`app/agent.py` — F6 recovery agent (google-adk 2.x).** The checklist (steps, phone numbers) is deterministic server content; the model only talks and changes state through three tools. Nothing is kept in the process: each turn runs in a throw-away ADK session seeded from `STORE.get_recovery()` (state + masked turns), because Cloud Run instances are interchangeable. The instruction is a callable, so ADK's `{placeholder}` templating never touches it. Any model failure falls back to `scripted_reply()`.
+
 Fusion (`fuse()`): a hard combo is final; otherwise `score = c·LLM + (1−c)·rules` with c = LLM confidence, so the LLM can raise *or lower* the rules. `LiveTracker` fuses the same way and latches after 2 consecutive HIGH updates. Its call-level accumulation is *soft* (LLM-vetoable); hard combos count only when their links fall within the last `HARD_WINDOW` updates.
 
 ### Known gaps (tracked in PLAN sections 7 and 11)
@@ -63,7 +65,8 @@ Fusion (`fuse()`): a hard combo is final; otherwise `score = c·LLM + (1−c)·r
 - Keep one long-lived `genai.Client` (`services._client()`): a throwaway `genai.Client().models...` is closed by GC before the request is sent.
 - The spike page and on-device STT have never been tried in a browser; ja-JP / vi-VN pack availability is unknown.
 - FCM push (`app/notifier.py`) has never run; the Family QR code is a placeholder icon; Live Guard, Family and Guardian screens have not been exercised in a browser.
-- Not written yet: `/agent/recovery` (F6), rate limiting and PII-masked request logs (P5), `frontend/` beyond `lib/audioCapture.js`.
+- F6 agent: verified for real on one turn only (channel + statement tools, 14–26 s); `mark_step_done` with the real model and the Recovery screen in a browser are unverified. Free-tier quota (429) runs out after a few agent turns.
+- Not written yet: rate limiting and PII-masked request logs (P5), `frontend/` beyond `lib/audioCapture.js`.
 - API `lang` accepts only `ja` / `vi` (the language packs); the UI's English mode must still send one of those.
 
 ## Constraints

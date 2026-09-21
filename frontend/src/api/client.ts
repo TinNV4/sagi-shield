@@ -94,7 +94,7 @@ class RealApi implements SagiApi {
     const res = await fetch(`${this.baseUrl}/agent/recovery`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({session_id: sessionId, message, lang: apiLang(lang)}),
+      body: JSON.stringify({session_id: sessionId, message, lang: apiLang(lang), ui_lang: lang}),
     });
     if (!res.ok) {
       throw new Error(`Recovery agent failed: ${res.status}`);

@@ -125,3 +125,11 @@ def test_report_needs_consent_and_feeds_community_hits_and_stats(client):
     s = client.get("/stats").json()
     assert s["total_checks"] == 2 and s["high_risk"] == 1
     assert s["by_type"] == {"fake_police": 2} and s["by_region"] == {"長野県": 2} and s["trend"][0]["count"] == 2
+
+
+def test_katakana_long_vowel_survives_normalisation(client):
+    # regression: every "ー" used to become "-", so キャッシュカード / マネーロンダリング never matched through /check
+    from input_layer import normalize_text
+    assert normalize_text("キャッシュカード 03ー1234ー5678") == "キャッシュカード 03-1234-5678"
+    out = client.post("/check", json={"lang": "ja", "text": "警察です。マネーロンダリングの疑いです。キャッシュカードを預かります"}).json()
+    assert out["risk_level"] == "HIGH"

@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 
 
 PAIR_CODE_TTL_S, MAX_ALERTS = 15 * 60, 50
+RECOVERY_TTL_S, MAX_RECOVERY = 24 * 3600, 500  # a recovery chat is useful for a day, not for ever
 
 
 def _now_iso() -> str:
@@ -52,6 +53,7 @@ class MemoryStore:
         self.checks: Counter = Counter()
         self.families: dict[str, dict] = {}
         self.alerts: dict[str, list[dict]] = {}
+        self.recovery: dict[str, dict] = {}  # insertion-ordered: oldest first
 
     def add_report(self, scam_type: str, phone_hash: str | None, keywords: list[str], prefecture: str | None) -> None:
         self.reports.append({"scam_type": scam_type, "phone_hash": phone_hash, "keywords": keywords[:10],
@@ -100,6 +102,16 @@ class MemoryStore:
 
     def list_alerts(self, family_id: str) -> list[dict]:
         return list(self.alerts.get(family_id, []))
+
+    def get_recovery(self, session_id: str) -> dict | None:
+        doc = self.recovery.get(session_id)
+        return dict(doc) if doc and doc["expires_at"] > time.time() else None
+
+    def save_recovery(self, session_id: str, data: dict) -> None:
+        self.recovery.pop(session_id, None)
+        self.recovery[session_id] = {**data, "expires_at": time.time() + RECOVERY_TTL_S}
+        while len(self.recovery) > MAX_RECOVERY:
+            self.recovery.pop(next(iter(self.recovery)))
 
 
 class FirestoreStore:
@@ -167,6 +179,16 @@ class FirestoreStore:
         col = self.db.collection("families").document(family_id).collection("alerts")
         docs = col.order_by("created_at", direction=self.fs.Query.DESCENDING).limit(MAX_ALERTS).stream()
         return [d.to_dict() for d in docs]
+
+    # recovery_sessions/{session_id}; set a Firestore TTL policy on `expires_at` so old chats are deleted for real
+    def get_recovery(self, session_id: str) -> dict | None:
+        doc = self.db.collection("recovery_sessions").document(session_id).get()
+        data = doc.to_dict() if doc.exists else None
+        return data if data and data["expires_at"].timestamp() > time.time() else None
+
+    def save_recovery(self, session_id: str, data: dict) -> None:
+        expires = datetime.fromtimestamp(time.time() + RECOVERY_TTL_S, timezone.utc)  # TTL policies need a timestamp field
+        self.db.collection("recovery_sessions").document(session_id).set({**data, "expires_at": expires})
 
 
 def get_store():

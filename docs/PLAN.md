@@ -216,7 +216,7 @@ Response:
 ```
 `WS /ws/live?lang=ja&mode=kiosk|manual&input=text` → client runs STT on-device and sends `{ "type": "transcript", "text", "final": true }` per finalized line (interim lines are ignored) and `{ "type": "reset" }` on "I am safe now"; server sends `{ "risk_score", "risk_level", "stage", "trigger_phrase", "transcript_tail", "advice", "speak": "<text to read aloud on HIGH>", "session_id" }`. Server sends `{ "event": "session_reset" }` after silence timeout. `risk_level` is HIGH only once latched (2 consecutive HIGH updates); `speak` is sent once per session. `input=audio` (PCM16 16 kHz 100 ms chunks → server-side STT with session rotation) is the opt-in fallback and is **not implemented**.
 `POST /precheck` → `{ reason_text, amount?, recipient_type?, who_asked?, lang }` → same response shape as `/check`.
-`POST /agent/recovery` → `{ session_id, message, lang }` → `{ reply, checklist: [{ step, done }], draft_statement? }`.
+`POST /agent/recovery` → `{ session_id, message, lang, ui_lang? }` → `{ reply, checklist: [{ step, done, tel? }], draft_statement? }`. `session_id` is a client-generated random id (≥ 16 chars) and the only key to the chat; `lang` = market (hotlines), `ui_lang` = reply language (ja/vi/en). `message = "INIT_RECOVERY"` returns the welcome without a model call. Checklist text and phone numbers are server-owned, never model output.
 `POST /report` → `{ phone_hmac, scam_type, prefecture, keywords[], created_at }` (opt-in).
 `POST /family/link` → `{ pair_code, fcm_token }`. `GET /family/alerts` (or Firestore listener) → Guardian view. `GET /stats` → aggregates for dashboard.
 
@@ -314,7 +314,7 @@ gantt
 - [ ] FCM push on HIGH: `notifier.py` written, **never run** (needs a Firebase project + web push token from the UI). Demo guardian on **Android or desktop Chrome** — iOS web push needs Home Screen install and is known to drop subscriptions
 - [x] Guardian view: alert stored before any push; UI polls `/family/alerts` every 5 s; live HIGH and "Notify my family" both create alerts; summary = first reason sentence (Gemini-written when the LLM ran), never the transcript. Firestore realtime listener → Milestone B
 - [ ] `/report` opt-in → Firestore; `/stats` aggregates; seed ~200 synthetic reports for demo (label them as synthetic in the UI)
-- [ ] F6 recovery agent (ADK 2.x) if on schedule — otherwise first item of Milestone B
+- [x] F6 recovery agent (`app/agent.py`, google-adk 2.9): three state-changing tools (payment channel / step done / police statement), numbers masked before the model, scripted fallback when the model is down. Stateless per instance: state + masked turns live in the store (`recovery_sessions`, 24 h; **set a Firestore TTL policy on `expires_at` at deploy**). Real run 2026-09-21 (free tier): channel + statement tools called correctly, 14–26 s per turn; `mark_step_done` **not yet seen with the real model** (quota ran out)
 
 ### P5 · Eval & freeze A (9/30)
 - [ ] `gen_dataset.py gen` → 100 JP + 100 VN synthetic (40% hard negatives) — *dev set*

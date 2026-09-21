@@ -49,7 +49,8 @@ class Evidence(BaseModel):
 def normalize_text(s: str) -> str:
     s = unicodedata.normalize("NFKC", s)          # ＬＩＮＥ -> LINE, ０９０ -> 090
     s = re.sub(r"[\u200b-\u200f\ufeff]", "", s)   # zero-width chars used to dodge filters
-    s = re.sub(r"[\u2010-\u2015\u2212\u30fc\uff70]", "-", s)  # dash variants (03−1234ー5678)
+    s = re.sub(r"[\u2010-\u2015\u2212]", "-", s)  # dash variants (03−1234‐5678)
+    s = re.sub(r"(?<=\d)[\u30fc\uff70](?=\d)", "-", s)  # the katakana long vowel is a dash only between digits
     return re.sub(r"\s+", " ", s).strip()
 
 def strip_vi_diacritics(s: str) -> str:
