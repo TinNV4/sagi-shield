@@ -252,3 +252,10 @@ def family_notify(body: FamilyNotify):
 @app.get("/stats")
 def stats():
     return store.stats()
+
+
+# Last, so every API route wins: the built PWA (frontend/dist copied to backend/static by infra/deploy.sh).
+# One Cloud Run URL serves both -> same origin, no CORS, and the WebSocket shares the host.
+STATIC = Path(__file__).resolve().parents[1] / "static"
+if STATIC.is_dir():
+    app.mount("/", StaticFiles(directory=STATIC, html=True), name="pwa")

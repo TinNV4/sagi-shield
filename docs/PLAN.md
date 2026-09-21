@@ -271,7 +271,7 @@ gantt
 - [x] GCP project `sagi-shield-560661` via `infra/setup.ps1`: Agent Platform, Cloud Run, Firestore (Tokyo, TTL on `recovery_sessions.expires_at`), Web Risk, Secret Manager, least-privilege service account `sagi-api`. Not enabled yet: Speech-to-Text (opt-in fallback only), FCM
 - [ ] Re-verify model IDs in section 6 against the Agent Platform model pages; set `.env`; load Gemini API + ADK skills into Antigravity
 - [ ] `pip install -r backend/requirements.txt`; run `risk_engine.py --no-llm` smoke test, then once **with** the LLM to prove the model ID and `global` location work
-- [x] Real API on Cloud Run (2026-09-21): `https://sagi-shield-api-209791011329.asia-northeast1.run.app`, timeout 3600 s, session affinity, `min-instances=0` until demo week (then 1). `/ws/live` verified from a script: scripted fake-police call reaches latched HIGH + `speak` on line 5 (~12 s). Still to check: client reconnect after the 60-min cut
+- [x] Real API on Cloud Run (2026-09-21): `https://sagi-shield-api-209791011329.asia-northeast1.run.app`, timeout 3600 s, session affinity, `min-instances=0` until demo week (then 1). `/ws/live` verified from a script: scripted fake-police call reaches latched HIGH + `speak` on line 5 (~12 s). The same service serves the PWA (`backend/static`, same origin) - this URL is the submission URL. Still to check: client reconnect after the 60-min cut
 
 ### P0.5 · Live spike + STT bake-off (9/20–9/21) — **highest risk, do first**
 - [ ] `spike/live_spike.py`: ugly end-to-end mic → WS → STT → rules → printed score. No UI.

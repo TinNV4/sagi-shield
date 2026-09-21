@@ -63,7 +63,8 @@ class GuardMiddleware:
         if scope["type"] not in ("http", "websocket"):
             return await self.app(scope, receive, send)
         path, key, start = scope.get("path", ""), client_key(scope), time.monotonic()
-        limited = scope.get("method") != "OPTIONS" and not path.startswith(FREE_PATHS) and not allow(key)
+        costly = scope["type"] == "websocket" or scope.get("method") == "POST"  # GETs are static files and cheap reads
+        limited = costly and not path.startswith(FREE_PATHS) and not allow(key)
         if limited and scope["type"] == "websocket":
             await receive()  # websocket.connect
             await send({"type": "websocket.close", "code": 1013})  # try again later

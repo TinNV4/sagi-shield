@@ -34,7 +34,9 @@ export interface SagiApi {
   ): LiveSocketConnection;
 }
 
-export const API_BASE = (import.meta.env.VITE_API_BASE || '').trim().replace(/\/+$/, '');
+// VITE_API_BASE: empty = MockApi (DEMO badge) · 'same-origin' = the API that serves this page (Cloud Run) · or a full URL
+const RAW_API_BASE = (import.meta.env.VITE_API_BASE || '').trim();
+export const API_BASE = (RAW_API_BASE === 'same-origin' ? window.location.origin : RAW_API_BASE).replace(/\/+$/, '');
 
 // The backend has language packs for ja and vi only; an English UI still checks Japanese content.
 const apiLang = (lang: string) => (lang === 'vi' ? 'vi' : 'ja');

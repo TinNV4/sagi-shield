@@ -13,3 +13,4 @@ backend/eval/real_heldout/
 skills-lock.json
 .playwright-mcp/
 frontend/dev-dist/
+backend/static/

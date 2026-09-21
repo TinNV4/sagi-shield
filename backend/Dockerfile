@@ -7,6 +7,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY core ./core
 COPY app ./app
+# built PWA, optional: `static*` also matches nothing, so the build works without it
+COPY static* ./static/
 # --no-access-log: uvicorn's log has IPs and query strings (family_id is a secret); app/guard.py logs instead.
 # One worker: LiveTracker state for /ws/live lives in process memory, keyed by the socket.
 CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080} --workers 1 --no-access-log"]

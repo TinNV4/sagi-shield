@@ -6,7 +6,10 @@ set -euo pipefail
 : "${PROJECT:?set PROJECT to your GCP project id}"
 REGION="${REGION:-asia-northeast1}"
 SERVICE="${SERVICE:-sagi-shield-api}"
-cd "$(dirname "$0")/../backend"
+cd "$(dirname "$0")/../frontend"
+VITE_API_BASE=same-origin npm run build            # the PWA is served by the API itself: one URL, same origin
+rm -rf ../backend/static && cp -r dist ../backend/static
+cd ../backend
 
 # one --set-env-vars only: gcloud keeps the last one when the flag is repeated. "^@^" = use @ as the separator,
 # so CORS_ORIGINS may contain commas.

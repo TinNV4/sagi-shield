@@ -64,8 +64,9 @@ Fusion (`fuse()`): a hard combo is final; otherwise `score = c·LLM + (1−c)·r
 - **Deployed and verified on Cloud Run (2026-09-21, project `sagi-shield-560661`, `asia-northeast1`):** `/check` with Gemini on Agent Platform (scam HIGH, benign LOW, ore-ore the rules miss HIGH), Web Risk hit, `FirestoreStore` (family pairing, alerts, recovery sessions), F6 agent incl. all three tools, rate limit, Secret Manager `HASH_KEY`. Latency: `/check` 5-15 s, agent turn ~22 s.
 - Cloud-only lessons: Cloud Run reserves `/healthz` (use `/health`); Firestore rejects nested arrays (`MemoryStore.save_recovery` now refuses them too, so tests catch it); repeated `--set-env-vars` keeps only the last one.
 - Keep one long-lived `genai.Client` (`services._client()`): a throwaway `genai.Client().models...` is closed by GC before the request is sent.
-- **Never executed:** `transcribe_audio` with real speech, FCM push (`app/notifier.py`), on-device STT in a browser (ja-JP / vi-VN pack availability unknown), Live Guard / Family / Guardian / Recovery screens in a browser. The Family QR code is a placeholder icon.
-- Not written yet: eval datasets + ablation table, frontend hosting.
+- **Never executed:** `transcribe_audio` with real speech, FCM push (`app/notifier.py`), on-device STT in a browser (ja-JP / vi-VN pack availability unknown), Live Guard / Family / Guardian screens in a browser. The Family QR code is a placeholder icon.
+- **Hosting:** the API serves the built PWA from `backend/static/` (git-ignored; `infra/deploy.sh` builds `frontend/` with `VITE_API_BASE=same-origin` and copies `dist/` there). One URL, same origin, mounted last so API routes win. Home and the Recovery screen (real agent reply, checklist update) were exercised in a browser against Cloud Run.
+- Not written yet: eval datasets + ablation table.
 - `app/guard.py`: per-client rate limit (`RATE_LIMIT_PER_MIN`, default 30, 0 = off; tests run with 0 via `tests/conftest.py`) and the only access log - uvicorn's is disabled because it prints IPs and query strings (`family_id` is a secret).
 - On this machine `grep -r` in Git Bash hangs; use the Grep tool. `gcloud` lives in `%LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin` and may be missing from PATH.
 - API `lang` accepts only `ja` / `vi` (the language packs); the UI's English mode must still send one of those.
