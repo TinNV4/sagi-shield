@@ -11,6 +11,7 @@ import {
   UserCheck,
   Users,
 } from 'lucide-react';
+import QRCode from 'qrcode';
 import {api} from '../api/client';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
@@ -29,6 +30,16 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
   const {t} = useI18n();
 
   const [pairCode, setPairCode] = useState('--- ---');
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+
+  // The QR opens this app on the guardian's phone with the code pre-filled. Fragment, not query: never sent to a server.
+  useEffect(() => {
+    const digits = pairCode.replace(/\D/g, '');
+    if (digits.length !== 6) return setQrDataUrl(null);
+    QRCode.toDataURL(`${window.location.origin}/#pair=${digits}`, {margin: 1, width: 224, errorCorrectionLevel: 'M'})
+      .then(setQrDataUrl)
+      .catch(() => setQrDataUrl(null));
+  }, [pairCode]);
   const [realGuardians, setRealGuardians] = useState<string[]>([]);
 
   // A fresh single-use code (valid 15 min) every time this screen opens; the family itself persists.
@@ -144,7 +155,11 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
 
         {/* QR Code Graphic Placeholder */}
         <div className="flex flex-col items-center justify-center p-4 bg-gray-50 dark:bg-slate-800 rounded-2xl border border-dashed border-gray-300 dark:border-gray-700 max-w-xs mx-auto">
-          <QrCode className="w-28 h-28 text-gray-800 dark:text-gray-200" />
+          {qrDataUrl ? (
+            <img id="family-pair-qr" src={qrDataUrl} alt={t('family.qr_label')} className="w-44 h-44 rounded-lg bg-white p-1" />
+          ) : (
+            <QrCode className="w-28 h-28 text-gray-300 dark:text-gray-600" />
+          )}
           <span className="text-xs font-bold text-gray-500 mt-2">
             {t('family.qr_label')}
           </span>

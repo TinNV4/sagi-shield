@@ -1,5 +1,19 @@
 @import "tailwindcss";
 
+/* Dark mode follows the in-app toggle (the `.dark` class on <html>), NOT the OS setting. Without this line Tailwind v4
+   ties every `dark:` utility to prefers-color-scheme: a phone in OS dark mode was stuck on a black UI and the toggle
+   did nothing. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+html {
+  color-scheme: light;
+  background-color: #F7F9F8; /* same as the app shell: no black band in the iOS overscroll / safe areas */
+}
+html.dark {
+  color-scheme: dark;
+  background-color: #0E1A16;
+}
+
 @layer utilities {
   .pb-safe {
     padding-bottom: env(safe-area-inset-bottom, 1rem);

@@ -1,5 +1,5 @@
 import React, {useEffect, useState} from 'react';
-import {api, mockApiInstance} from './api/client';
+import {api, mockApiInstance, PAIR_FROM_LINK} from './api/client';
 import {CheckResult} from './api/types';
 import {BottomNav, TabType} from './components/BottomNav';
 import {DemoHelperModal} from './components/DemoHelperModal';
@@ -54,8 +54,8 @@ function AppContent() {
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem('sagi_dark_mode');
-      if (saved !== null) return saved === 'true';
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
+      // Light unless the user chose dark: high contrast on white is the safer default for elderly users
+      return saved === 'true';
     } catch {
       return false;
     }
@@ -63,6 +63,7 @@ function AppContent() {
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<FullTabType>(() => {
+    if (PAIR_FROM_LINK) return 'guardian_view'; // opened from a family member's QR code
     // If kiosk mode is active, opening goes straight to Live Guard!
     try {
       if (localStorage.getItem('sagi_kiosk_mode') === 'true') {
@@ -81,6 +82,7 @@ function AppContent() {
     return window.location.pathname.includes('demo') || window.location.hash.includes('demo');
   });
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() => {
+    if (PAIR_FROM_LINK) return false; // a guardian scanning a QR code came to pair, not to set up a kiosk
     try {
       return localStorage.getItem('sagi_onboarding_completed') !== 'true';
     } catch {

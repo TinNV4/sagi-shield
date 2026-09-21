@@ -162,7 +162,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
           </div>
 
           <div className="mt-2 text-sm font-bold uppercase tracking-wider opacity-80">
-            {t('result.scam_type_prefix')}{result.scam_type}
+            {t('result.scam_type_prefix')}{t(`types.${result.scam_type}`).startsWith('types.') ? t('types.unknown') : t(`types.${result.scam_type}`)}
           </div>
         </div>
 
@@ -206,6 +206,13 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
             {result.advice}
           </p>
         </div>
+
+        {/* The model did not answer or a file could not be read: say so instead of looking like a full analysis */}
+        {result.evidence_flags?.some((f) => f === 'llm_unavailable' || f.endsWith('_not_analyzed')) && (
+          <div id="partial-analysis-notice" className="mt-4 p-3 rounded-xl bg-amber-100 dark:bg-amber-950/60 border border-amber-400 text-amber-900 dark:text-amber-100 text-sm font-bold">
+            {t('result.partial_analysis')}
+          </div>
+        )}
 
         {/* Rule Evidence Chips */}
         {result.evidence_flags && result.evidence_flags.length > 0 && (

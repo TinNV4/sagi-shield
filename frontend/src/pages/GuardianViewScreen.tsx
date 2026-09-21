@@ -11,7 +11,7 @@ import {
   ShieldAlert,
   Users,
 } from 'lucide-react';
-import {api, getFamilyId} from '../api/client';
+import {api, getFamilyId, PAIR_FROM_LINK} from '../api/client';
 import {FamilyAlertItem} from '../api/types';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
@@ -26,9 +26,15 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   const [alerts, setAlerts] = useState<FamilyAlertItem[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const prevAlertCountRef = useRef<number>(0);
-  const [linked, setLinked] = useState<boolean>(api.isMock || !!getFamilyId());
-  const [codeInput, setCodeInput] = useState('');
+  const [linked, setLinked] = useState<boolean>(!PAIR_FROM_LINK && (api.isMock || !!getFamilyId()));
+  const [codeInput, setCodeInput] = useState(PAIR_FROM_LINK);
   const [linkError, setLinkError] = useState(false);
+
+  // API labels (fake_police, ...) are contract values, not text for people
+  const typeLabel = (code: string) => {
+    const label = t(`types.${code}`);
+    return label.startsWith('types.') ? t('types.unknown') : label;
+  };
 
   const handleLink = async () => {
     setLinkError(false);
@@ -188,7 +194,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
                       {t('guardian.risk_badge', {level: alert.risk_level})}
                     </span>
                     <span className="text-xs font-bold opacity-75">
-                      {t('guardian.stage_label', {stage: alert.stage, type: alert.scam_type})}
+                      {t('guardian.stage_label', {stage: alert.stage, type: typeLabel(alert.scam_type)})}
                     </span>
                   </div>
 
@@ -200,7 +206,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
 
                 {/* Member name */}
                 <div className="text-lg sm:text-xl font-black">
-                  {alert.member_name}
+                  {alert.member_name || t('guardian.member_fallback')}
                 </div>
 
                 {/* 2-line summary */}
@@ -215,7 +221,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
                     className="w-full min-h-[52px] rounded-2xl bg-[#1B4D3E] hover:bg-[#143C30] active:scale-98 text-white font-bold text-base flex items-center justify-center gap-2 shadow-md transition"
                   >
                     <PhoneCall className="w-5 h-5 text-yellow-300" />
-                    <span>{t('guardian.btn_call_member', {name: alert.member_name.split('（')[0]})}</span>
+                    <span>{t('guardian.btn_call_member', {name: (alert.member_name || t('guardian.member_fallback')).split('（')[0]})}</span>
                   </a>
                 </div>
               </div>

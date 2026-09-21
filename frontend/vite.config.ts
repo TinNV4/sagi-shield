@@ -45,6 +45,9 @@ export default defineConfig(() => {
         },
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          cleanupOutdatedCaches: true,
+          // the API lives on the same origin: never answer its routes with the cached app shell
+          navigateFallbackDenylist: [/^\/(check|precheck|report|stats|health|healthz|family|agent|ws|spike|docs|openapi\.json)/],
         },
         devOptions: {
           enabled: true,

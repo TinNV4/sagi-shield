@@ -7,10 +7,11 @@
     "privacy_badge": "Âm thanh không gửi ra ngoài (Chỉ xử lý văn bản trên máy)"
   },
   "nav": {
+    "more": "Thêm",
     "home": "Trang chủ",
-    "guard": "Bảo vệ cuộc gọi",
-    "quick": "Kiểm tra nhanh",
-    "pay": "Trước khi chuyển tiền",
+    "guard": "Canh gác",
+    "quick": "Kiểm tra",
+    "pay": "Trước CK",
     "recovery": "Hỗ trợ khẩn cấp",
     "family": "Kết nối người thân",
     "community": "Bản đồ lừa đảo",
@@ -249,6 +250,7 @@
     "fallback_flag": "Cảnh báo dừng chuyển tiền"
   },
   "result": {
+    "partial_analysis": "Hiện chỉ kiểm tra được ở mức cơ bản (phần phân tích AI chưa phản hồi). Hãy thử lại sau ít phút và đừng coi kết quả này là an toàn.",
     "title": "Kết quả đánh giá",
     "btn_back": "Quay lại",
     "explain_elderly": "Giải thích cho người cao tuổi",
@@ -345,6 +347,7 @@
     "unit_guardians": "người"
   },
   "guardian": {
+    "member_fallback": "người thân",
     "title": "Bảng điều khiển người giám hộ",
     "subtitle": "Theo dõi mức độ rủi ro cuộc gọi của người thân từ xa theo thời gian thực (Tự làm mới mỗi 5 giây)",
     "back_btn": "Quay lại cài đặt gia đình",
@@ -455,7 +458,7 @@
     "fake_billing": "Đe dọa nợ cước / Giấy phạt",
     "refund": "Lừa hoàn tiền qua ATM",
     "investment": "Đầu tư tài chính / Việc làm online",
-    "safe": "Liên lạc an toàn",
+    "safe": "Chưa thấy dấu hiệu lừa đảo",
     "unknown": "Liên lạc chưa phân loại"
   },
   "speech_setup": {

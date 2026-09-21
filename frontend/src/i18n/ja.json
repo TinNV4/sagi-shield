@@ -7,10 +7,11 @@
     "privacy_badge": "音声データは端末外へ送信されません（文字のみ解析）"
   },
   "nav": {
+    "more": "その他",
     "home": "ホーム",
-    "guard": "通話を見守る",
-    "quick": "今すぐチェック",
-    "pay": "振り込む前に",
+    "guard": "見守り",
+    "quick": "チェック",
+    "pay": "振込前",
     "recovery": "被害相談",
     "family": "家族連携",
     "community": "地域統計",
@@ -249,6 +250,7 @@
     "fallback_flag": "送金制止警報"
   },
   "result": {
+    "partial_analysis": "ただいまAIによる詳しい分析ができず、簡易チェックのみの結果です。少し待ってからもう一度お試しください。この結果だけで安全と判断しないでください。",
     "title": "診断結果",
     "btn_back": "戻る",
     "explain_elderly": "ご高齢者向け解説",
@@ -345,6 +347,7 @@
     "unit_guardians": "名"
   },
   "guardian": {
+    "member_fallback": "ご家族",
     "title": "見守り人ダッシュボード",
     "subtitle": "離れて暮らす家族の通話リスクをリアルタイムで監視しています（5秒毎自動更新）",
     "back_btn": "見守り設定へ戻る",
@@ -455,7 +458,7 @@
     "fake_billing": "架空料金請求詐欺",
     "refund": "還付金詐欺（ATM誘導）",
     "investment": "偽投資・SNS型詐欺",
-    "safe": "安全な連絡",
+    "safe": "詐欺の特徴は見つかりませんでした",
     "unknown": "未分類の連絡"
   },
   "speech_setup": {

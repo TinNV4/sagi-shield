@@ -34,6 +34,18 @@ export interface SagiApi {
   ): LiveSocketConnection;
 }
 
+/** Pair code carried by a scanned QR link. It lives in the URL *fragment* (#pair=123456): fragments are never sent
+ *  to a server, so the code stays out of access logs. Read once, then removed from the address bar. */
+export const PAIR_FROM_LINK: string = (() => {
+  try {
+    const m = window.location.hash.match(/pair=(\d{6})/);
+    if (m) window.history.replaceState(null, '', window.location.pathname);
+    return m ? m[1] : '';
+  } catch {
+    return '';
+  }
+})();
+
 // VITE_API_BASE: empty = MockApi (DEMO badge) · 'same-origin' = the API that serves this page (Cloud Run) · or a full URL
 const RAW_API_BASE = (import.meta.env.VITE_API_BASE || '').trim();
 export const API_BASE = (RAW_API_BASE === 'same-origin' ? window.location.origin : RAW_API_BASE).replace(/\/+$/, '');

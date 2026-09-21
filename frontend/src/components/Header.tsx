@@ -3,7 +3,6 @@ import {Globe, Moon, Shield, Sparkles, Sun, Wrench} from 'lucide-react';
 import {api, isMockModeActive} from '../api/client';
 import {Language, useI18n} from '../i18n';
 import * as speech from '../lib/speak';
-import {PWAInstallButton} from './PWAInstallButton';
 
 interface HeaderProps {
   darkMode: boolean;
@@ -41,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
     >
       <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between gap-2">
         {/* Brand */}
-        <div className="flex items-center gap-2.5 sm:gap-3">
+        <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <button
             id="header-brand-btn"
             onClick={() => {
@@ -54,15 +53,15 @@ export const Header: React.FC<HeaderProps> = ({
             <Shield className="w-6 h-6 sm:w-7 sm:h-7" />
           </button>
 
-          <div>
-            <div className="flex items-center gap-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               <button
                 id="header-brand-title-btn"
                 onClick={() => {
                   speech.warmUp();
                   onNavigateHome();
                 }}
-                className="text-xl sm:text-2xl font-black tracking-tight text-[#1B4D3E] dark:text-emerald-400 hover:opacity-90 transition text-left focus:outline-none"
+                className="text-lg sm:text-2xl font-black tracking-tight text-[#1B4D3E] dark:text-emerald-400 hover:opacity-90 transition text-left focus:outline-none truncate min-w-0"
               >
                 {t('app.name')}
               </button>
@@ -76,7 +75,7 @@ export const Header: React.FC<HeaderProps> = ({
                     speech.warmUp();
                     onOpenDemoHelper();
                   }}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/60 border border-amber-400 text-amber-900 dark:text-amber-200 text-[10px] sm:text-xs font-black tracking-wider uppercase shadow-xs hover:bg-amber-200 transition"
+                  className="hidden min-[420px]:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-100 dark:bg-amber-950/60 border border-amber-400 text-amber-900 dark:text-amber-200 text-[10px] sm:text-xs font-black tracking-wider uppercase shadow-xs hover:bg-amber-200 transition"
                   title={t('header.demo_title')}
                 >
                   <Wrench className="w-3 h-3 text-amber-600" />
@@ -90,7 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
                     speech.warmUp();
                     onOpenDemoHelper();
                   }}
-                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-400 text-emerald-900 dark:text-emerald-200 text-[10px] sm:text-xs font-black tracking-wider uppercase shadow-xs hover:bg-emerald-200 transition"
+                  className="hidden min-[420px]:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-950/60 border border-emerald-400 text-emerald-900 dark:text-emerald-200 text-[10px] sm:text-xs font-black tracking-wider uppercase shadow-xs hover:bg-emerald-200 transition"
                   title={t('header.gemini_title')}
                 >
                   <Sparkles className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
@@ -105,13 +104,13 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
 
         {/* Controls */}
-        <div className="flex items-center gap-1.5 sm:gap-3">
-          {/* PWA Install Button */}
-          <PWAInstallButton className="hidden md:inline-flex text-xs py-1.5 px-3" />
+        <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
+          {/* No install button here: on iOS it renders as a long "Note for iPhone users" pill and crowds the bar.
+              Home has the install entry at the bottom of the page. */}
 
           {/* Language Switcher */}
-          <div className="relative inline-flex items-center rounded-xl bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-gray-700 px-2 py-1">
-            <Globe className="w-4 h-4 text-gray-500 mr-1 flex-shrink-0" />
+          <div className="relative inline-flex items-center rounded-xl bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-gray-700 px-1.5 sm:px-2 py-1">
+            <Globe className="hidden sm:block w-4 h-4 text-gray-500 mr-1 flex-shrink-0" />
             <select
               id="language-select"
               value={lang}

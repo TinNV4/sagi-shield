@@ -7,10 +7,11 @@
     "privacy_badge": "Audio stays on-device (Only text patterns analyzed)"
   },
   "nav": {
+    "more": "More",
     "home": "Home",
-    "guard": "Live Guard",
-    "quick": "Quick Check",
-    "pay": "Before You Pay",
+    "guard": "Guard",
+    "quick": "Check",
+    "pay": "Before pay",
     "recovery": "Recovery",
     "family": "Family Link",
     "community": "Community",
@@ -249,6 +250,7 @@
     "fallback_flag": "Transfer Prevention Alert"
   },
   "result": {
+    "partial_analysis": "Only a basic check could be done just now (the AI analysis did not respond). Please check again in a moment, and do not treat this result as safe.",
     "title": "Safety Assessment",
     "btn_back": "Back",
     "explain_elderly": "Explain for Seniors",
@@ -345,6 +347,7 @@
     "unit_guardians": "members"
   },
   "guardian": {
+    "member_fallback": "your family member",
     "title": "Guardian Dashboard",
     "subtitle": "Monitoring living call risks for your family members in real-time (Auto-refresh every 5s)",
     "back_btn": "Back to Family Settings",
@@ -455,7 +458,7 @@
     "fake_billing": "Fake Invoice / Penalty Demand",
     "refund": "ATM Refund Scam",
     "investment": "Social Media Investment Scam",
-    "safe": "Legitimate Communication",
+    "safe": "No scam pattern found",
     "unknown": "Unclassified Communication"
   },
   "speech_setup": {
