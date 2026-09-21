@@ -7,8 +7,10 @@ set -euo pipefail
 REGION="${REGION:-asia-northeast1}"
 SERVICE="${SERVICE:-sagi-shield-api}"
 cd "$(dirname "$0")/../frontend"
-VITE_API_BASE=same-origin npm run build            # the PWA is served by the API itself: one URL, same origin
-rm -rf ../backend/static && cp -r dist ../backend/static
+if [ -z "${SKIP_FRONTEND:-}" ]; then               # SKIP_FRONTEND=1: backend-only change, keep backend/static as built
+  VITE_API_BASE=same-origin npm run build          # the PWA is served by the API itself: one URL, same origin
+  rm -rf ../backend/static && cp -r dist ../backend/static
+fi
 cd ../backend
 
 # one --set-env-vars only: gcloud keeps the last one when the flag is repeated. "^@^" = use @ as the separator,

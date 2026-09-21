@@ -55,6 +55,7 @@ def main() -> None:
     ap.add_argument("--gate", default="periodic", choices=["periodic", "rules"])
     ap.add_argument("--no-memory", action="store_true", help="do not carry the set-up-call flag between calls")
     ap.add_argument("--by-case", action="store_true", help="files named case-N.ext belong to one scam: memory is reset when the case changes")
+    ap.add_argument("--fresh", action="store_true", help="transcribe again instead of using the cached transcript")
     ap.add_argument("--out", help="write one JSON row per call (levels and flags only)")
     a = ap.parse_args()
     import risk_engine  # noqa: F401  (.env)
@@ -72,7 +73,14 @@ def main() -> None:
             prior = prior or done[name]["setup_call"]
             continue
         path = pathlib.Path(a.dir) / name
-        heard = services.transcribe_audio(path.read_bytes(), "audio/mpeg" if name.endswith(".mp3") else "audio/wav", "ja") or ""
+        # one transcript per recording, kept next to it (git-ignored): the transcriber differs from run to run (a 429
+        # sends the audio to the next one), and two gates can only be compared on the same text
+        cache = path.with_suffix(".transcript.txt")
+        if cache.exists() and not a.fresh:
+            heard = cache.read_text(encoding="utf-8")
+        else:
+            heard = services.transcribe_audio(path.read_bytes(), "audio/mpeg" if name.endswith(".mp3") else "audio/wav", "ja") or ""
+            cache.write_text(heard, encoding="utf-8")
         t = time.time()
         for attempt in (1, 2, 3):
             try:

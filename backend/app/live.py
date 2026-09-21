@@ -56,6 +56,7 @@ async def live(ws: WebSocket):
     silence_s = float(os.getenv("LIVE_SILENCE_S", "45"))
     llm_every_s = float(os.getenv("LIVE_LLM_EVERY_S", "5"))
     periodic_s = float(os.getenv("LIVE_PERIODIC_S", "20"))
+    periodic_lines = int(os.getenv("LIVE_PERIODIC_LINES", "6"))  # half a window: no line is ever dropped unjudged
     periodic = (ws.query_params.get("gate") or os.getenv("LIVE_LLM_GATE", "periodic")) == "periodic"
     pack = engine.LANG_PACKS[lang]
     tracker, window = engine.LiveTracker(), deque(maxlen=WINDOW_LINES)
@@ -142,7 +143,10 @@ async def live(ws: WebSocket):
             since = time.monotonic() - state["last_llm"]
             ask_from = 20 if tracker.prior_precursor else 40  # after a set-up call the model is consulted earlier
             by_rules = score >= ask_from and since >= llm_every_s
-            by_clock = periodic and len(window) >= 4 and state["unseen"] >= 3 and since >= periodic_s
+            # the clock alone leaves holes: a fast talker says more than one window in periodic_s, and a short call ends
+            # before the second look - so a batch of unseen lines also triggers a look
+            by_clock = periodic and len(window) >= 4 and since >= llm_every_s and (
+                (state["unseen"] >= 3 and since >= periodic_s) or state["unseen"] >= periodic_lines)
             if _use_llm() and idle and (by_rules or by_clock):
                 state["last_llm"], state["unseen"] = time.monotonic(), 0
                 state["task"] = asyncio.create_task(ask_llm("\n".join(window), state["session"]))

@@ -113,3 +113,22 @@ def test_periodic_gate_consults_the_model_even_when_the_rules_are_silent(client,
             say(ws, line)
         levels = [ws.receive_json()["risk_level"] for _ in range(len(asked))]
     assert asked and "<PHONE>" not in asked[0] and levels    # the masked window reached the judge on the clock
+
+
+def test_a_batch_of_unseen_lines_triggers_a_look_before_the_clock_does(client, monkeypatch):
+    # a short call ends, and a fast talker fills the window, long before LIVE_PERIODIC_S has passed
+    asked = []
+
+    def verdict(text, lang, backend=None, model=None):
+        asked.append(text.count("\n") + 1)
+        return live.engine.LlmVerdict(stage=0, scam_type="safe", confidence=0.9, reasons=[], risk=5)
+
+    monkeypatch.setenv("USE_LLM", "1")
+    monkeypatch.setenv("LIVE_PERIODIC_S", "3600")
+    monkeypatch.setenv("LIVE_LLM_EVERY_S", "0")
+    monkeypatch.setattr(live.engine, "llm_verdict", verdict)
+    with client.websocket_connect("/ws/live?lang=ja") as ws:
+        for i in range(11):
+            say(ws, f"今日はいい天気ですね、その{i}。")
+            time.sleep(0.05)
+    assert asked[:2] == [4, 10]                         # first look at 4 lines, the next one 6 lines later
