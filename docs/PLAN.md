@@ -323,6 +323,7 @@ gantt
 - [ ] Targets: recall ≥ 90% on real scam transcripts; **false-alarm rate ≤ 1 per 20 benign calls** (live, per call — not per window); 0 latches in the TV test; `/check` p50 < 4 s; live alert < 10 s after the trigger phrase
 - [x] Audio upload verified on Cloud Run with six synthetic ja/vi calls (`tools/`): 6/6 as expected. Gemini blocks fake-police audio for SAFETY (not configurable) → Chirp 3 fallback; unanalyzed files return 503 instead of a false LOW
 - [x] Model comparison harness (`tools/compare_llm.py`, `LLM_BACKEND=fci`, comparison only): 15 hard cases, DeepSeek-V4-Flash 15/15 vs Gemini 14/15 (the miss = Agent Platform 429 → silent rules-only LOW; now retried and flagged `llm_unavailable`). Open: request a quota increase / provisioned throughput before demo week; show the flag in the UI
+- [x] Quick Check: all five inputs verified on Cloud Run; phone and link no longer depend on the model (overseas / reported numbers, URL-shape floors). Open: de-duplicate community reports per reporter
 - [~] `app/guard.py`: per-client rate limit on HTTP + WS handshakes, access log without bodies / query strings / IPs (uvicorn's log off). Open: UI error states (429, offline), **budget alert on the billing account**
 - [ ] **FEATURE FREEZE A at end of day.** Only bug fixes until 10-04.
 

@@ -44,6 +44,16 @@ MSG = {
                      "vi": "Công an không bao giờ yêu cầu chuyển tiền hay chuyển tiền tiết kiệm sang tài khoản khác."},
     "official_to_person": {"ja": "役所や銀行が、個人の口座へ振り込むよう求めることはありません。",
                            "vi": "Cơ quan nhà nước, ngân hàng không yêu cầu chuyển tiền vào tài khoản cá nhân."},
+    "intl_number": {"ja": "海外からの番号です。日本の警察・役所・銀行が国際電話でかけてくることはありません。",
+                    "vi": "Đây là số gọi từ nước ngoài. Công an, cơ quan nhà nước, ngân hàng trong nước không gọi từ số quốc tế."},
+    "url_lookalike": {"ja": "公式サイトに似せた偽のアドレスです。開かずに、公式アプリや公式サイトから確認してください。",
+                      "vi": "Địa chỉ này giả mạo trang chính thức. Đừng mở; hãy vào ứng dụng hoặc trang chính thức để kiểm tra."},
+    "url_odd": {"ja": "短縮URLや見慣れないドメインです。送り主に別の方法で確認するまで開かないでください。",
+                "vi": "Đây là link rút gọn hoặc tên miền lạ. Đừng mở cho tới khi xác nhận với người gửi bằng cách khác."},
+    "reported": {"ja": "この番号は、他の利用者から詐欺として{n}件報告されています。",
+                 "vi": "Số này đã bị {n} người dùng khác báo cáo là lừa đảo."},
+    "phone_no_reports": {"ja": "この番号への報告はまだありません。安全という意味ではありません。",
+                         "vi": "Chưa có báo cáo nào về số này. Điều đó không có nghĩa là số này an toàn."},
     "stranger": {"ja": "知らない人から頼まれた支払いは、家族や公式窓口に確認してからにしてください。",
                  "vi": "Người lạ yêu cầu chuyển tiền: hãy hỏi người thân hoặc kênh chính thức trước."},
 }
@@ -162,7 +172,22 @@ async def check(request: Request):
             if threats:
                 flags += [f"url_webrisk_{t}" for t in threats]
                 raise_to(result, 90, lang, MSG["webrisk"][lang])
-    return finish(result, flags, sum(store.count_phone(p.hash) for p in ev.phones))
+    # URL shape is evidence even when no model looked at it (flags come from input_layer; the URL is never fetched)
+    if "url_lookalike" in ev.flags:
+        raise_to(result, 70, lang, MSG["url_lookalike"][lang], "fake_billing")
+    elif any(f in ev.flags for f in ("url_shortener", "url_punycode", "url_ip_host", "url_suspicious_tld")):
+        raise_to(result, 50, lang, MSG["url_odd"][lang])
+    # A phone number carries two signals of its own: where it calls from, and what other users reported.
+    community_hits = sum(store.count_phone(p.hash) for p in ev.phones)
+    if "international_number" in ev.flags:
+        raise_to(result, 50, lang, MSG["intl_number"][lang])
+    if community_hits:
+        raise_to(result, 80 if community_hits >= 3 else 50, lang, MSG["reported"][lang].format(n=community_hits))
+    if ev.phones and result["risk_level"] == "LOW":
+        # an unreported number is unknown, not safe - say exactly that
+        result["scam_type"] = "unknown" if result["scam_type"] == "safe" else result["scam_type"]
+        result["reasons"] = ([MSG["phone_no_reports"][lang]] + result["reasons"])[:2]
+    return finish(result, flags, community_hits)
 
 
 class PreCheck(BaseModel):

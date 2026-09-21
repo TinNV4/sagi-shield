@@ -177,6 +177,27 @@ def test_missing_llm_verdict_is_flagged_not_hidden(client, monkeypatch):
     assert "llm_unavailable" in out["evidence_flags"] and out["scam_type"] != "safe"
 
 
+def test_phone_number_signals(client):
+    # seen on Cloud Run: an overseas number came back "LOW / safe", and community reports did not move the score
+    abroad = client.post("/check", json={"lang": "ja", "phone": "+44 20 7946 0000"}).json()
+    assert abroad["risk_level"] == "MEDIUM" and abroad["reasons"][0] == main.MSG["intl_number"]["ja"]
+    fresh = client.post("/check", json={"lang": "ja", "phone": "03-3210-0000"}).json()
+    assert fresh["risk_level"] == "LOW" and fresh["scam_type"] == "unknown" and fresh["reasons"][0] == main.MSG["phone_no_reports"]["ja"]
+    for n, expected in ((1, "MEDIUM"), (2, "MEDIUM"), (3, "HIGH")):
+        client.post("/report", json={"scam_type": "fake_police", "phone": "03-3210-0000", "consent": True})
+        out = client.post("/check", json={"lang": "ja", "phone": "03 3210 0000"}).json()  # same number, typed differently
+        assert (out["community_hits"], out["risk_level"]) == (n, expected)
+    assert "3" in out["reasons"][0] and "3210" not in str(out)
+
+
+def test_url_shape_counts_without_a_model(client):
+    lookalike = client.post("/check", json={"lang": "ja", "url": "https://smbc-card-kakunin.top/login"}).json()
+    assert lookalike["risk_level"] == "HIGH" and lookalike["reasons"][0] == main.MSG["url_lookalike"]["ja"]
+    short = client.post("/check", json={"lang": "ja", "url": "https://bit.ly/3abcd"}).json()
+    assert short["risk_level"] == "MEDIUM" and short["reasons"][0] == main.MSG["url_odd"]["ja"]
+    assert client.post("/check", json={"lang": "ja", "url": "https://www.npa.go.jp/"}).json()["risk_level"] == "LOW"
+
+
 def test_katakana_long_vowel_survives_normalisation(client):
     # regression: every "ー" used to become "-", so キャッシュカード / マネーロンダリング never matched through /check
     from input_layer import normalize_text

@@ -75,7 +75,9 @@ class RealApi implements SagiApi {
       body: formData,
     });
     if (!res.ok) {
-      throw new Error(`Check failed with status: ${res.status}`);
+      // 429 (rate limit) and 503 (file could not be analyzed) carry a sentence meant for the user
+      const detail = await res.json().then((b) => b?.detail).catch(() => null);
+      throw new Error(typeof detail === 'string' ? detail : `Check failed with status: ${res.status}`);
     }
     return res.json();
   }

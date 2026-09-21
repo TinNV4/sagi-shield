@@ -1,4 +1,4 @@
-import React, {useState} from 'react';
+import React, {useEffect, useMemo, useState} from 'react';
 import {
   FileText,
   Globe,
@@ -90,6 +90,13 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
     }
   };
 
+  // Listen to the recording before / after sending it (object URL lives only in this tab)
+  const audioSource = activeTab === 'recording' ? audioBlob || selectedFile : null;
+  const audioPreviewUrl = useMemo(() => (audioSource ? URL.createObjectURL(audioSource) : null), [audioSource]);
+  useEffect(() => () => {
+    if (audioPreviewUrl) URL.revokeObjectURL(audioPreviewUrl);
+  }, [audioPreviewUrl]);
+
   const handleExecuteCheck = async () => {
     speech.warmUp();
     setErrorMsg('');
@@ -125,20 +132,18 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
       if (activeTab === 'text') {
         formData.append('text', inputText);
       } else if (activeTab === 'phone') {
+        // No filler text next to a number or a file: the server must be able to tell "nothing could be
+        // analyzed" (503) from "analyzed and found nothing" - a placeholder sentence would hide the difference.
         formData.append('phone', phoneNumber);
-        formData.append('text', `${t('quick.phone_check_prefix')}: ${phoneNumber}`);
       } else if (activeTab === 'link') {
         formData.append('url', linkUrl);
-        formData.append('text', `${t('quick.url_check_prefix')}: ${linkUrl}`);
+        formData.append('text', linkUrl); // lets the model reason about the domain itself
       } else if (activeTab === 'screenshot' && selectedFile) {
         formData.append('image', selectedFile);
-        formData.append('text', inputText || t('quick.screenshot_analysis_default'));
       } else if (activeTab === 'recording' && audioBlob) {
         formData.append('audio', audioBlob, 'recording.wav');
-        formData.append('text', inputText || t('quick.audio_clip_analysis_default'));
       } else if (activeTab === 'recording' && selectedFile) {
         formData.append('audio', selectedFile);
-        formData.append('text', inputText || t('quick.audio_file_analysis_default'));
       }
 
       const result = await api.check(formData);
@@ -369,6 +374,9 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
                 </>
               )}
             </div>
+            {audioPreviewUrl && (
+              <audio id="audio-preview-player" controls preload="metadata" src={audioPreviewUrl} className="w-full" />
+            )}
           </div>
         )}
 
