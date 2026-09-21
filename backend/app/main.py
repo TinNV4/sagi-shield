@@ -25,7 +25,8 @@ from risk_engine import LANG_PACKS, analyze, level  # noqa: E402
 
 from . import services  # noqa: E402
 from .live import router as live_router  # noqa: E402
-from .storage import get_store  # noqa: E402
+from .notifier import alert_family  # noqa: E402
+from .storage import STORE  # noqa: E402
 
 MAX_IMAGE, MAX_AUDIO, MAX_TEXT = 8 * 2**20, 20 * 2**20, 20_000
 FLAG_BONUS = {"international_number": 10, "url_lookalike": 15}
@@ -47,7 +48,7 @@ MSG = {
 app = FastAPI(title="Sagi Shield API")
 app.add_middleware(CORSMiddleware, allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
                    allow_methods=["*"], allow_headers=["*"])
-store = get_store()
+store = STORE
 app.include_router(live_router)
 SPIKE = Path(__file__).resolve().parents[2] / "frontend" / "spike"  # dev only: not copied into the Docker image
 if SPIKE.is_dir():
@@ -185,6 +186,56 @@ def report(body: Report):
     info = analyze_phone(body.phone, check_lang(body.lang)) if body.phone else None
     store.add_report(body.scam_type, info.hash if info else None, [k[:40] for k in body.keywords], body.prefecture)
     return {"ok": True}
+
+
+class FamilyCode(BaseModel):
+    member_name: str = Field(default="", max_length=40)
+
+
+@app.post("/family/code")
+def family_code(body: FamilyCode):
+    """Protected person's device: start a family. Keep family_id secret; show pair_code (valid 15 min)."""
+    fam = store.create_family(body.member_name)
+    return {"family_id": fam["family_id"], "pair_code": fam["pair_code"], "expires_in": 900}
+
+
+class FamilyLink(BaseModel):
+    pair_code: str = Field(max_length=12)
+    guardian_name: str = Field(default="", max_length=40)
+    fcm_token: str | None = Field(default=None, max_length=4096)
+
+
+@app.post("/family/link")
+def family_link(body: FamilyLink):
+    fam = store.link_guardian("".join(c for c in body.pair_code if c.isdigit()), body.guardian_name, body.fcm_token)
+    if not fam:
+        raise HTTPException(404, "pair code is wrong or expired")
+    return {"ok": True, "family_id": fam["family_id"], "guardian_name": body.guardian_name, "member_name": fam["member_name"]}
+
+
+@app.get("/family/alerts")
+def family_alerts(family_id: str):
+    if not store.get_family(family_id):
+        raise HTTPException(404, "unknown family")
+    return store.list_alerts(family_id)
+
+
+class FamilyNotify(BaseModel):
+    family_id: str = Field(max_length=64)
+    risk_level: Literal["LOW", "MEDIUM", "HIGH"]
+    scam_type: str = Field(default="unknown", max_length=40)
+    stage: int = Field(default=0, ge=0, le=5)
+    reasons: list[str] = Field(default_factory=list, max_length=2)
+    lang: str = "ja"
+
+
+@app.post("/family/notify")
+def family_notify(body: FamilyNotify):
+    """"Notify my family" on a result screen."""
+    alert = alert_family(body.family_id, body.model_dump(), check_lang(body.lang))
+    if not alert:
+        raise HTTPException(404, "unknown family")
+    return {"ok": True, "id": alert["id"]}
 
 
 @app.get("/stats")

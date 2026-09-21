@@ -25,6 +25,8 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import risk_engine as engine  # app.main put backend/core on sys.path
 from input_layer import build_evidence
 
+from .notifier import alert_family
+
 router = APIRouter()
 WINDOW_LINES, MAX_LINE = 12, 500   # ~30 s of speech
 
@@ -44,14 +46,16 @@ async def live(ws: WebSocket):
     llm_every_s = float(os.getenv("LIVE_LLM_EVERY_S", "5"))
     pack = engine.LANG_PACKS[lang]
     tracker, window = engine.LiveTracker(), deque(maxlen=WINDOW_LINES)
-    state = {"session": uuid.uuid4().hex[:12], "spoken": False, "last_llm": 0.0, "task": None}
+    family_id = ws.query_params.get("family_id")
+    state = {"session": uuid.uuid4().hex[:12], "spoken": False, "last_llm": 0.0, "task": None,
+             "scam_type": "unknown", "reasons": []}
 
     def reset():
         tracker.reset()
         window.clear()
         if state["task"]:
             state["task"].cancel()
-        state.update(session=uuid.uuid4().hex[:12], spoken=False, last_llm=0.0, task=None)
+        state.update(session=uuid.uuid4().hex[:12], spoken=False, last_llm=0.0, task=None, scam_type="unknown", reasons=[])
 
     async def send(score: float, trigger: str = ""):
         # HIGH is only announced once latched (2 consecutive windows) - no one-window red flashes
@@ -60,13 +64,18 @@ async def live(ws: WebSocket):
         msg = {"risk_score": score, "risk_level": lv, "stage": tracker.max_stage, "trigger_phrase": trigger,
                "transcript_tail": window[-1] if window else "", "advice": pack["advice"][lv],
                "session_id": state["session"]}
-        if lv == "HIGH" and not state["spoken"]:
+        first_high = lv == "HIGH" and not state["spoken"]
+        if first_high:
             state["spoken"], msg["speak"] = True, pack["speak"]
-        await ws.send_json(msg)
+        await ws.send_json(msg)  # the person on the phone is warned first; the family push must never delay it
+        if first_high and family_id:
+            reasons = state["reasons"] or engine.rule_reasons(tracker.hits, lang)
+            await asyncio.to_thread(alert_family, family_id, {**msg, "scam_type": state["scam_type"], "reasons": reasons}, lang)
 
     async def ask_llm(text: str, session: str):
         v = await asyncio.to_thread(engine.llm_verdict, text, lang)
         if v and session == state["session"]:  # the call may have been reset while we waited
+            state["scam_type"], state["reasons"] = v.scam_type, v.reasons
             await send(tracker.update({}, engine.STAGE_SCORE.get(v.stage, 0), v.stage, v.confidence))
 
     try:

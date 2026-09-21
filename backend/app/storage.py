@@ -6,8 +6,29 @@ Only hashes and aggregates are stored - never raw phone numbers, audio or transc
 """
 from __future__ import annotations
 import os
+import secrets
+import time
+import uuid
 from collections import Counter
 from datetime import datetime, timezone
+
+
+PAIR_CODE_TTL_S, MAX_ALERTS = 15 * 60, 50
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _new_family(member_name: str) -> dict:
+    # family_id is the shared secret of one family (unguessable); the 6-digit code only lives 15 min
+    return {"family_id": secrets.token_urlsafe(16), "pair_code": f"{secrets.randbelow(10**6):06d}",
+            "code_expires": time.time() + PAIR_CODE_TTL_S, "member_name": member_name[:40], "guardians": []}
+
+
+def _alert(risk_level: str, scam_type: str, stage: int, summary: str, member_name: str) -> dict:
+    return {"id": uuid.uuid4().hex[:12], "created_at": _now_iso(), "member_name": member_name,
+            "risk_level": risk_level, "scam_type": scam_type, "stage": stage, "summary": summary[:300]}
 
 
 def _today() -> str:
@@ -29,6 +50,8 @@ class MemoryStore:
     def __init__(self):
         self.reports: list[dict] = []
         self.checks: Counter = Counter()
+        self.families: dict[str, dict] = {}
+        self.alerts: dict[str, list[dict]] = {}
 
     def add_report(self, scam_type: str, phone_hash: str | None, keywords: list[str], prefecture: str | None) -> None:
         self.reports.append({"scam_type": scam_type, "phone_hash": phone_hash, "keywords": keywords[:10],
@@ -44,6 +67,33 @@ class MemoryStore:
 
     def stats(self) -> dict:
         return _stats(self.checks, self.reports)
+
+    def create_family(self, member_name: str) -> dict:
+        fam = _new_family(member_name)
+        self.families[fam["family_id"]] = fam
+        return fam
+
+    def link_guardian(self, pair_code: str, guardian_name: str, fcm_token: str | None) -> dict | None:
+        for fam in self.families.values():
+            if fam["pair_code"] == pair_code and fam["code_expires"] > time.time():
+                fam["guardians"].append({"name": guardian_name[:40], "fcm_token": fcm_token})
+                fam["code_expires"] = 0  # single use
+                return fam
+        return None
+
+    def get_family(self, family_id: str) -> dict | None:
+        return self.families.get(family_id)
+
+    def add_alert(self, family_id: str, risk_level: str, scam_type: str, stage: int, summary: str) -> dict | None:
+        fam = self.families.get(family_id)
+        if not fam:
+            return None
+        alert = _alert(risk_level, scam_type, stage, summary, fam["member_name"])
+        self.alerts[family_id] = ([alert] + self.alerts.get(family_id, []))[:MAX_ALERTS]
+        return alert
+
+    def list_alerts(self, family_id: str) -> list[dict]:
+        return list(self.alerts.get(family_id, []))
 
 
 class FirestoreStore:
@@ -71,6 +121,43 @@ class FirestoreStore:
         reports = [d.to_dict() for d in self.db.collection("reports").limit(5000).stream()]  # demo-sized
         return _stats(checks, reports)
 
+    # families/{family_id} + families/{family_id}/alerts/{id}  (never run against a real Firestore yet)
+    def create_family(self, member_name: str) -> dict:
+        fam = _new_family(member_name)
+        self.db.collection("families").document(fam["family_id"]).set(fam)
+        return fam
+
+    def link_guardian(self, pair_code: str, guardian_name: str, fcm_token: str | None) -> dict | None:
+        q = self.db.collection("families").where(filter=self.fs.FieldFilter("pair_code", "==", pair_code)).limit(5)
+        for doc in q.stream():
+            fam = doc.to_dict()
+            if fam["code_expires"] > time.time():
+                fam["guardians"].append({"name": guardian_name[:40], "fcm_token": fcm_token})
+                fam["code_expires"] = 0
+                doc.reference.set(fam)
+                return fam
+        return None
+
+    def get_family(self, family_id: str) -> dict | None:
+        doc = self.db.collection("families").document(family_id).get()
+        return doc.to_dict() if doc.exists else None
+
+    def add_alert(self, family_id: str, risk_level: str, scam_type: str, stage: int, summary: str) -> dict | None:
+        fam = self.get_family(family_id)
+        if not fam:
+            return None
+        alert = _alert(risk_level, scam_type, stage, summary, fam["member_name"])
+        self.db.collection("families").document(family_id).collection("alerts").document(alert["id"]).set(alert)
+        return alert
+
+    def list_alerts(self, family_id: str) -> list[dict]:
+        col = self.db.collection("families").document(family_id).collection("alerts")
+        docs = col.order_by("created_at", direction=self.fs.Query.DESCENDING).limit(MAX_ALERTS).stream()
+        return [d.to_dict() for d in docs]
+
 
 def get_store():
     return FirestoreStore() if os.getenv("STORE", "memory") == "firestore" else MemoryStore()
+
+
+STORE = get_store()  # one instance per process, shared by the HTTP routes and the live socket
