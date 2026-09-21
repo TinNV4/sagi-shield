@@ -9,6 +9,7 @@ Env: USE_LLM=0 rules only · STORE=firestore · USE_WEBRISK=1 · CORS_ORIGINS=ht
 """
 from __future__ import annotations
 import io
+import logging
 import os
 import sys
 from pathlib import Path
@@ -25,6 +26,7 @@ from risk_engine import LANG_PACKS, analyze, level  # noqa: E402
 
 from . import services  # noqa: E402
 from .agent import router as agent_router  # noqa: E402
+from .guard import GuardMiddleware  # noqa: E402
 from .live import router as live_router  # noqa: E402
 from .notifier import alert_family  # noqa: E402
 from .storage import STORE  # noqa: E402
@@ -46,7 +48,9 @@ MSG = {
                  "vi": "Người lạ yêu cầu chuyển tiền: hãy hỏi người thân hoặc kênh chính thức trước."},
 }
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
 app = FastAPI(title="Sagi Shield API")
+app.add_middleware(GuardMiddleware)  # added first = innermost: CORS headers are still put on a 429
 app.add_middleware(CORSMiddleware, allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
                    allow_methods=["*"], allow_headers=["*"])
 store = STORE

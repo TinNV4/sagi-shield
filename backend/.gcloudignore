@@ -1,0 +1,9 @@
+# What `gcloud run deploy --source .` uploads to Cloud Build: only what the image needs.
+# eval/ may hold police audio for private evaluation - it must never leave this machine.
+eval/
+tests/
+spike/
+.env
+__pycache__/
+.pytest_cache/
+.deepeval/
