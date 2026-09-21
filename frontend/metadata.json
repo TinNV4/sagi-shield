@@ -1,0 +1,6 @@
+{
+  "name": "Sagi Shield",
+  "description": "Installable PWA protecting families against phone scams (オレオレ詐欺, fake police, VNeID scams) with on-device speech transcription and live safety guard.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

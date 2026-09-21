@@ -1,0 +1,84 @@
+@import "tailwindcss";
+
+@layer utilities {
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
+  }
+}
+
+/* 3-Second Urgency Pulse Animation for High-Risk Takeover */
+@keyframes takeover-pulse-3s {
+  0%, 100% {
+    background-color: #991B1B;
+    box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.7);
+  }
+  50% {
+    background-color: #DC2626;
+    box-shadow: inset 0 0 100px rgba(254, 240, 138, 0.38);
+  }
+}
+
+.animate-takeover-pulse-3s {
+  animation: takeover-pulse-3s 3s ease-in-out infinite;
+}
+
+@keyframes beacon-ring-3s {
+  0%, 100% {
+    transform: scale(0.92);
+    opacity: 0.5;
+    box-shadow: 0 0 0 0 rgba(255, 235, 59, 0.6);
+  }
+  50% {
+    transform: scale(1.22);
+    opacity: 0.9;
+    box-shadow: 0 0 35px 12px rgba(255, 255, 255, 0.4);
+  }
+}
+
+.animate-beacon-ring-3s {
+  animation: beacon-ring-3s 3s ease-in-out infinite;
+}
+
+@keyframes urgent-badge-pulse-3s {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.85;
+  }
+  50% {
+    transform: scale(1.06);
+    opacity: 1;
+    filter: drop-shadow(0 0 8px rgba(254, 240, 138, 0.6));
+  }
+}
+
+.animate-urgent-badge-3s {
+  animation: urgent-badge-pulse-3s 3s ease-in-out infinite;
+}
+
+@keyframes pulse-fast {
+  0%, 100% {
+    background-color: #C62828;
+  }
+  50% {
+    background-color: #B71C1C;
+  }
+}
+
+.animate-pulse-fast {
+  animation: pulse-fast 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out forwards;
+}
