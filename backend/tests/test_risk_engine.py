@@ -194,3 +194,12 @@ def test_ui_sample_texts_score_as_labelled():
         for key in ("sample_jp_police_text", "sample_jp_refund_text", "sample_vi_police_text"):
             assert rules(quick[key], lang)["risk_level"] == "HIGH", (lang, key)
         assert rules(quick["sample_safe_text"], lang)["risk_level"] == "LOW"
+
+
+def test_verdict_parser_for_models_without_constrained_decoding():
+    from risk_engine import parse_verdict
+    raw = 'Let me think {"not": "it"}. ```json\n{"stage": 4, "scam_type": "fake_police", "confidence": 0.9, "reasons": ["a", "b", "c"]}\n```'
+    v = parse_verdict(raw)
+    assert v.stage == 4 and v.reasons == ["a", "b"]
+    assert parse_verdict('{"stage": 5, "scam_type": "police_impersonation", "confidence": 1, "reasons": []}') is None  # outside the contract
+    assert parse_verdict("I cannot help with that") is None

@@ -167,6 +167,16 @@ def test_transcription_reads_the_right_field_and_falls_back_in_order(monkeypatch
     assert services.transcribe_audio(b"RIFF", "audio/wav", "vi") == "chirp:vi" and len(calls) == 2
 
 
+def test_missing_llm_verdict_is_flagged_not_hidden(client, monkeypatch):
+    # seen on Cloud Run: Gemini 429 -> rules only -> an ore-ore call came back "LOW / safe" with no hint
+    import risk_engine
+    monkeypatch.setenv("USE_LLM", "1")
+    monkeypatch.setattr(risk_engine, "llm_verdict", lambda text, lang, backend=None: None)
+    monkeypatch.setattr(main, "analyze", risk_engine.analyze)
+    out = client.post("/check", json={"lang": "ja", "text": "母さん、俺だけど。今日中に300万必要なんだ"}).json()
+    assert "llm_unavailable" in out["evidence_flags"] and out["scam_type"] != "safe"
+
+
 def test_katakana_long_vowel_survives_normalisation(client):
     # regression: every "ー" used to become "-", so キャッシュカード / マネーロンダリング never matched through /check
     from input_layer import normalize_text

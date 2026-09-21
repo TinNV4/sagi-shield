@@ -85,6 +85,7 @@ def raise_to(result: dict, floor: int, lang: str, reason: str, scam_type: str | 
 
 
 def finish(result: dict, flags: list[str], community_hits: int) -> dict:
+    result.pop("llm_used", None)  # internal; the contract exposes it as the `llm_unavailable` flag
     result.update(evidence_flags=sorted(set(flags)), community_hits=community_hits)
     store.record_check(result["risk_level"])
     return result
@@ -146,6 +147,11 @@ async def check(request: Request):
     flags += ev.flags
     bonus = sum(v for k, v in FLAG_BONUS.items() if k in ev.flags)
     result = analyze(ev.text, lang, use_llm=use_llm(), bonus=bonus)
+    if use_llm() and ev.text and not result.get("llm_used", True):
+        # the model was asked and did not answer: rules alone miss keyword-free scams (ore-ore), so never call it "safe"
+        flags.append("llm_unavailable")
+        if result["scam_type"] == "safe":
+            result["scam_type"] = "unknown"
 
     if doc_type in services.OFFICIAL_DOCS:
         flags.append(f"image_{doc_type}")
