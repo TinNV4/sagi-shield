@@ -215,3 +215,10 @@ def test_people_warning_each_other_is_not_a_hard_combo():
     assert analyze(scam, "vi", use_llm=False)["risk_level"] == "HIGH"  # the bare word "lừa đảo" is not a reporting marker
     ja = "警視庁です。詐欺事件の捜査で、あなたの口座が犯罪に使われていることが分かりました。LINEで逮捕状を送ります。"
     assert analyze(ja, "ja", use_llm=False)["risk_level"] == "HIGH"
+
+
+def test_low_result_never_carries_a_scam_label():
+    from risk_engine import LlmVerdict
+    suspicious = LlmVerdict(stage=1, scam_type="fake_police", confidence=0.3, reasons=["警察を名乗る連絡"])
+    out = analyze("警察署の落とし物係です。お財布が届いています。窓口までお越しください", "ja", use_llm=False, verdict=suspicious)
+    assert out["risk_level"] == "LOW" and out["scam_type"] == "unknown"

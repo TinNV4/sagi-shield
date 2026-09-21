@@ -353,7 +353,8 @@ def analyze(text: str, lang: str = "ja", use_llm: bool = True, verdict: LlmVerdi
         "risk_score": score,
         "risk_level": lv,
         "stage": max(rule_stage(hits) if score >= 40 else 0, v.stage if v else 0),
-        "scam_type": v.scam_type if v else ("unknown" if score >= 40 else "safe"),
+        # a scam label next to LOW reads as a contradiction on screen: below MEDIUM only "safe" / "unknown" are shown
+        "scam_type": (v.scam_type if lv != "LOW" or v.scam_type == "safe" else "unknown") if v else ("unknown" if score >= 40 else "safe"),
         "rule_hits": {Stage(s).name: m for s, m in hits.items()},
         "reasons": (v.reasons if v and v.reasons else rule_reasons(hits, lang) if score >= 40 else [])[:2],
         "advice": LANG_PACKS[lang]["advice"][lv],

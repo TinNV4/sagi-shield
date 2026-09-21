@@ -54,7 +54,8 @@ def describe_image(jpeg: bytes) -> ImageVerdict | None:
         from google.genai import types
         from risk_engine import safety_settings  # app.main put backend/core on sys.path
         resp = _generate(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+            # reading a photographed warrant is the one job kept on the larger model; text judging runs on flash-lite
+            model=os.getenv("GEMINI_VISION_MODEL") or os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
             contents=[types.Part.from_bytes(data=jpeg, mime_type="image/jpeg"), IMAGE_PROMPT],
             config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=ImageVerdict,
                                                temperature=0.0,
