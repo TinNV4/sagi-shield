@@ -144,14 +144,27 @@ def test_rule_verdict_never_keeps_a_safe_label(client, monkeypatch):
     assert client.get("/health").json()["ok"] and client.get("/healthz").json()["ok"]
 
 
-def test_gemini_refusing_the_audio_falls_back_to_chirp(monkeypatch):
-    # seen on Cloud Run: block_reason=SAFETY on a fake-police recording, even with BLOCK_NONE
-    class Blocked:
-        text, prompt_feedback = None, "block_reason=SAFETY"
+def test_transcription_reads_the_right_field_and_falls_back_in_order(monkeypatch):
+    from types import SimpleNamespace as NS
 
-    monkeypatch.setattr(services, "_generate", lambda **kw: Blocked())
+    def response(heard=None, text=None):
+        part = NS(audio_transcription=NS(text=heard) if heard else None)
+        return NS(candidates=[NS(content=NS(parts=[part]))], text=text, prompt_feedback="block_reason=SAFETY")
+
+    # 1. the transcribe model answers in parts[].audio_transcription, not in .text (found 2026-09-21)
+    client = NS(models=NS(generate_content=lambda **kw: response(heard="もしもし")))
+    monkeypatch.setattr(services, "_stt_clients", lambda: iter([client]))
+    assert services.transcribe_audio(b"RIFF", "audio/wav", "ja") == "もしもし"
+    # 2. transcribe model 404 everywhere, general model blocked for SAFETY -> Chirp 3
+    def not_found(**kw):
+        err = RuntimeError("404"); err.code = 404
+        raise err
+    calls = []
+    monkeypatch.setitem(services._stt, "client", None)
+    monkeypatch.setattr(services, "_stt_clients", lambda: iter([NS(models=NS(generate_content=lambda **kw: (calls.append(1), not_found())[1]))] * 2))
+    monkeypatch.setattr(services, "_generate", lambda **kw: response())
     monkeypatch.setattr(services, "transcribe_chirp", lambda data, lang: f"chirp:{lang}")
-    assert services.transcribe_audio(b"RIFF", "audio/wav", "vi") == "chirp:vi"
+    assert services.transcribe_audio(b"RIFF", "audio/wav", "vi") == "chirp:vi" and len(calls) == 2
 
 
 def test_katakana_long_vowel_survives_normalisation(client):

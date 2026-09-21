@@ -67,27 +67,70 @@ def describe_image(jpeg: bytes) -> ImageVerdict | None:
         return None
 
 
-def transcribe_audio(data: bytes, mime_type: str, lang: str = "ja") -> str | None:
-    """Uploaded recording -> text. Gemini first; Chirp 3 when Gemini refuses the audio.
+STT_MODEL = "gemini-3.5-transcribe"
+_stt = {"client": None, "retry_after": 0.0}  # client that last served STT_MODEL / when to probe again after 404s
+STT_RETRY_S = 3600
 
-    Found on Cloud Run (2026-09-21): a fake-police call comes back `block_reason=SAFETY` even with BLOCK_NONE -
-    a fixed filter on audio prompts, triggered by exactly the threats we need to hear. Chirp 3 is plain speech
-    recognition with no content filter, so the scam still reaches the text judge."""
+
+def _stt_clients():
+    """Where to find the transcribe model. Measured 2026-09-21: served by the Gemini Developer API (API key), 404 on
+    Agent Platform in global / us-central1 / asia-northeast1 / us / europe-west4. So: a dedicated key if one is
+    mounted (STT_API_KEY, from Secret Manager), else the default client when it is key-based, else probe
+    STT_LOCATIONS - and after a full round of 404s stop probing for an hour instead of paying for it on every upload."""
+    from google import genai
+    if _stt["client"] is not None:
+        yield _stt["client"]
+        return
+    if os.getenv("STT_API_KEY", "").strip():
+        yield genai.Client(api_key=os.environ["STT_API_KEY"].strip())
+        return
+    if os.getenv("GOOGLE_GENAI_USE_ENTERPRISE", "").lower() != "true":
+        yield _client()
+        return
+    if time.time() < _stt["retry_after"]:
+        return
+    _stt["retry_after"] = time.time() + STT_RETRY_S  # cleared again as soon as one location answers
+    for location in os.getenv("STT_LOCATIONS", "us-central1,asia-northeast1,us,europe-west4").split(","):
+        yield genai.Client(enterprise=True, project=os.environ["GOOGLE_CLOUD_PROJECT"], location=location.strip())
+
+
+def _transcript_of(resp) -> str:
+    """The transcribe models answer in parts[].audio_transcription.text - `resp.text` stays empty."""
+    parts = [p for c in (resp.candidates or []) if c.content for p in (c.content.parts or [])]
+    heard = [p.audio_transcription.text for p in parts if getattr(p, "audio_transcription", None)]
+    return " ".join(t for t in heard if t).strip() or (resp.text or "").strip()
+
+
+def transcribe_audio(data: bytes, mime_type: str, lang: str = "ja") -> str | None:
+    """Uploaded recording -> text: gemini-3.5-transcribe, then the scoring model, then Chirp 3.
+
+    Measured 2026-09-21 on a synthetic fake-police call: the transcribe model returns it verbatim in ~3 s; the
+    general model refuses the same audio (`block_reason=SAFETY`, even with BLOCK_NONE) - hence it is only second."""
+    from google.genai import types
+    from risk_engine import safety_settings  # app.main put backend/core on sys.path
+    audio = types.Part.from_bytes(data=data, mime_type=mime_type or "audio/wav")
+    for client in _stt_clients():
+        try:
+            resp = client.models.generate_content(model=os.getenv("STT_BATCH_MODEL", STT_MODEL), contents=[audio])
+            _stt["client"], _stt["retry_after"] = client, 0.0
+            text = _transcript_of(resp)
+            if text:
+                return text
+            _warn("transcribe model", RuntimeError(f"empty transcript, feedback={resp.prompt_feedback}"))
+            break
+        except Exception as e:
+            _warn("transcribe model", e)
+            if getattr(e, "code", None) != 404:  # 404 = not served from this location: try the next one
+                break
     try:
-        from google.genai import types
-        from risk_engine import safety_settings  # app.main put backend/core on sys.path
         resp = _generate(
-            # the scoring model hears audio natively and is served wherever the app runs; `gemini-3.5-transcribe`
-            # was 404 on the global endpoint of a fresh project (2026-09-21) - opt in with STT_BATCH_MODEL
-            model=os.getenv("STT_BATCH_MODEL") or os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
-            contents=[types.Part.from_bytes(data=data, mime_type=mime_type or "audio/wav"),
-                      "Transcribe this phone call verbatim in its original language. Output the transcript only."],
+            model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+            contents=[audio, "Transcribe this phone call verbatim in its original language. Output the transcript only."],
             config=types.GenerateContentConfig(
                 system_instruction="You transcribe phone calls for a fraud-detection service that protects elderly people. "
                                    "Calls may contain threats or scam scripts; transcribing them is how they get detected.",
-                thinking_config=types.ThinkingConfig(thinking_level="low"), safety_settings=safety_settings()),
-        )
-        text = (resp.text or "").strip()
+                thinking_config=types.ThinkingConfig(thinking_level="low"), safety_settings=safety_settings()))
+        text = _transcript_of(resp)
         if text:
             return text
         _warn("gemini transcription", RuntimeError(f"empty transcript, feedback={resp.prompt_feedback}"))
