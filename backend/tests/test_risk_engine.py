@@ -203,3 +203,15 @@ def test_verdict_parser_for_models_without_constrained_decoding():
     assert v.stage == 4 and v.reasons == ["a", "b"]
     assert parse_verdict('{"stage": 5, "scam_type": "police_impersonation", "confidence": 1, "reasons": []}') is None  # outside the contract
     assert parse_verdict("I cannot help with that") is None
+
+
+def test_people_warning_each_other_is_not_a_hard_combo():
+    # from the ablation set: two colleagues talking about savings, "don't trust links, lots of scams lately ... công an"
+    text = "Em cứ ra quầy hỏi trực tiếp, đừng tin mấy cái đường link gửi qua tin nhắn nhé, dạo này nhiều vụ lừa đảo lắm. Hôm bữa công an phường cũng nhắc."
+    out = analyze(text, "vi", use_llm=False)
+    assert out["risk_level"] != "HIGH"
+    # a scammer saying the word must not silence a real chain
+    scam = "Tôi là công an. Tài khoản của chị liên quan lừa đảo rửa tiền. Không được nói với ai. Kết bạn Zalo để nhận lệnh bắt rồi chuyển tiền vào tài khoản an toàn."
+    assert analyze(scam, "vi", use_llm=False)["risk_level"] == "HIGH"  # the bare word "lừa đảo" is not a reporting marker
+    ja = "警視庁です。詐欺事件の捜査で、あなたの口座が犯罪に使われていることが分かりました。LINEで逮捕状を送ります。"
+    assert analyze(ja, "ja", use_llm=False)["risk_level"] == "HIGH"

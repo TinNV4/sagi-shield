@@ -59,7 +59,8 @@ LANG_PACKS = {
                           r"(安全|確認|指定|調査).{0,6}口座", r"(預金|お金|資金|全額).{0,8}(移動|移し|移す|預け)"],
         },
         # third-person words used when talking ABOUT scams (news, police warnings), not while running one
-        "reporting": [r"名乗", r"によりますと", r"ニュース", r"手口", r"注意を呼びかけ"],
+        "reporting": [r"名乗", r"によりますと", r"ニュース", r"手口", r"注意を呼びかけ",
+                      r"詐欺に(気をつけ|注意)", r"詐欺(が|も)(多|増え)"],  # NOT bare 詐欺: fake police say 詐欺事件の捜査で
         # rules-only fallback when the LLM gave no reasons (one short sentence per link)
         "reasons": {
             Stage.AUTHORITY: "警察や役所を名乗る電話は、まず疑ってください。",
@@ -87,7 +88,9 @@ LANG_PACKS = {
             Stage.MONEY: [r"chuyển.{0,15}(tiền|khoản|triệu)", r"tài khoản tạm giữ", r"\botp\b", r"\batm\b", r"mã xác (nhận|thực)",
                           r"xác minh (dòng )?tiền"],
         },
-        "reporting": [r"giả danh", r"mạo danh", r"thủ đoạn", r"cảnh báo", r"khuyến cáo"],
+        # people warning each other count too ("dạo này nhiều vụ lừa đảo lắm, đừng tin link lạ") - found by the ablation set
+        "reporting": [r"giả danh", r"mạo danh", r"thủ đoạn", r"cảnh báo", r"khuyến cáo", r"cảnh giác",
+                      r"(nhiều|mấy) vụ lừa đảo", r"đừng tin"],  # NOT bare "lừa đảo": fake police say "liên quan đường dây lừa đảo"
         "reasons": {
             Stage.AUTHORITY: "Người tự xưng công an, cơ quan nhà nước qua điện thoại: hãy nghi ngờ trước.",
             Stage.FEAR: "Dọa bắt giữ, khóa tài khoản hoặc hứa hoàn tiền để hối thúc là chiêu lừa đảo quen thuộc.",

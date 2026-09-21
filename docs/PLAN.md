@@ -317,10 +317,10 @@ gantt
 - [x] F6 recovery agent (`app/agent.py`, google-adk 2.9): three state-changing tools (payment channel / step done / police statement), numbers masked before the model, scripted fallback when the model is down. Stateless per instance: state + masked turns live in the store (`recovery_sessions`, 24 h; **set a Firestore TTL policy on `expires_at` at deploy**). Real run 2026-09-21 (free tier): channel + statement tools called correctly, 14–26 s per turn; all three tools verified on Cloud Run (Agent Platform), state round-trips through Firestore; ~22 s per turn - try `gemini-3.5-flash-lite` for the agent
 
 ### P5 · Eval & freeze A (9/30)
-- [ ] `gen_dataset.py gen` → 100 JP + 100 VN synthetic (40% hard negatives) — *dev set*
+- [x] Dev set: 59 JP + 56 VN synthetic transcripts (~35% hard negatives), **written by DeepSeek-V4-Flash, judged by Gemini** so the evaluation is not circular; committed in `backend/eval/`
 - [ ] Held-out real set: police transcripts (scam, private) + real benign set + injection samples — *test set, reported in deck*
-- [ ] Ablation table: **rules-only / LLM-only / hybrid** on the test set
-- [ ] Targets: recall ≥ 90% on real scam transcripts; **false-alarm rate ≤ 1 per 20 benign calls** (live, per call — not per window); 0 latches in the TV test; `/check` p50 < 4 s; live alert < 10 s after the trigger phrase
+- [x] Ablation (`docs/EVAL.md`): at MEDIUM rules 75.0% recall / 46.2% FPR → rules + LLM **96.1% / 2.6%**; at HIGH recall 35.5% → **78.9%**, FPR 2.6%. LLM-only column not run (the product never runs without rules)
+- [~] Targets: synthetic recall 96% ≥ 90% ✅; false alarms 1 in 39 benign ✅ (≤ 1 in 20); live alert ≈ 12 s into the scripted call, LLM verdict ≈ 1.5 s with flash-lite ✅; `/check` p50 ≈ 6 s ❌ (> 4 s: try flash-lite for text checks too). Not measured: real held-out calls, the TV test
 - [x] Audio upload verified on Cloud Run with six synthetic ja/vi calls (`tools/`): 6/6 as expected. Gemini blocks fake-police audio for SAFETY (not configurable) → Chirp 3 fallback; unanalyzed files return 503 instead of a false LOW
 - [x] Model comparison harness (`tools/compare_llm.py`, `LLM_BACKEND=fci`, comparison only): 15 hard cases, DeepSeek-V4-Flash 15/15 vs Gemini 14/15 (the miss = Agent Platform 429 → silent rules-only LOW; now retried and flagged `llm_unavailable`). Open: request a quota increase / provisioned throughput before demo week; show the flag in the UI
 - [x] Quick Check: all five inputs verified on Cloud Run; phone and link no longer depend on the model (overseas / reported numbers, URL-shape floors). Open: de-duplicate community reports per reporter
