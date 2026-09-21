@@ -1,5 +1,6 @@
 import React, {useEffect} from 'react';
 import {PhoneCall, PhoneOff, ShieldAlert, CheckCircle2} from 'lucide-react';
+import {CallTrustedButton} from './TrustedContact';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
 
@@ -114,6 +115,11 @@ export const HighRiskTakeover: React.FC<HighRiskTakeoverProps> = ({
               {t('live.takeover_detected_word')} <strong>「{triggerPhrase}」</strong>
             </div>
           )}
+
+          {/* One tap to the number the user already trusts (renders only when one is saved) */}
+          <div className="mt-4 w-full">
+            <CallTrustedButton tone="alarm" />
+          </div>
 
           {/* Firm Guidance Box */}
           <div className="mt-4 w-full bg-black/30 backdrop-blur-md rounded-2xl p-4 sm:p-5 border border-white/20 text-center shadow-lg">

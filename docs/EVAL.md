@@ -61,6 +61,22 @@ for nothing yet; 3-7 short calls per case). Each call is judged alone today - re
 calls of the same day is on the roadmap. Median time per upload 6.1 s.
 Reproduce: `python tools/eval_real_audio.py download`, then `score <url>`.
 
+## Real calls through the LIVE path (WebSocket, device-like memory)
+
+`tools/replay_live.py` transcribes a recording, then feeds the sentences one by one to the deployed `/ws/live` at the
+pace of speech, carrying the "set-up call heard" flag between calls the way the app does (2026-09-21, numbers only):
+
+| Recording | Result | Note |
+|---|---|---|
+| fake police (`k1-1`, 36 sentences) | alarm at sentence 12, spoken warning | not flagged as a set-up call |
+| "it's me", call 1 of 7 (`n1-1`) | LOW, quiet - **remembered as a set-up call** | the caller asks for nothing |
+| calls 2 and 3 (`n1-2`, `n1-3`) | LOW, quiet | memory alone accuses nobody |
+| call 6, the money request (`n1-6`, 33 sentences) | **alarm at sentence 5**, spoken warning | sentence 8 without the memory |
+
+Before the periodic gate, none of these calls reached the model in the live path: the rules scored the real speech
+0-50 and the old gate waited for MEDIUM. On 49 legitimate synthetic calls the set-up flag fired once (2%); its only
+effect is a soft floor on a later money request, which the model can veto.
+
 ## Threshold MEDIUM (any warning shown)
 
 | Lang | System | Recall | Precision | False-positive rate | TP | FP | TN | FN |

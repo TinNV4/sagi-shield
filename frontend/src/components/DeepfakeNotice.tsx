@@ -1,5 +1,6 @@
 import React from 'react';
 import {Video} from 'lucide-react';
+import {CallTrustedButton} from './TrustedContact';
 import {useI18n} from '../i18n';
 
 /**
@@ -35,6 +36,7 @@ export const DeepfakeNotice: React.FC<{compact?: boolean}> = ({compact = false})
       <p className="text-sm sm:text-base font-black text-violet-900 dark:text-violet-200 leading-snug">
         {t('deepfake.action')}
       </p>
+      <CallTrustedButton />
       {!compact && <p className="text-xs text-gray-500 dark:text-gray-400">{t('deepfake.source')}</p>}
     </div>
   );

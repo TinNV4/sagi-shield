@@ -612,5 +612,14 @@
     ],
     "action": "Bình tĩnh, cúp máy và gọi lại số bạn đã lưu từ trước. Đừng chuyển tiền chỉ vì một cuộc gọi video.",
     "source": "Theo khuyến cáo 5 dấu hiệu nhận biết của Cục An toàn thông tin. Sagi Shield hiện chưa phân tích hình ảnh cuộc gọi video."
+  },
+  "trusted": {
+    "title": "Người để xác minh",
+    "desc": "Khi có cuộc gọi tự nhận là người thân - hoặc cuộc gọi video hiện khuôn mặt quen - hãy cúp máy và gọi vào số này, số bạn vẫn tin từ trước. Chỉ lưu trên thiết bị này.",
+    "name_placeholder": "Tên (vd: Nam, con trai)",
+    "tel_placeholder": "Số điện thoại quen thuộc",
+    "save": "Lưu",
+    "saved": "Đã lưu",
+    "call_btn": "Cúp máy và gọi {{name}} theo số đã lưu"
   }
 }

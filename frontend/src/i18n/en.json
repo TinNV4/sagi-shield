@@ -612,5 +612,14 @@
     ],
     "action": "Stay calm, hang up and call back on the number you already have saved. Never send money because of a video call alone.",
     "source": "Based on the five warning signs published by Vietnam's Authority of Information Security. Sagi Shield does not analyze video calls yet."
+  },
+  "trusted": {
+    "title": "Person to verify with",
+    "desc": "When a call claims to be family - or a video call shows a familiar face - hang up and call this number, the one you already trust. Stored on this device only.",
+    "name_placeholder": "Name (e.g. Taro, my son)",
+    "tel_placeholder": "Their usual phone number",
+    "save": "Save",
+    "saved": "Saved",
+    "call_btn": "Hang up and call {{name}} on the saved number"
   }
 }
