@@ -209,6 +209,7 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
 
     const controller = startLiveGuard(lang, isKioskMode ? 'kiosk' : 'manual', {
       allowCloudFallback,
+      onSpeechMode: (m) => setShowCloudOptInNotice(m === 'blocked'),
       onRisk: handleRiskUpdate,
       onReset: handleSessionReset,
       onStatus: (st) => {
@@ -237,9 +238,6 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
     setIsRunning(true);
     setIsPaused(false);
 
-    if (!controller.canProcessLocally && !allowCloudFallback) {
-      setShowCloudOptInNotice(true);
-    }
   }, [acquireWakeLock, lang, isKioskMode, allowCloudFallback, handleRiskUpdate, handleSessionReset, resetIdleTimer]);
 
   // Stop Guard Action

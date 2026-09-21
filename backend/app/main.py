@@ -148,9 +148,9 @@ async def check(request: Request):
 
 class PreCheck(BaseModel):
     reason_text: str = Field(max_length=2000)
-    amount: float | None = None
+    amount: float | str | None = None  # the UI sends free text ("300万円"); informational only
     recipient_type: Literal["person", "company", "government", "unknown"] | None = None
-    who_asked: Literal["police", "bank", "family", "company", "stranger", "nobody"] | None = None
+    who_asked: Literal["police", "government", "bank", "family", "broker", "company", "stranger", "nobody"] | None = None
     lang: str = "ja"
 
 
@@ -162,9 +162,9 @@ def precheck(body: PreCheck):
     result = analyze(ev.text, lang, use_llm=use_llm())
     if body.who_asked == "police":
         raise_to(result, 90, lang, MSG["police_money"][lang], "fake_police")
-    elif body.who_asked == "bank" and body.recipient_type == "person":
+    elif body.who_asked in ("bank", "government") and body.recipient_type == "person":
         raise_to(result, 90, lang, MSG["official_to_person"][lang])
-    elif body.who_asked == "stranger":
+    elif body.who_asked in ("stranger", "broker"):
         raise_to(result, 70, lang, MSG["stranger"][lang])
     return finish(result, ev.flags, 0)
 

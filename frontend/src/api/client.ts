@@ -32,7 +32,10 @@ export interface SagiApi {
   ): LiveSocketConnection;
 }
 
-const API_BASE = (import.meta.env.VITE_API_BASE || '').trim();
+export const API_BASE = (import.meta.env.VITE_API_BASE || '').trim().replace(/\/+$/, '');
+
+// The backend has language packs for ja and vi only; an English UI still checks Japanese content.
+const apiLang = (lang: string) => (lang === 'vi' ? 'vi' : 'ja');
 
 // ==========================================
 // REAL API IMPLEMENTATION
@@ -46,6 +49,7 @@ class RealApi implements SagiApi {
   }
 
   async check(formData: FormData): Promise<CheckResult> {
+    formData.set('lang', apiLang(String(formData.get('lang') || 'ja')));
     const res = await fetch(`${this.baseUrl}/check`, {
       method: 'POST',
       body: formData,
@@ -60,7 +64,7 @@ class RealApi implements SagiApi {
     const res = await fetch(`${this.baseUrl}/precheck`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify(payload),
+      body: JSON.stringify({...payload, lang: apiLang(payload.lang)}),
     });
     if (!res.ok) {
       throw new Error(`Precheck failed with status: ${res.status}`);
@@ -72,7 +76,7 @@ class RealApi implements SagiApi {
     const res = await fetch(`${this.baseUrl}/agent/recovery`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({session_id: sessionId, message, lang}),
+      body: JSON.stringify({session_id: sessionId, message, lang: apiLang(lang)}),
     });
     if (!res.ok) {
       throw new Error(`Recovery agent failed: ${res.status}`);
@@ -92,6 +96,7 @@ class RealApi implements SagiApi {
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(data),
     });
+    if (!res.ok) throw new Error(`Report failed: ${res.status}`);
     return res.json();
   }
 
@@ -122,95 +127,47 @@ class RealApi implements SagiApi {
     mode: 'kiosk' | 'manual',
     callbacks: LiveSocketCallbacks
   ): LiveSocketConnection {
-    const isExternal = this.baseUrl.startsWith('http');
+    // Text-only WebSocket (PLAN 6.9). There is deliberately NO per-line HTTP fallback: the server
+    // decides when a masked window may go to Gemini; while offline, lines are dropped, not queued.
+    const wsUrl = `${this.baseUrl.replace(/^http/, 'ws')}/ws/live?lang=${apiLang(lang)}&mode=${mode}&input=text`;
     let ws: WebSocket | null = null;
     let isClosed = false;
     let reconnectDelay = 1000;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    if (isExternal) {
-      const wsProto = this.baseUrl.startsWith('https') ? 'wss:' : 'ws:';
-      const host = this.baseUrl.replace(/^https?:\/\//, '');
-      const wsUrl = `${wsProto}//${host}/ws/live?lang=${encodeURIComponent(lang)}&mode=${mode}&input=text`;
-
-      const connect = () => {
-        if (isClosed) return;
-        callbacks.onStatus('reconnecting');
+    const connect = () => {
+      if (isClosed) return;
+      ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        reconnectDelay = 1000;
+        callbacks.onStatus('connected');
+        callbacks.onStatus('listening');
+      };
+      ws.onmessage = (event) => {
         try {
-          ws = new WebSocket(wsUrl);
-
-          ws.onopen = () => {
-            callbacks.onStatus('connected');
-            callbacks.onStatus('listening');
-            reconnectDelay = 1000;
-          };
-
-          ws.onmessage = (event) => {
-            try {
-              const data: LiveWsServerMessage = JSON.parse(event.data);
-              if ('event' in data && data.event === 'session_reset') {
-                callbacks.onReset();
-              } else if ('risk_level' in data) {
-                callbacks.onRisk(data);
-              }
-            } catch (e) {
-              console.error('WS parse error:', e);
-            }
-          };
-
-          ws.onerror = (e) => {
-            console.warn('WS error, using HTTP Gemini fallback:', e);
-            callbacks.onStatus('listening');
-          };
-
-          ws.onclose = () => {
-            if (!isClosed) {
-              callbacks.onStatus('listening');
-            } else {
-              callbacks.onStatus('disconnected');
-            }
-          };
-        } catch (err) {
-          callbacks.onStatus('listening');
+          const data: LiveWsServerMessage = JSON.parse(event.data);
+          if ('event' in data && data.event === 'session_reset') callbacks.onReset();
+          else if ('risk_level' in data) callbacks.onRisk(data);
+        } catch (e) {
+          console.error('WS parse error:', e);
         }
       };
-
-      connect();
-    } else {
-      // Direct local Gemini analysis mode
-      callbacks.onStatus('connected');
-      callbacks.onStatus('listening');
-    }
+      ws.onclose = () => {
+        if (isClosed) return;
+        callbacks.onStatus('reconnecting');
+        reconnectTimer = setTimeout(connect, reconnectDelay);
+        reconnectDelay = Math.min(reconnectDelay * 2, 15000);
+      };
+    };
+    callbacks.onStatus('reconnecting');
+    connect();
 
     return {
-      sendTranscript: async (text: string) => {
-        if (isClosed) return;
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          const msg: LiveWsClientMessage = {type: 'transcript', text, final: true};
-          ws.send(JSON.stringify(msg));
-          return;
-        }
-
-        // Real Gemini 3.8 Flash analysis via server precheck
-        try {
-          callbacks.onStatus('checking');
-          const result = await this.precheck({ transcript: text, lang });
-          if (!isClosed) {
-            callbacks.onRisk({
-              risk_score: result.risk_score,
-              risk_level: result.risk_level,
-              stage: result.stage || (result.risk_level === 'HIGH' ? 5 : 1),
-              trigger_phrase: result.trigger_phrases?.[0] || (result.risk_level === 'HIGH' ? text.slice(0, 30) : '安全'),
-              transcript_tail: text,
-              advice: result.advice,
-              speak: result.risk_level === 'HIGH' ? result.advice : undefined,
-              session_id: 'real-gemini-live',
-            });
-            callbacks.onStatus('listening');
-          }
-        } catch (e) {
-          console.warn('Live Gemini precheck error:', e);
-          if (!isClosed) callbacks.onStatus('listening');
-        }
+      sendTranscript: (text: string) => {
+        if (isClosed || !ws || ws.readyState !== WebSocket.OPEN) return;
+        if (callbacks.onTranscript) callbacks.onTranscript(text);
+        const msg: LiveWsClientMessage = {type: 'transcript', text, final: true};
+        ws.send(JSON.stringify(msg));
       },
       sendReset: () => {
         if (isClosed) return;
@@ -222,6 +179,7 @@ class RealApi implements SagiApi {
       },
       close: () => {
         isClosed = true;
+        if (reconnectTimer) clearTimeout(reconnectTimer);
         if (ws) ws.close();
         callbacks.onStatus('disconnected');
       },
@@ -871,17 +829,17 @@ class MockApi implements SagiApi {
 }
 
 // API Instances
-export const realApiInstance = new RealApi(API_BASE || '/api');
+export const realApiInstance = new RealApi(API_BASE);
 export const mockApiInstance = new MockApi();
 
-// Check if user explicitly prefers Demo/Mock Mode
+// Mock when no backend is configured, or when the demo helper forces it.
 export function isMockModeActive(): boolean {
+  if (!API_BASE) return true;
   try {
-    const saved = localStorage.getItem('sagi_use_mock');
-    if (saved !== null) return saved === 'true';
-  } catch {}
-  // Default to Real Gemini API (via /api)
-  return false;
+    return localStorage.getItem('sagi_use_mock') === 'true';
+  } catch {
+    return false;
+  }
 }
 
 export function setMockMode(enabled: boolean) {

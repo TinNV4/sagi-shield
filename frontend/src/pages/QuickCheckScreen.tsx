@@ -131,7 +131,7 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
         formData.append('url', linkUrl);
         formData.append('text', `${t('quick.url_check_prefix')}: ${linkUrl}`);
       } else if (activeTab === 'screenshot' && selectedFile) {
-        formData.append('screenshot', selectedFile);
+        formData.append('image', selectedFile);
         formData.append('text', inputText || t('quick.screenshot_analysis_default'));
       } else if (activeTab === 'recording' && audioBlob) {
         formData.append('audio', audioBlob, 'recording.wav');

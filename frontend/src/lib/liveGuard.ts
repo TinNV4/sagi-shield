@@ -18,8 +18,12 @@ export interface LiveGuardController {
   canProcessLocally: boolean;
 }
 
+export type SpeechMode = 'local' | 'cloud' | 'blocked';
+
 export interface LiveGuardOptions extends LiveSocketCallbacks {
   allowCloudFallback?: boolean;
+  /** local = on-device; cloud = user opted in to the browser's cloud recognizer; blocked = not listening */
+  onSpeechMode?: (mode: SpeechMode) => void;
 }
 
 export interface SpeechSupportDetails {
@@ -28,166 +32,54 @@ export interface SpeechSupportDetails {
   status: 'ready' | 'downloadable' | 'downloading' | 'unsupported';
   language: string;
   languageName: string;
-  isCustomInstalled?: boolean;
 }
 
+const langTagOf = (lang: string) => (lang === 'ja' ? 'ja-JP' : lang === 'vi' ? 'vi-VN' : 'en-US');
+const speechRec = () => (typeof window === 'undefined' ? null : window.SpeechRecognition || window.webkitSpeechRecognition);
+
 /**
- * Checks whether on-device speech recognition is supported in this browser.
+ * Asks the browser whether it can recognize this language ON THE DEVICE.
+ * PRIVACY: the only source of truth is SpeechRecognition.available(). Never infer it from a
+ * localStorage flag or from the mere existence of the `processLocally` property - doing so would
+ * tell the user "audio stays on this device" while Chrome streams it to a cloud recognizer.
  */
 export async function checkOnDeviceSpeechSupport(lang: string): Promise<SpeechSupportDetails> {
-  const langTag = lang === 'ja' ? 'ja-JP' : lang === 'vi' ? 'vi-VN' : 'en-US';
-  const langName = lang === 'ja' ? '日本語' : lang === 'vi' ? 'Tiếng Việt' : 'English';
-
-  if (typeof window === 'undefined') {
-    return {
-      supported: false,
-      canProcessLocally: false,
-      status: 'unsupported',
-      language: langTag,
-      languageName: langName,
-    };
-  }
-
-  const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SpeechRec) {
-    return {
-      supported: false,
-      canProcessLocally: false,
-      status: 'unsupported',
-      language: langTag,
-      languageName: langName,
-    };
-  }
-
-  // Check if locally simulated / stored as installed
-  let isSavedInstalled = false;
+  const base = {language: langTagOf(lang), languageName: lang === 'ja' ? '日本語' : lang === 'vi' ? 'Tiếng Việt' : 'English'};
+  const SpeechRec = speechRec();
+  if (!SpeechRec) return {...base, supported: false, canProcessLocally: false, status: 'unsupported'};
+  if (typeof SpeechRec.available !== 'function') return {...base, supported: true, canProcessLocally: false, status: 'unsupported'};
   try {
-    isSavedInstalled = localStorage.getItem(`sagi_stt_installed_${lang}`) === 'true';
-  } catch {}
-
-  try {
-    // Check W3C SpeechRecognition proposal for on-device available()
-    if (typeof (SpeechRec as any).available === 'function') {
-      const avail = await (SpeechRec as any).available({langs: [langTag], processLocally: true});
-      if (avail === 'available' || isSavedInstalled) {
-        return {
-          supported: true,
-          canProcessLocally: true,
-          status: 'ready',
-          language: langTag,
-          languageName: langName,
-          isCustomInstalled: isSavedInstalled,
-        };
-      }
-      if (avail === 'downloadable') {
-        return {
-          supported: true,
-          canProcessLocally: true,
-          status: 'downloadable',
-          language: langTag,
-          languageName: langName,
-        };
-      }
-      if (avail === 'downloading') {
-        return {
-          supported: true,
-          canProcessLocally: true,
-          status: 'downloading',
-          language: langTag,
-          languageName: langName,
-        };
-      }
-    }
-
-    // Check if processLocally flag exists on instance or prototype
-    const dummy = new SpeechRec();
-    const hasLocalFlag = 'processLocally' in dummy;
-
-    if (hasLocalFlag || isSavedInstalled) {
-      return {
-        supported: true,
-        canProcessLocally: true,
-        status: 'ready',
-        language: langTag,
-        languageName: langName,
-        isCustomInstalled: isSavedInstalled,
-      };
-    }
-
-    // Modern Chrome / WebKit heuristic: supports SpeechRec, check if user can install pack
-    return {
-      supported: true,
-      canProcessLocally: isSavedInstalled,
-      status: isSavedInstalled ? 'ready' : 'downloadable',
-      language: langTag,
-      languageName: langName,
-    };
+    const avail = await SpeechRec.available({langs: [base.language], processLocally: true});
+    if (avail === 'available') return {...base, supported: true, canProcessLocally: true, status: 'ready'};
+    if (avail === 'downloadable' || avail === 'downloading')
+      return {...base, supported: true, canProcessLocally: false, status: avail};
   } catch (e) {
-    return {
-      supported: true,
-      canProcessLocally: isSavedInstalled,
-      status: isSavedInstalled ? 'ready' : 'unsupported',
-      language: langTag,
-      languageName: langName,
-    };
+    console.warn('SpeechRecognition.available failed:', e);
   }
+  return {...base, supported: true, canProcessLocally: false, status: 'unsupported'};
 }
 
 /**
- * Initiates language pack installation or on-device model preparation.
- * Reports progress (0-100%) and persists installed state.
+ * Downloads the on-device language pack through the browser. Resolves true only if the browser
+ * then reports the pack as available. No simulated progress: a fake "installed" state is a lie
+ * about where the caller's voice goes.
  */
 export async function installLanguagePack(
   lang: string,
   onProgress?: (percent: number, stepText: string) => void
 ): Promise<boolean> {
-  const langTag = lang === 'ja' ? 'ja-JP' : lang === 'vi' ? 'vi-VN' : 'en-US';
-  const SpeechRec = typeof window !== 'undefined' ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
-
-  // If browser natively implements SpeechRecognition.install
-  if (SpeechRec && typeof (SpeechRec as any).install === 'function') {
-    try {
-      if (onProgress) onProgress(10, '音声認識パックの確認中...');
-      const installPromise = (SpeechRec as any).install({langs: [langTag], processLocally: true});
-
-      if (typeof installPromise?.then === 'function') {
-        await installPromise;
-        if (onProgress) onProgress(100, 'インストール完了');
-        try {
-          localStorage.setItem(`sagi_stt_installed_${lang}`, 'true');
-        } catch {}
-        return true;
-      }
-    } catch (e) {
-      console.warn('Native SpeechRecognition.install call error, falling back to simulated pipeline:', e);
-    }
+  const SpeechRec = speechRec();
+  if (!SpeechRec || typeof SpeechRec.install !== 'function') return false;
+  try {
+    if (onProgress) onProgress(10, '...');
+    await SpeechRec.install({langs: [langTagOf(lang)], processLocally: true});
+  } catch (e) {
+    console.warn('SpeechRecognition.install failed:', e);
+    return false;
   }
-
-  // Smooth progressive setup experience
-  return new Promise((resolve) => {
-    let current = 0;
-    const steps = [
-      {at: 20, text: 'モデルの検証中...'},
-      {at: 50, text: '端末内辞書データを展開中...'},
-      {at: 80, text: 'オンデバイス推論パイプラインを初期化中...'},
-      {at: 100, text: '準備完了！安全な端末内文字起こしが有効です'},
-    ];
-
-    const timer = setInterval(() => {
-      current += 10;
-      const step = steps.find((s) => s.at >= current) || steps[steps.length - 1];
-      if (onProgress) {
-        onProgress(Math.min(100, current), step.text);
-      }
-      if (current >= 100) {
-        clearInterval(timer);
-        try {
-          localStorage.setItem(`sagi_stt_installed_${lang}`, 'true');
-        } catch {}
-        resolve(true);
-      }
-    }, 150);
-  });
+  const ok = (await checkOnDeviceSpeechSupport(lang)).canProcessLocally;
+  if (ok && onProgress) onProgress(100, 'OK');
+  return ok;
 }
 
 /**
@@ -225,6 +117,7 @@ export function startLiveGuard(
 
   let canProcessLocally = false;
 
+  if (!SpeechRec && options.onSpeechMode) options.onSpeechMode('blocked');
   if (SpeechRec) {
     try {
       recognition = new SpeechRec();
@@ -232,14 +125,8 @@ export function startLiveGuard(
       recognition.interimResults = false; // PRIVACY & CONTRACT: Do not send interim results!
       recognition.maxAlternatives = 1;
 
-      // Check on-device availability
-      if ('processLocally' in recognition) {
-        recognition.processLocally = true;
-        canProcessLocally = true;
-      }
-
       // Map language
-      recognition.lang = lang === 'vi' ? 'vi-VN' : lang === 'en' ? 'en-US' : 'ja-JP';
+      recognition.lang = langTagOf(lang);
 
       recognition.onresult = (event: any) => {
         if (!isRunning || isPausedState) return;
@@ -281,10 +168,20 @@ export function startLiveGuard(
         }
       };
 
-      // If user allows or local processing is ready, start speech engine
-      if (canProcessLocally || options.allowCloudFallback) {
-        recognition.start();
-      }
+      // Start only after the browser CONFIRMS on-device recognition, or after an explicit opt-in.
+      checkOnDeviceSpeechSupport(lang).then((support) => {
+        if (!isRunning) return;
+        canProcessLocally = support.canProcessLocally;
+        controller.canProcessLocally = canProcessLocally;
+        if (canProcessLocally) recognition.processLocally = true;
+        const mode: SpeechMode = canProcessLocally ? 'local' : options.allowCloudFallback ? 'cloud' : 'blocked';
+        if (options.onSpeechMode) options.onSpeechMode(mode);
+        if (mode !== 'blocked' && !isPausedState) {
+          try {
+            recognition.start();
+          } catch {}
+        }
+      });
     } catch (err) {
       console.warn('Web Speech API initialization warning:', err);
     }

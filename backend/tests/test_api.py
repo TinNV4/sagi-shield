@@ -105,6 +105,8 @@ def test_webrisk_hit_is_high(client, monkeypatch):
     ({"reason_text": "貯金を安全な口座に移すように言われました", "who_asked": "police"}, "HIGH"),
     ({"reason_text": "手数料を先に払う必要があると言われた", "who_asked": "bank", "recipient_type": "person"}, "HIGH"),
     ({"reason_text": "当選金の受け取りに必要と言われた", "who_asked": "stranger"}, "HIGH"),
+    ({"reason_text": "還付の手続きと言われた", "who_asked": "government", "recipient_type": "person", "amount": "30万円"}, "HIGH"),
+    ({"reason_text": "必ず儲かる投資と言われた", "who_asked": "broker", "amount": ""}, "HIGH"),
     ({"reason_text": "甥の大学の授業料を大学に支払います", "who_asked": "family", "recipient_type": "company"}, "LOW"),
 ])
 def test_precheck(client, payload, expected):

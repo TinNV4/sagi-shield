@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
-import {isMockModeActive, setMockMode} from '../api/client';
+import {API_BASE, isMockModeActive, setMockMode} from '../api/client';
 
 interface DemoHelperModalProps {
   isOpen: boolean;
@@ -58,12 +58,13 @@ export const DemoHelperModal: React.FC<DemoHelperModalProps> = ({
   const checkBackendHealth = async () => {
     setHealthStatus((prev) => ({ ...prev, loading: true }));
     try {
-      const res = await fetch('/api/health');
+      if (!API_BASE) throw new Error('VITE_API_BASE is not set');
+      const res = await fetch(`${API_BASE}/healthz`);
       if (res.ok) {
         const data = await res.json();
         setHealthStatus({
           tested: true,
-          geminiConfigured: !!data.gemini_configured,
+          geminiConfigured: !!data.llm,
           model: data.model || 'gemini-3.8-flash',
           loading: false,
         });
