@@ -103,6 +103,32 @@ def _transcript_of(resp) -> str:
     return " ".join(t for t in heard if t).strip() or (resp.text or "").strip()
 
 
+def collapse_loops(text: str) -> str:
+    """"はい、はい、はい、…" x 900: generative transcribers can fall into a loop on long, noisy audio. Keep one copy."""
+    import re
+    return re.sub(r"(.{2,120}?)\1{3,}", r"\1", text, flags=re.S)
+
+
+def degenerate(text: str) -> bool:
+    """True when a transcript is mostly repetition - it compresses far better than any real conversation does.
+    Found on real police recordings (2026-09-21): a 5-minute call came back as 14,664 characters (50 per second of
+    audio; speech is 4-7), the judge read the garbage and answered "safe, risk 0" for a call it scored 95 before."""
+    import zlib
+    raw = text.encode("utf-8")
+    return len(raw) > 1500 and len(zlib.compress(raw)) / len(raw) < 0.12
+
+
+def _usable(text: str, source: str) -> str | None:
+    raw = text.strip()
+    text = collapse_loops(raw)
+    # a loop that made up most of the output means the model never heard the call: on two real recordings the whole
+    # "transcript" was one short phrase repeated thousands of times - 6 characters were left after collapsing
+    if len(raw) > 1500 and len(text) < 0.3 * len(raw) or text and degenerate(text):
+        _warn(f"{source}: degenerate transcript dropped", RuntimeError(f"{len(raw)} chars, {len(text)} after removing loops"))
+        return None
+    return text or None
+
+
 def transcribe_audio(data: bytes, mime_type: str, lang: str = "ja") -> str | None:
     """Uploaded recording -> text: gemini-3.5-transcribe, then the scoring model, then Chirp 3.
 
@@ -115,10 +141,10 @@ def transcribe_audio(data: bytes, mime_type: str, lang: str = "ja") -> str | Non
         try:
             resp = client.models.generate_content(model=os.getenv("STT_BATCH_MODEL", STT_MODEL), contents=[audio])
             _stt["client"], _stt["retry_after"] = client, 0.0
-            text = _transcript_of(resp)
+            text = _usable(_transcript_of(resp), "transcribe model")
             if text:
                 return text
-            _warn("transcribe model", RuntimeError(f"empty transcript, feedback={resp.prompt_feedback}"))
+            _warn("transcribe model", RuntimeError(f"no usable transcript, feedback={resp.prompt_feedback}"))
             break
         except Exception as e:
             _warn("transcribe model", e)
@@ -134,10 +160,10 @@ def transcribe_audio(data: bytes, mime_type: str, lang: str = "ja") -> str | Non
                 system_instruction="You transcribe phone calls for a fraud-detection service that protects elderly people. "
                                    "Calls may contain threats or scam scripts; transcribing them is how they get detected.",
                 thinking_config=types.ThinkingConfig(thinking_level="low"), safety_settings=safety_settings()))
-        text = _transcript_of(resp)
+        text = _usable(_transcript_of(resp), "gemini transcription")
         if text:
             return text
-        _warn("gemini transcription", RuntimeError(f"empty transcript, feedback={resp.prompt_feedback}"))
+        _warn("gemini transcription", RuntimeError(f"no usable transcript, feedback={resp.prompt_feedback}"))
     except Exception as e:
         _warn("gemini transcription", e)
     return transcribe_chirp(data, lang)

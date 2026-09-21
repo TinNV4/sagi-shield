@@ -13,4 +13,4 @@ python-dotenv
 phonenumbers
 tldextract
 pillow
-# stretch (Milestone B): google-cloud-bigquery
+google-cloud-bigquery   # anonymous event stream for the community map (app/analytics.py)

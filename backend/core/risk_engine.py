@@ -147,6 +147,28 @@ def llm_score(v: "LlmVerdict", corroborated: bool = True) -> int:
     score = max(by_stage if v.stage >= 4 else 0, min(100, v.risk))
     return score if corroborated or v.stage >= 4 else min(score, 69)
 
+
+def second_opinion(text: str, lang: str):
+    """A larger model re-reads the call. Used only when the fast judge wants an alarm the rules cannot back up."""
+    return llm_verdict(text, lang, "gemini", os.getenv("GEMINI_CONFIRM_MODEL", "gemini-3.8-flash"))
+
+
+def llm_score_confirmed(v: "LlmVerdict", r_score: float, confirm=None) -> int:
+    """llm_score() with the corroboration rule, where a second model may stand in for the rules.
+
+    Found on real police recordings (2026-09-21): natural speech after STT rarely matches the rule patterns, so
+    confident, correct verdicts ("refund scam, risk 85") were capped at 69 and the alarm never fired. A blunt cap
+    is the wrong brake for a flaky judge; agreement between two different models is a better one. The second call
+    only happens in this branch (alarm wanted, chain below stage 4, rules below MEDIUM)."""
+    corroborated = r_score >= 40
+    wanted = llm_score(v, True)
+    if corroborated or v.stage >= 4 or wanted < 70 or confirm is None:
+        return llm_score(v, corroborated)
+    second = confirm()
+    if second is not None and second.scam_type != "safe" and llm_score(second, True) >= 70:
+        return round((wanted + llm_score(second, True)) / 2)
+    return llm_score(v, False)
+
 SYSTEM_PROMPT = """You are a phone-scam analyst protecting elderly people in Japan and Vietnam. You read a (possibly partial,
 possibly mis-transcribed) phone call or message and return a verdict.
 
@@ -395,15 +417,17 @@ class LiveTracker:
         self.recent.clear()
 
 def analyze(text: str, lang: str = "ja", use_llm: bool = True, verdict: LlmVerdict | None = None,
-            bonus: int = 0) -> dict:
+            bonus: int = 0, confirm=None) -> dict:
     """verdict: inject a ready LLM verdict (tests, callers that already asked). bonus: evidence-flag
     points from the input layer (international number, lookalike URL)."""
     hits = rule_stages(text, lang)
     reporting = is_reporting(text, lang)
     r_score = rule_score(hits, reporting)
+    if verdict is None and use_llm and confirm is None:
+        confirm = lambda: second_opinion(text, lang)  # noqa: E731  (an injected verdict brings its own `confirm`, or none)
     v = verdict or (llm_verdict(text, lang) if use_llm and text.strip() else None)
     hard = bool(hard_floor(hits)) and not reporting
-    score = fuse(r_score, llm_score(v, corroborated=r_score >= 40) if v else None, v.confidence if v else 0.0, hard)
+    score = fuse(r_score, llm_score_confirmed(v, r_score, confirm) if v else None, v.confidence if v else 0.0, hard)
     score = round(min(100, score + bonus))
     lv = level(score)
     return {

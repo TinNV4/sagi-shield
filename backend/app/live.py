@@ -25,6 +25,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 import risk_engine as engine  # app.main put backend/core on sys.path
 from input_layer import build_evidence
 
+from .analytics import log_event
 from .notifier import alert_family
 
 router = APIRouter()
@@ -68,6 +69,8 @@ async def live(ws: WebSocket):
         if first_high:
             state["spoken"], msg["speak"] = True, pack["speak"]
         await ws.send_json(msg)  # the person on the phone is warned first; the family push must never delay it
+        if first_high:
+            log_event("live_alarm", lang=lang, source="live", risk_level=lv, risk_score=score, scam_type=state["scam_type"], stage=tracker.max_stage)
         if first_high and family_id:
             reasons = state["reasons"] or engine.rule_reasons(tracker.hits, lang)
             await asyncio.to_thread(alert_family, family_id, {**msg, "scam_type": state["scam_type"], "reasons": reasons}, lang)
@@ -79,7 +82,10 @@ async def live(ws: WebSocket):
         if v and session == state["session"]:  # the call may have been reset while we waited
             state["scam_type"], state["reasons"] = v.scam_type, v.reasons
             rules_now = engine.rule_score(tracker.hits, tracker.reporting, combos=False)
-            await send(tracker.update({}, engine.llm_score(v, corroborated=rules_now >= 40), v.stage, v.confidence))
+            # one flaky verdict would stay in the EMA and latch: an uncorroborated alarm needs a second model to agree
+            llm = await asyncio.to_thread(engine.llm_score_confirmed, v, rules_now, lambda: engine.second_opinion(text, lang))
+            if session == state["session"]:
+                await send(tracker.update({}, llm, v.stage, v.confidence))
 
     try:
         while True:

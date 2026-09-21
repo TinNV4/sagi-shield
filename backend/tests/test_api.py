@@ -201,6 +201,29 @@ def test_url_shape_counts_without_a_model(client):
     assert client.post("/check", json={"lang": "ja", "url": "https://www.npa.go.jp/"}).json()["risk_level"] == "LOW"
 
 
+def test_looping_transcripts_are_repaired_or_dropped(monkeypatch):
+    # real police audio: the transcriber looped (50 chars per second of audio) and the judge called the garbage "safe"
+    from types import SimpleNamespace as NS
+    talk = "もしもし、警察です。あなたの口座が犯罪に使われています。"
+    looped = talk + "はい、" * 900 + "LINEで逮捕状を送ります。"
+    assert services.collapse_loops(looped) == talk + "はい、" + "LINEで逮捕状を送ります。"
+    assert services.degenerate("あいうえお" * 2000) and not services.degenerate(talk * 3)
+    noise = "".join(f"ええと{i % 7}あのう{i % 5}、" for i in range(3000))   # repetitive, but no clean loop to collapse
+    assert services.degenerate(services.collapse_loops(noise))
+
+    def response(heard):
+        return NS(candidates=[NS(content=NS(parts=[NS(audio_transcription=NS(text=heard))]))], text=None, prompt_feedback=None)
+    monkeypatch.setitem(services._stt, "client", None)
+    monkeypatch.setattr(services, "_stt_clients", lambda: iter([NS(models=NS(generate_content=lambda **kw: response(noise)))]))
+    monkeypatch.setattr(services, "_generate", lambda **kw: response(looped))
+    monkeypatch.setattr(services, "transcribe_chirp", lambda data, lang: "chirp")
+    short_loop = talk + "はい、" * 40
+    monkeypatch.setattr(services, "_generate", lambda **kw: response(short_loop))
+    assert services.transcribe_audio(b"x", "audio/mpeg", "ja") == talk + "はい、"   # a small loop is repaired and kept
+    monkeypatch.setattr(services, "_generate", lambda **kw: response(looped))      # 2,700 of 2,760 chars are one loop:
+    assert services.transcribe_audio(b"x", "audio/mpeg", "ja") == "chirp"           # nothing was heard -> next transcriber
+
+
 def test_katakana_long_vowel_survives_normalisation(client):
     # regression: every "ー" used to become "-", so キャッシュカード / マネーロンダリング never matched through /check
     from input_layer import normalize_text

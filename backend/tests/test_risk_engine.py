@@ -246,3 +246,18 @@ def test_institution_warning_about_scams_is_not_an_alarm():
     assert analyze(clinic, "ja", use_llm=False)["risk_level"] != "HIGH"
     told = "Hôm qua còn có người tự xưng công an gọi nói tôi liên quan vụ rửa tiền, tôi cúp máy liền. Anh có thể chuyển khoản trước hoặc trả tiền mặt tại quầy."
     assert analyze(told, "vi", use_llm=False)["risk_level"] != "HIGH"
+
+
+def test_second_model_can_stand_in_for_the_rules():
+    from risk_engine import LlmVerdict, llm_score_confirmed
+    sure = LlmVerdict(stage=2, scam_type="refund", confidence=0.9, reasons=[], risk=85)
+    agree = LlmVerdict(stage=2, scam_type="refund", confidence=0.9, reasons=[], risk=90)
+    calm = LlmVerdict(stage=0, scam_type="safe", confidence=0.9, reasons=[], risk=5)
+    asked = []
+    assert llm_score_confirmed(sure, 20, lambda: asked.append(1) or agree) == 88    # both models agree -> alarm allowed
+    assert llm_score_confirmed(sure, 20, lambda: calm) == 69                         # they disagree -> warn only
+    assert llm_score_confirmed(sure, 20, lambda: None) == 69                         # second model down -> warn only
+    assert llm_score_confirmed(sure, 45, lambda: asked.append(1) or calm) == 85 and len(asked) == 1  # rules back it: no 2nd call
+    real_speech = "市役所の者です。医療費の払い戻しがありますので、今日中にお手続きをお願いします"  # few rule hits, like STT output
+    assert analyze(real_speech, "ja", use_llm=False, verdict=sure, confirm=lambda: agree)["risk_level"] == "HIGH"
+    assert analyze(real_speech, "ja", use_llm=False, verdict=sure, confirm=lambda: calm)["risk_level"] == "MEDIUM"

@@ -26,6 +26,7 @@ from risk_engine import LANG_PACKS, analyze, level  # noqa: E402
 
 from . import services  # noqa: E402
 from .agent import router as agent_router  # noqa: E402
+from .analytics import log_event  # noqa: E402
 from .guard import GuardMiddleware  # noqa: E402
 from .live import router as live_router  # noqa: E402
 from .notifier import alert_family  # noqa: E402
@@ -94,10 +95,12 @@ def raise_to(result: dict, floor: int, lang: str, reason: str, scam_type: str | 
     return result
 
 
-def finish(result: dict, flags: list[str], community_hits: int) -> dict:
-    result.pop("llm_used", None)  # internal; the contract exposes it as the `llm_unavailable` flag
+def finish(result: dict, flags: list[str], community_hits: int, kind: str = "check", source: str = "text", lang: str = "ja") -> dict:
+    llm_used = result.pop("llm_used", None)  # internal; the contract exposes it as the `llm_unavailable` flag
     result.update(evidence_flags=sorted(set(flags)), community_hits=community_hits)
     store.record_check(result["risk_level"])
+    log_event(kind, lang=lang, source=source, risk_level=result["risk_level"], risk_score=result["risk_score"],
+              scam_type=result["scam_type"], stage=result["stage"], llm_used=llm_used)  # aggregate fields only
     return result
 
 
@@ -187,7 +190,8 @@ async def check(request: Request):
         # an unreported number is unknown, not safe - say exactly that
         result["scam_type"] = "unknown" if result["scam_type"] == "safe" else result["scam_type"]
         result["reasons"] = ([MSG["phone_no_reports"][lang]] + result["reasons"])[:2]
-    return finish(result, flags, community_hits)
+    source = "image" if image is not None else "audio" if audio is not None else "phone" if phone and not text.strip() else "url" if url else "text"
+    return finish(result, flags, community_hits, "check", source, lang)
 
 
 class PreCheck(BaseModel):
@@ -210,7 +214,7 @@ def precheck(body: PreCheck):
         raise_to(result, 90, lang, MSG["official_to_person"][lang])
     elif body.who_asked in ("stranger", "broker"):
         raise_to(result, 70, lang, MSG["stranger"][lang])
-    return finish(result, ev.flags, 0)
+    return finish(result, ev.flags, 0, "precheck", "form", lang)
 
 
 class Report(BaseModel):
@@ -234,6 +238,7 @@ def report(body: Report, request: Request):
     origin = body.reporter_id or f"{forwarded or (request.client.host if request.client else '')}:{storage_today()}"
     store.add_report(body.scam_type, info.hash if info else None, [k[:40] for k in body.keywords], body.prefecture,
                      reporter=phone_hmac("reporter:" + origin))
+    log_event("report", lang=body.lang, source="phone" if info else "form", scam_type=body.scam_type[:40], prefecture=body.prefecture)
     return {"ok": True}
 
 

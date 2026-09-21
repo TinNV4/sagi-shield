@@ -164,7 +164,8 @@ def ablation(datasets: list[str], out_md: str, model: str | None, workers: int =
         text = build_evidence(lang=sample["lang"], text=sample["text"]).text  # masked, as in production
         rules = engine.analyze(text, sample["lang"], use_llm=False)
         verdict = engine.llm_verdict(text, sample["lang"], "gemini", model)
-        fused = engine.analyze(text, sample["lang"], use_llm=False, verdict=verdict) if verdict else rules
+        fused = engine.analyze(text, sample["lang"], use_llm=False, verdict=verdict,
+                               confirm=lambda: engine.second_opinion(text, sample["lang"])) if verdict else rules  # as in production
         return {**sample, "rules": rules["risk_level"], "fused": fused["risk_level"], "llm_ok": verdict is not None,
                 "rules_score": rules["risk_score"], "fused_score": fused["risk_score"]}
 

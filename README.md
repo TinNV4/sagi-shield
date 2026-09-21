@@ -58,8 +58,9 @@ PWA (React + Vite, served by the API)
   │                  ├─ audio  ─▶ gemini-3.5-transcribe ─▶ Chirp 3 fallback
   │                  └─ url    ─▶ Web Risk
   ├─ POST /agent/recovery ─▶ ADK 2.x agent (3 tools) ─▶ Firestore session (24 h TTL)
-  └─ /family/* ─▶ Firestore
-Cloud Run (asia-northeast1) · Gemini on Agent Platform (global) · Firestore · Web Risk · Speech-to-Text · Secret Manager
+  ├─ /family/*, /report ─▶ Firestore (lookups while the user waits: reported numbers, pairing, alerts)
+  └─ every verdict ─▶ BigQuery `sagi.events` (anonymous: no text, numbers or ids) ─▶ Looker Studio scam map
+Cloud Run (asia-northeast1) · Gemini on Agent Platform (global) · Firestore · BigQuery · Web Risk · Speech-to-Text · Secret Manager
 ```
 
 Details, decisions and the phase checklist: [docs/PLAN.md](docs/PLAN.md). Working notes for coding agents: [CLAUDE.md](CLAUDE.md).
@@ -84,6 +85,7 @@ npm run dev                         # http://localhost:3000 (without VITE_API_BA
 ```bash
 pwsh infra/setup.ps1 -Project <project-id>         # once: APIs, Firestore + TTL, secret, service account
 pwsh infra/setup_stt_key.ps1 -Project <project-id> # once, optional: API key for gemini-3.5-transcribe
+pwsh infra/setup_analytics.ps1 -Project <project-id> # once, optional: BigQuery events + views for Looker Studio
 PROJECT=<project-id> ./infra/deploy.sh             # builds the PWA, deploys API + PWA to Cloud Run
 python tools/check_tabs.py  https://<service-url>  # post-deploy checks
 python tools/check_audio.py https://<service-url>
