@@ -171,7 +171,7 @@ def test_missing_llm_verdict_is_flagged_not_hidden(client, monkeypatch):
     # seen on Cloud Run: Gemini 429 -> rules only -> an ore-ore call came back "LOW / safe" with no hint
     import risk_engine
     monkeypatch.setenv("USE_LLM", "1")
-    monkeypatch.setattr(risk_engine, "llm_verdict", lambda text, lang, backend=None: None)
+    monkeypatch.setattr(risk_engine, "llm_verdict", lambda text, lang, backend=None, model=None: None)
     monkeypatch.setattr(main, "analyze", risk_engine.analyze)
     out = client.post("/check", json={"lang": "ja", "text": "母さん、俺だけど。今日中に300万必要なんだ"}).json()
     assert "llm_unavailable" in out["evidence_flags"] and out["scam_type"] != "safe"

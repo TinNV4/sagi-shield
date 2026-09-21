@@ -70,7 +70,7 @@ def test_manual_reset_and_silence_timeout_start_a_new_session(client, monkeypatc
 def test_llm_is_asked_only_from_medium_and_can_lower_the_score(client, monkeypatch):
     asked = []
 
-    def verdict(text, lang):
+    def verdict(text, lang, backend=None, model=None):
         asked.append(text)
         return live.engine.LlmVerdict(stage=0, scam_type="safe", confidence=0.95, reasons=[])
 

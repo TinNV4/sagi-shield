@@ -73,7 +73,9 @@ async def live(ws: WebSocket):
             await asyncio.to_thread(alert_family, family_id, {**msg, "scam_type": state["scam_type"], "reasons": reasons}, lang)
 
     async def ask_llm(text: str, session: str):
-        v = await asyncio.to_thread(engine.llm_verdict, text, lang)
+        # during a call every second counts: flash-lite scored 15/15 on tools/compare_llm.py at ~2.3 s median,
+        # against ~6.9 s for the Quick Check model (2026-09-21)
+        v = await asyncio.to_thread(engine.llm_verdict, text, lang, None, os.getenv("GEMINI_LIVE_MODEL", "gemini-3.5-flash-lite"))
         if v and session == state["session"]:  # the call may have been reset while we waited
             state["scam_type"], state["reasons"] = v.scam_type, v.reasons
             await send(tracker.update({}, engine.STAGE_SCORE.get(v.stage, 0), v.stage, v.confidence))

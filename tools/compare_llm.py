@@ -50,24 +50,30 @@ def remote(text, lang, url):
 
 ap = argparse.ArgumentParser()
 ap.add_argument("--gemini-url")
+ap.add_argument("--gemini-model", help="override GEMINI_MODEL for the local Gemini column, e.g. gemini-3.5-flash-lite")
+ap.add_argument("--backends", default="gemini,fci", help="comma-separated: gemini, fci")
 ap.add_argument("--pause", type=float, default=2.5, help="seconds between cases (the public API is rate-limited)")
 args = ap.parse_args()
+if args.gemini_model:
+    os.environ["GEMINI_MODEL"] = args.gemini_model
+BACKENDS = [b for b in args.backends.split(",") if b in ("gemini", "fci")]
+NAMES = {"gemini": os.getenv("GEMINI_MODEL", "gemini-3.8-flash") + (" (deployed)" if args.gemini_url else ""), "fci": os.getenv("FCI_MODEL", "fci")}
 score = {"gemini": 0, "fci": 0}
 lat = {"gemini": [], "fci": []}
-print(f"{'case':26} {'expect':6} | {'gemini':22} | {os.getenv('FCI_MODEL', 'fci')}")
+print(f"{'case':26} {'expect':6} | " + " | ".join(f"{NAMES[b]:22}" for b in BACKENDS))
 for name, lang, expect, text in CASES:
     row = {}
-    for backend in ("gemini", "fci"):
+    for backend in BACKENDS:
         out, dt = remote(text, lang, args.gemini_url) if backend == "gemini" and args.gemini_url else local(text, lang, backend)
         row[backend] = out
         lat[backend].append(dt)
         score[backend] += out["risk_level"] == expect
     cell = lambda b: f"{'ok ' if row[b]['risk_level'] == expect else 'XX '}{row[b]['risk_level']:6} {row[b]['risk_score']:3} {lat[b][-1]:4.1f}s"
-    print(f"{name:26} {expect:6} | {cell('gemini'):22} | {cell('fci')}")
-    for b in ("gemini", "fci"):
+    print(f"{name:26} {expect:6} | " + " | ".join(f"{cell(b):22}" for b in BACKENDS))
+    for b in BACKENDS:
         if row[b]["risk_level"] != expect:
             print(f"    {b}: type={row[b].get('scam_type')} reasons={row[b].get('reasons')}")
     time.sleep(args.pause)
 n = len(CASES)
-for b in ("gemini", "fci"):
-    print(f"{b:7} {score[b]}/{n} correct, median latency {sorted(lat[b])[n // 2]:.1f}s")
+for b in BACKENDS:
+    print(f"{NAMES[b]:28} {score[b]}/{n} correct, median latency {sorted(lat[b])[n // 2]:.1f}s, max {max(lat[b]):.1f}s")
