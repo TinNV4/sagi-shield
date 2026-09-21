@@ -53,6 +53,7 @@
   {
     "name": "vi_scam_fake_police",
     "culture": "vi-VN",
+    "fci_voice": "std_banmai",
     "voice": "Microsoft An",
     "expect": "HIGH",
     "lines": [
@@ -66,6 +67,7 @@
   {
     "name": "vi_benign_delivery",
     "culture": "vi-VN",
+    "fci_voice": "std_banmai",
     "voice": "Microsoft An",
     "expect": "LOW",
     "lines": [

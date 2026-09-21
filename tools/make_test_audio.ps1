@@ -2,7 +2,10 @@
 #   pwsh tools/make_test_audio.ps1            -> tools/test_audio/*.wav  (git-ignored; regenerate any time)
 # Use them in Live Guard > "Test tools", in Quick Check (audio upload), or play them next to the microphone.
 # 16 kHz mono PCM16 = what speech recognizers expect. A pause between lines mimics turn-taking on a call.
-param([string]$OutDir = "$PSScriptRoot/test_audio", [int]$PauseMs = 900)
+#   pwsh tools/make_test_audio.ps1 -Engine fci   -> also *_fci.wav for calls that name an `fci_voice`, through an
+#        OpenAI-compatible /v1/audio/speech endpoint (OPENAI_BASE_URL / OPENAI_API_KEY / FCI_TTS_MODEL in .env).
+#        More natural than the Windows voices - a harder, more realistic test for the recognizer. Test data only.
+param([string]$OutDir = "$PSScriptRoot/test_audio", [int]$PauseMs = 900, [ValidateSet("windows", "fci")][string]$Engine = "windows")
 Add-Type -AssemblyName System.Speech
 $calls = Get-Content "$PSScriptRoot/test_calls.json" -Raw -Encoding utf8 | ConvertFrom-Json
 New-Item -ItemType Directory -Force $OutDir | Out-Null
@@ -25,4 +28,19 @@ foreach ($call in $calls) {
     $synth.Speak($prompt)
     $synth.Dispose()
     "{0,-28} {1,5:N0} KB  expect {2,-6} ({3})" -f "$($call.name).wav", ((Get-Item $path).Length / 1KB), $call.expect, $voice.VoiceInfo.Name
+}
+
+if ($Engine -eq "fci") {
+    $cfg = @{}
+    Get-Content "$PSScriptRoot/../.env" | Where-Object { $_ -match '^\s*([A-Za-z_]+)=(.*)$' } | ForEach-Object { $cfg[$Matches[1]] = $Matches[2].Trim() }
+    $url = $cfg.OPENAI_BASE_URL.TrimEnd('/') + "/v1/audio/speech"
+    foreach ($call in $calls | Where-Object { $_.fci_voice }) {
+        $path = Join-Path $OutDir "$($call.name)_fci.wav"
+        $body = @{ model = $cfg.FCI_TTS_MODEL; input = ($call.lines -join "`n"); response_format = "wav"; voice = $call.fci_voice } | ConvertTo-Json
+        try {
+            Invoke-WebRequest -Uri $url -Method Post -ContentType "application/json; charset=utf-8" -OutFile $path `
+                -Headers @{ Authorization = "Bearer $($cfg.OPENAI_API_KEY)" } -Body ([Text.Encoding]::UTF8.GetBytes($body)) | Out-Null
+            "{0,-28} {1,5:N0} KB  expect {2,-6} ({3} / {4})" -f "$($call.name)_fci.wav", ((Get-Item $path).Length / 1KB), $call.expect, $cfg.FCI_TTS_MODEL, $call.fci_voice
+        } catch { Write-Warning "$($call.name): $($_.ErrorDetails.Message ?? $_.Exception.Message)" }  # e.g. model not allowed for this key
+    }
 }

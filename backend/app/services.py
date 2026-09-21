@@ -81,13 +81,14 @@ def _stt_clients():
     if _stt["client"] is not None:
         yield _stt["client"]
         return
+    if time.time() < _stt["retry_after"]:
+        return
     if os.getenv("STT_API_KEY", "").strip():
-        yield genai.Client(api_key=os.environ["STT_API_KEY"].strip())
+        # explicit enterprise=False: GOOGLE_GENAI_USE_ENTERPRISE=true would send the key to Agent Platform (401)
+        yield genai.Client(enterprise=False, api_key=os.environ["STT_API_KEY"].strip())
         return
     if os.getenv("GOOGLE_GENAI_USE_ENTERPRISE", "").lower() != "true":
         yield _client()
-        return
-    if time.time() < _stt["retry_after"]:
         return
     _stt["retry_after"] = time.time() + STT_RETRY_S  # cleared again as soon as one location answers
     for location in os.getenv("STT_LOCATIONS", "us-central1,asia-northeast1,us,europe-west4").split(","):
@@ -120,6 +121,8 @@ def transcribe_audio(data: bytes, mime_type: str, lang: str = "ja") -> str | Non
             break
         except Exception as e:
             _warn("transcribe model", e)
+            if getattr(e, "code", None) in (401, 402, 403):  # key / billing problem: not going to heal in a minute
+                _stt["retry_after"] = time.time() + STT_RETRY_S
             if getattr(e, "code", None) != 404:  # 404 = not served from this location: try the next one
                 break
     try:
