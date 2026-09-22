@@ -267,20 +267,20 @@ gantt
 - [ ] **Team: find 1–3 teammates now** — solo entries are not allowed; all members 21+, working professionals, JAPAC-based. Register everyone on Hack2skill **before 10-04** (FAQ/T&C date) even though the homepage says 10-11
 - [ ] Confirm on the Hack2skill dashboard / Discord which dates are binding (10-04 vs 10-11 / 10-18) and write them here
 - [x] `git init` + first commit (2026-09-21)
-- [ ] Push to GitHub (private now, public at submission). Commit history = proof of fresh code
+- [x] Push to GitHub: https://github.com/TinNV4/sagi-shield (private since 2026-09-23; flip to public at submission). Commit history = proof of fresh code
 - [x] GCP project `sagi-shield-560661` via `infra/setup.ps1`: Agent Platform, Cloud Run, Firestore (Tokyo, TTL on `recovery_sessions.expires_at`), Web Risk, Secret Manager, least-privilege service account `sagi-api`. Not enabled yet: Speech-to-Text (opt-in fallback only), FCM
-- [ ] Re-verify model IDs in section 6 against the Agent Platform model pages; set `.env`; load Gemini API + ADK skills into Antigravity
-- [ ] `pip install -r backend/requirements.txt`; run `risk_engine.py --no-llm` smoke test, then once **with** the LLM to prove the model ID and `global` location work
+- [x] Re-verify model IDs in section 6 against the Agent Platform model pages; set `.env`; load Gemini API + ADK skills into Antigravity (done 2026-09-21: `gemini-3.5-flash-lite` judge, `gemini-3.8-flash` vision / second opinion, `global`; deployed)
+- [x] `pip install -r backend/requirements.txt`; run `risk_engine.py --no-llm` smoke test, then once **with** the LLM to prove the model ID and `global` location work (done)
 - [x] Real API on Cloud Run (2026-09-21): `https://sagi-shield-api-209791011329.asia-northeast1.run.app`, timeout 3600 s, session affinity, `min-instances=0` until demo week (then 1). `/ws/live` verified from a script: scripted fake-police call reaches latched HIGH + `speak` on line 5 (~12 s). The same service serves the PWA (`backend/static`, same origin) - this URL is the submission URL. Still to check: client reconnect after the 60-min cut
 
 ### P0.5 · Live spike + STT bake-off (9/20–9/21) — **highest risk, do first**
-- [ ] `spike/live_spike.py`: ugly end-to-end mic → WS → STT → rules → printed score. No UI.
+- [x] `spike/live_spike.py`: ugly end-to-end mic → WS → STT → rules → printed score. No UI. Superseded: `app/live.py` (`WS /ws/live`) + `frontend/spike/live_text.html`
 - [ ] Play a scam-call recording **through a phone/landline speaker into a tablet mic** at ~50 cm (far-field, 8 kHz narrowband source)
 - [ ] **Branch 3 — on-device STT (do this first, it decides the architecture):** run the API, open `http://localhost:8080/spike/live_text.html` in Chrome 139+ on the dev PC (no tablet needed yet: laptop mic + a phone on speaker at ~50 cm). Record per language: is the ja-JP / vi-VN pack `available`? CER vs the reference transcript, delay until a final line, does recognition survive 25 min (`onend` restarts)?
 - [ ] `spike/stt_bakeoff.py`: `gemini-3.5-transcribe-live` vs Chirp 3 streaming (with denoiser + phrase hints) → CER vs the reference transcript, first-token latency, cost/min; repeat for vi-VN; try browser `noiseSuppression` / `autoGainControl` on and off
-- [ ] Session rotation: open the next transcribe-live session ~5 s before the 10-min cap, de-duplicate overlapping text; **test on a 25-min call**
+- [x] Session rotation: open the next transcribe-live session ~5 s before the 10-min cap, de-duplicate overlapping text; **test on a 25-min call** Not needed: on-device STT is the default, transcribe-live is not used
 - [ ] (≤ 2 h, optional) ephemeral-token direct-from-browser path
-- [ ] **Decision gate:** on-device STT good enough for the rules + LLM to fire → tier 0 is the default and the cloud STT work is dropped to fallback. Otherwise pick a cloud STT per language and make it an explicit opt-in. If ja far-field CER is too bad for rules to fire → try `gemini-3.8-live`; if vi streaming fails → VN is Quick Check only.
+- [x] **Decision gate:** on-device STT good enough for the rules + LLM to fire → tier 0 is the default and the cloud STT work is dropped to fallback. Otherwise pick a cloud STT per language and make it an explicit opt-in. If ja far-field CER is too bad for rules to fire → try `gemini-3.8-live`; if vi streaming fails → VN is Quick Check only. **Decided 2026-09-21:** tier 0 on-device STT is the default; cloud STT stays an unimplemented opt-in fallback. Far-field mic test (278/279) still open
 
 ### P1 · UI in AI Studio Build (9/20–9/22, parallel — ideal teammate task)
 - [x] UI generated in AI Studio Build and exported to `frontend/` (2026-09-21). It **did** add an Express + Gemini server with its own API shape, a keyword fallback and a simulated "on-device language pack installed" state → server removed, client rewired to section 9, on-device status now comes only from `SpeechRecognition.available()`
@@ -304,9 +304,9 @@ gantt
 - [x] `/ws/live` text mode: rolling window, rules per line, LLM on a ~20 s clock (`gate=periodic`, default since real recordings showed rules stay below MEDIUM on natural speech) or only from MEDIUM (`gate=rules`), masked window, off the receive loop, silence-timeout + manual reset, latched HIGH, `speak` once (offline tests, LLM stubbed)
 - [x] The judge sees the middle of the story: the first 3 lines of the call stay pinned on top of the 12-line window once they roll out, and a text-free `<call_state>` block (stages reached, playbook, minutes, set-up call remembered) travels with every look (~30 tokens). Found 2026-09-22: minute 6 of a fake-police call judged cold got the right risk but the wrong playbook. Replay of the 34 real recordings: `docs/EVAL.md`
 - [ ] Client WS auto-reconnect; (fallback only) `input=audio` with STT session rotation
-- [ ] Rules every chunk, Gemini (`thinking_level="low"`) every 5 s or on rule hit; feed `LiveTracker.update(window_hits, llm_score, llm_stage, reporting)`; call `reset()` on the silence timeout; add the 2-window latch
-- [ ] Frontend: VAD gate in `audioCapture.js`, Screen Wake Lock, kiosk mode (auto-start on load, auto-restart on error)
-- [ ] F1b spoken alert via `speechSynthesis` (pre-warm voice on first user gesture — browsers block TTS before one)
+- [x] Rules every chunk, Gemini (`thinking_level="low"`) every 5 s or on rule hit; feed `LiveTracker.update(window_hits, llm_score, llm_stage, reporting)`; call `reset()` on the silence timeout; add the 2-window latch Done as `gate=periodic` (every 20 s / 6 unseen lines) + rules on every line, latch after 2 HIGH, `reset()` on silence
+- [ ] Frontend: VAD gate in `audioCapture.js`, Screen Wake Lock, kiosk mode (auto-start on load, auto-restart on error) (wake lock done; VAD gate and auto-restart still open)
+- [x] F1b spoken alert via `speechSynthesis` (pre-warm voice on first user gesture — browsers block TTS before one) (`src/lib/speak.ts`, used by the HIGH takeover)
 - [ ] **TV test**: play a police drama / news segment about scams for 10 min → must not latch HIGH
 - [ ] Record the re-enacted demo call on a real speaker + tablet; keep the footage as demo fallback
 
@@ -314,7 +314,7 @@ gantt
 - [x] Pairing: `/family/code` (single-use 6-digit code, 15 min, refreshable) → `/family/link`; `family_id` is the family's shared secret. QR is still a placeholder icon in the UI
 - [ ] FCM push on HIGH: `notifier.py` written, **never run** (needs a Firebase project + web push token from the UI). Demo guardian on **Android or desktop Chrome** — iOS web push needs Home Screen install and is known to drop subscriptions
 - [x] Guardian view: alert stored before any push; UI polls `/family/alerts` every 5 s; live HIGH and "Notify my family" both create alerts; summary = first reason sentence (Gemini-written when the LLM ran), never the transcript. Firestore realtime listener → Milestone B
-- [ ] `/report` opt-in → Firestore; `/stats` aggregates; seed ~200 synthetic reports for demo (label them as synthetic in the UI)
+- [x] `/report` opt-in → Firestore; `/stats` aggregates; seed ~200 synthetic reports for demo (label them as synthetic in the UI) (`tools/seed_dashboard.py`, keyword `demo-seed`)
 - [x] F6 recovery agent (`app/agent.py`, google-adk 2.9): five tools - three state-changing (payment channel / step done / police statement), `lookup_official_number` (curated table, the only numbers it may quote) and `notify_guardian` (family alert, 2026-09-23) - plus a `before_model_callback` that re-masks numbers; numbers masked before the model, scripted fallback when the model is down. Stateless per instance: state + masked turns live in the store (`recovery_sessions`, 24 h; **set a Firestore TTL policy on `expires_at` at deploy**). Real run 2026-09-21 (free tier): channel + statement tools called correctly, 14–26 s per turn; all three tools verified on Cloud Run (Agent Platform), state round-trips through Firestore; ~22 s per turn - try `gemini-3.5-flash-lite` for the agent
 
 ### P5 · Eval & freeze A (9/30)
@@ -331,12 +331,12 @@ gantt
 
 ### P6 · Ship Milestone A (10/1–10/2, buffer 10/3–10/4)
 - [ ] Demo video **under 3 min, English narration or subtitles**, public YouTube/Vimeo/Drive link (section 12)
-- [ ] Deck **in English, exported to PDF**: problem (sourced numbers) → demo → architecture → eval/ablation numbers → impact → scalability → roadmap (bank-embedded 振込前チェック API → VN → JAPAC)
-- [ ] English README, public GitHub repo, deployed URL → everything needed for the form is ready on 10-04 (submit right away if 10-04 turns out to be binding)
+- [ ] Deck **in English, exported to PDF**: problem (sourced numbers) → demo → architecture → eval/ablation numbers → impact → scalability → roadmap (bank-embedded 振込前チェック API → VN → JAPAC) (built as a Slides artifact, 14 + 4 slides; PDF export still open)
+- [ ] English README, public GitHub repo, deployed URL → everything needed for the form is ready on 10-04 (submit right away if 10-04 turns out to be binding) (README + private repo https://github.com/TinNV4/sagi-shield + deployed URL done 2026-09-23; make the repo public at submission)
 
 ### Milestone B (10/5–10/17) — only if 10-18 is confirmed
 - [ ] B1 Field tests: real landline + tablet in a living room, 3+ people, TV on; tune thresholds; fix what breaks
-- [ ] B2 F6 recovery agent (if not done) → VN Live Guard → BigQuery/Looker, in that order
+- [ ] B2 F6 recovery agent (if not done) → VN Live Guard → BigQuery/Looker, in that order (F6 done; BigQuery/Looker done; VN Live Guard untested with a real voice)
 - [x] BigQuery event stream (`app/analytics.py`, `infra/setup_analytics.ps1`): one anonymous row per verdict / report / live alarm → `sagi.events` (day-partitioned, 400-day expiry), views `daily_verdicts` and `reports_by_prefecture`. Firestore stays the lookup store (a per-request "was this number reported?" is not a warehouse query). Open: the Looker Studio report itself (built in the UI from the two views; link printed by the setup script)
 - [x] Live Guard on real speech: periodic LLM gate + cross-call memory (device-side flag, 48 h) - replayed real recordings through the deployed socket: set-up call stays quiet and is remembered, the money call alarms at sentence 5 of 33 (`docs/EVAL.md`). Trusted contact (Settings, device-only) → one-tap "hang up and call the saved number" on the alarm screen and the deepfake card
 - [x] False-alarm work: real non-scam speech 0/14 (93 min); hard-negative legitimate calls HIGH 13.9% → 6.3% after the authority + fear + money combo became reviewable by two agreeing models (recall unchanged). Settings: strict-privacy toggle (`gate=rules`). `docs/VIDEO_SCRIPT.md`, `docs/DECK_OUTLINE.md` drafted (two claims marked VERIFY). Open: real benign *phone calls* (no free corpus)
