@@ -115,3 +115,69 @@ def test_sessions_expire_are_bounded_and_input_is_validated(client, monkeypatch)
            {"session_id": "sess-0123456789abcdef", "message": "hi", "lang": "en"},  # lang is the market
            {"session_id": "../families/0123456789", "message": "hi"}]
     assert [client.post("/agent/recovery", json=b).status_code for b in bad] == [422, 422, 422]
+
+
+def test_official_numbers_come_only_from_the_table():
+    class Ctx:
+        state = {"market": "ja"}
+
+    assert agent.lookup_official_number("警察", Ctx)["tel"] == "#9110"
+    assert agent.lookup_official_number("bank", Ctx)["tel"] is None            # "back of the card", never invented
+    assert agent.lookup_official_number("NTT Finance", Ctx)["status"] == "unknown"
+    Ctx.state["market"] = "vi"
+    assert agent.lookup_official_number("công an", Ctx)["tel"] == "113"
+    assert agent.lookup_official_number("consumer", Ctx)["status"] == "unknown"  # no such hotline in the vi table yet
+
+
+def test_notify_guardian_needs_a_paired_family_and_fires_once(client):
+    fam = main.store.create_family("Grandma")
+
+    class Ctx:
+        state = {**agent.new_state(), "family_id": None}
+
+    assert agent.notify_guardian("paid a fake police caller", Ctx)["status"] == "no_family"
+    Ctx.state["family_id"] = "not-a-family"
+    assert agent.notify_guardian("paid a fake police caller", Ctx)["status"] == "no_family"
+    Ctx.state["family_id"] = fam["family_id"]
+    assert agent.notify_guardian("paid 500,000 yen to account 1234-5678-9012", Ctx)["status"] == "ok"
+    assert agent.notify_guardian("again", Ctx)["status"] == "already_sent"
+    alerts = main.store.list_alerts(fam["family_id"])
+    assert len(alerts) == 1 and alerts[0]["scam_type"] == "recovery" and alerts[0]["risk_level"] == "HIGH"
+    assert "1234" not in alerts[0]["summary"] and "<NUMBER>" in alerts[0]["summary"]
+
+
+def test_family_id_is_kept_with_the_session(client, monkeypatch):
+    monkeypatch.setenv("USE_LLM", "1")
+    seen = {}
+
+    async def fake_agent(message, state):
+        seen.update(state)
+        return "ok", state
+
+    monkeypatch.setattr(agent, "run_agent", fake_agent)
+    ask(client, "hello", family_id="fam_abc123")
+    assert seen["family_id"] == "fam_abc123"
+    ask(client, "next turn")               # no family_id in the body: the stored one survives
+    assert seen["family_id"] == "fam_abc123"
+    assert client.post("/agent/recovery", json={"session_id": "sess-0123456789abcdef", "message": "x", "lang": "ja",
+                                                "family_id": "bad id!"}).status_code == 422
+
+
+def test_model_boundary_masks_digit_runs_in_user_parts():
+    class Part:
+        def __init__(self, text):
+            self.text = text
+
+    class Content:
+        def __init__(self, role, *texts):
+            self.role, self.parts = role, [Part(t) for t in texts]
+
+    class Req:
+        contents = [Content("user", "the caller said pay to 1234-5678-9012 today", "tel 090 1234 5678"),
+                    Content("model", "call 1234-5678-9012?")]  # the model's own turn is left alone
+
+    assert agent._guard_request(None, Req) is None
+    assert Req.contents[0].parts[0].text == "the caller said pay to <NUMBER> today"
+    assert Req.contents[0].parts[1].text == "tel <NUMBER>"
+    assert "1234" in Req.contents[1].parts[0].text
+    assert agent._mask("50万円 in 2026, <PHONE> stays") == "50万円 in 2026, <PHONE> stays"  # short numbers and tokens untouched

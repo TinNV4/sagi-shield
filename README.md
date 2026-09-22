@@ -61,7 +61,7 @@ PWA (React + Vite, served by the API)
   │                  ├─ image  ─▶ Gemini 3.8 Flash (vision)
   │                  ├─ audio  ─▶ gemini-3.5-transcribe ─▶ Chirp 3 fallback
   │                  └─ url    ─▶ Web Risk
-  ├─ POST /agent/recovery ─▶ ADK 2.x agent (3 tools) ─▶ Firestore session (24 h TTL)
+  ├─ POST /agent/recovery ─▶ ADK 2.x agent (5 tools) ─▶ Firestore session (24 h TTL)
   ├─ /family/*, /report ─▶ Firestore (lookups while the user waits: reported numbers, pairing, alerts)
   └─ every verdict ─▶ BigQuery `sagi.events` (anonymous: no text, numbers or ids) ─▶ Looker Studio scam map
 Cloud Run (asia-northeast1) · Gemini on Agent Platform (global) · Firestore · BigQuery · Web Risk · Speech-to-Text · Secret Manager
@@ -75,7 +75,7 @@ Details, decisions and the phase checklist: [docs/PLAN.md](docs/PLAN.md). Workin
 cd backend
 pip install -r requirements.txt
 cp ../.env.example ../.env          # Gemini API key, or an Agent Platform project
-python -m pytest tests -q           # 82 tests, offline
+python -m pytest tests -q           # 101 tests, offline, no network
 USE_LLM=0 uvicorn app.main:app --port 8080     # rules only; drop USE_LLM=0 to use Gemini
 
 cd ../frontend
@@ -84,7 +84,35 @@ echo VITE_API_BASE=http://localhost:8080 > .env
 npm run dev                         # http://localhost:3000 (without VITE_API_BASE the app runs on mock data)
 ```
 
+Or the container, exactly as Cloud Run runs it (the PWA is served by the API when `frontend/` was built into
+`backend/static/`):
+
+```bash
+cd frontend && VITE_API_BASE=same-origin npm run build && rm -rf ../backend/static && cp -r dist ../backend/static && cd ..
+docker build -t sagi-shield-api backend
+docker run --rm -p 8080:8080 --env-file .env -e USE_LLM=1 -e STORE=memory sagi-shield-api
+# open http://localhost:8080
+```
+
+### Configuration (`.env`, all optional except the model access)
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `GOOGLE_GENAI_USE_ENTERPRISE`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | `true`, -, `global` | Gemini on Agent Platform (production). With `GEMINI_API_KEY` instead, set `GOOGLE_GENAI_USE_ENTERPRISE=false` |
+| `GEMINI_MODEL` / `GEMINI_LIVE_MODEL` / `GEMINI_VISION_MODEL` / `GEMINI_CONFIRM_MODEL` | `gemini-3.5-flash-lite` / same / `gemini-3.8-flash` / `gemini-3.8-flash` | text judge + agent / Live Guard judge / screenshots / second opinion |
+| `USE_LLM` | `1` | `0` = rules only, offline (tests, demos without credentials) |
+| `STORE` | `memory` | `firestore` on Cloud Run |
+| `USE_WEBRISK` | `0` | `1` = check links against Web Risk |
+| `HASH_KEY` | `change-me` | HMAC key for reported numbers; a Secret Manager secret in production |
+| `STT_API_KEY` | - | Gemini Developer API key for `gemini-3.5-transcribe` (uploads); Chirp 3 otherwise |
+| `LIVE_LLM_GATE`, `LIVE_PERIODIC_S`, `LIVE_PERIODIC_LINES`, `LIVE_CONTEXT` | `periodic`, `20`, `6`, `on` | when the Live Guard judge is consulted, and whether it gets the pinned opening + call state |
+| `BQ_TABLE` | - | `project.sagi.events`: anonymous verdict rows for the scam map |
+| `VERDICT_LOG`, `LOG_TEXT` | -, `0` | JSONL copy of the verdict log (why each verdict); `LOG_TEXT=1` adds masked text, local evaluation only |
+| `RATE_LIMIT_PER_MIN`, `CORS_ORIGINS` | `30`, `*` | per-client brake; allowed origins |
+
 ## Deploy
+
+Scripts (the quick path, used for the live demo):
 
 ```bash
 pwsh infra/setup.ps1 -Project <project-id>         # once: APIs, Firestore + TTL, secret, service account
@@ -95,14 +123,27 @@ python tools/check_tabs.py  https://<service-url>  # post-deploy checks
 python tools/check_audio.py https://<service-url>
 ```
 
+Or as code, `infra/terraform/` (APIs, least-privilege service account, Firestore + TTL, the HMAC secret, BigQuery,
+Cloud Run with secrets mounted; the image is built by Cloud Build from `backend/Dockerfile`):
+
+```bash
+gcloud builds submit backend --tag asia-northeast1-docker.pkg.dev/<project-id>/cloud-run-source-deploy/sagi-shield-api:latest
+cd infra/terraform && terraform init && terraform apply -var project=<project-id> \
+  -var image=asia-northeast1-docker.pkg.dev/<project-id>/cloud-run-source-deploy/sagi-shield-api:latest
+```
+
+**Where to look when it runs:** every check and every Live Guard look writes a structured line to Cloud Logging
+(`jsonPayload.kind="live_look"`: rule hits, the judge's verdict and reasons, the call state it was given, latency);
+`python tools/verdict_log.py <jsonl | ->` summarises a local log or a `gcloud logging read --format=json` export.
+
 ## Repository
 
 ```
 backend/core/   input_layer.py (normalize + mask) · risk_engine.py (kill chain, fusion, LiveTracker) · gen_dataset.py (data + ablation)
 backend/app/    FastAPI: main.py (/check …) · live.py (WS) · agent.py (ADK) · services.py (Google calls) · storage.py · guard.py
-backend/eval/   synthetic evaluation set · backend/tests/ 82 offline tests
+backend/eval/   synthetic evaluation set · backend/tests/ 101 offline tests
 frontend/       React + Vite PWA (ja / vi / en)
-infra/          setup + deploy scripts · tools/ test calls, post-deploy checks, model comparison · docs/ plan + evaluation
+infra/          setup + deploy scripts, terraform/ · tools/ test calls, post-deploy checks, replay, verdict log viewer, model comparison · docs/ plan, evaluation, related work, deck data
 ```
 
 ## Testing with recorded calls

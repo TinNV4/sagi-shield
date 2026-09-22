@@ -1,5 +1,13 @@
 # Pitch deck outline (export to PDF, English, ~12 slides)
 
+**Built deck (2026-09-22, Google-style, Roboto):** 14 slides + 3 appendix, in this order - cover · problem · why
+defences miss it · market landscape (carriers as competitors, Pixel Scam Detection as the on-device layer we
+complement, never a rival) · the kill-chain idea · demo (four real screenshots from the deployed app) · Quick Check
+channels · what Gen AI does · evidence (incl. the live-path A/B) · privacy · architecture (draw.io, Google colours,
+`docs/diagrams/`) · **business viability** (¥5.1M average loss per case, 27.6M households with a 65+ member, three
+revenue channels, unit economics) · roadmap · team & ask · appendix: what real data taught us, evaluation method and
+limits, **model benchmark** (34 hard cases × Gemini / Gemma 4 / DeepSeek / Qwen, `tools/compare_llm.py`), security notes. Placeholders still open: team names, GitHub URL, price points and SAM/SOM figures in brackets.
+
 Every number below is either sourced (NPA) or reproducible from this repo (`docs/EVAL.md`). Re-check them on the day
 the deck is exported.
 

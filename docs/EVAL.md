@@ -101,6 +101,42 @@ that hole for fast talkers and short calls; at normal pace it changes little. Si
 on the alarm threshold (66-72) and flips between runs, and the transcript differs by transcriber (the first column used
 other transcripts), so read the columns as "no systematic difference at speech pace", not as a ranking.
 
+## The judge sees the middle of the story: pinned opening + call state (2026-09-22)
+
+Each live look sends the judge the last 12 lines (~30 s). Minute 6 of a fake-police call, read cold, is "transfer
+before 3 pm, go to the counter": one Gemini call on such a window gave risk 99 but playbook `family_impersonation`;
+with the call state it gave 100 / `fake_police` / confidence 0.99. Two changes in `live.py`, no audio, ~30 extra
+tokens per look: the first 3 lines of the call stay pinned on top of the window once they roll out (`[...]` marks
+the cut), and `LiveTracker.call_state()` travels as a `<call_state>` block outside the untrusted transcript - stages
+reached so far, playbook, minutes elapsed, set-up call remembered; never text. `?context=off` switches both off.
+
+**A/B on the 34 real recordings, same cached transcripts, local server, 1.5 s per sentence, set-up flag carried by
+case** (`backend/eval/real_heldout/live_results_context_{off,on}.json`, numbers only):
+
+| | context off | context on |
+|---|---|---|
+| per recording HIGH / MEDIUM / LOW | 18 / 11 / 5 | **23 / 8 / 3** |
+| per scam case (14) warned / alarmed | 13 / 12 | **14 / 13** |
+| recordings that changed level | | 7 up, **0 down** |
+| alarm reached earlier / later (both legs alarmed) | | 11 earlier, 5 later |
+
+Moved up: `240304` MEDIUM 65 → HIGH 93 (alarm at 22), `n5-2` MEDIUM 68 → HIGH 88 (17), `n5-5` MEDIUM 69 → HIGH 90,
+`n1-3` MEDIUM 41 → HIGH 74, `n1-4` MEDIUM 65 → HIGH 91, `s1` (refund) LOW 30 → MEDIUM 69, `n4-5` LOW 0 → MEDIUM 51.
+Earlier alarms: `n1-6` at 30 instead of 76, `n2` 24 instead of 43, `n5-6` 27 instead of 43, `n8-2` 18 instead of 26.
+Every recording is a scam, so this run says nothing about false alarms; the two-call opening calls (`n1-1`, `n1-2`,
+`n4-3`, `n4-5`) now sit at MEDIUM 50-65 where the bare window gave LOW-MEDIUM 0-55 - the context makes the judge
+suspicious earlier in a rapport call. **Before shipping the default, replay the hard-negative set through the live
+path** (not done: `gen --hard-negatives` calls exist only as text for `/check`).
+
+**Verdict log.** The off leg was the first run with `app/verdict_log.py` (`backend/eval/logs/replay_ab.jsonl`, git-ignored):
+643 looks, 481 triggered by the rules, 123 by 6 unseen lines, 39 by the clock; 127 needed a second opinion.
+Latency from this machine to the Gemini API: judge only median 2.2 s, p90 4.9 s; with a second opinion median 6.0 s,
+p90 11.4 s (Cloud Run to Agent Platform measured ~1.3 s per judge earlier). `python tools/verdict_log.py <file>
+--level MEDIUM` shows why a look stopped at MEDIUM: e.g. rules 20 (authority only), judge 80 at stage 1, second
+opinion 65, fused 62 - "警察を名乗る人物からの突然の不審な電話です".
+
+Cost of this study: about ¥190 (one on leg incl. re-transcribing 17 files, one off leg).
+
 ## False alarms: real non-scam speech and hard-negative calls
 
 **Real speech, not a scam.** 14 public-domain Japanese LibriVox recordings from archive.org (2-14 minutes each, 93
@@ -183,6 +219,38 @@ python core/gen_dataset.py ablation --datasets eval/ja_final.jsonl eval/vi_final
 
 A second, hand-written check of 15 hard cases (news reports, prompt injection, keyword-free ore-ore, Vietnamese OTP / investment scams) is in `tools/compare_llm.py`: 15/15 on Cloud Run, median 1.3 s.
 
+**Other judges on 34 hard cases (2026-09-22, `tools/compare_llm.py`; same rules, fusion and second-opinion path as
+production, only the model differs; comparison only, the product runs Gemini).** 3-5 cases per playbook at the hard end
+(a fake-police call with no threat words, a prosecutor over Zalo, a prompt injection in each language, a mid-call window
+without the opening, "grandson, then the lawyer takes the phone", a set-up call that asks for nothing, a refund scam
+without the word ATM, a carrier's automated "line suspended" voice, parcel customs fees, an investment "withdrawal
+tax") and 8 legitimate look-alikes (a bank's real fraud desk, a city refund by mail, a TV drama script, a son's monthly
+transfer, news and warnings).
+
+| Judge | Correct | fake police | family | refund | billing | investment | legit | scripted | Median | Max |
+|---|---|---|---|---|---|---|---|---|---|---|
+| gemini-3.5-flash-lite (+3.8 Flash second opinion) | **32/34** | 5/5 | 4/5 | 3/3 | 4/4 | 3/3 | 7/8 | 6/6 | 2.5 s | 14.0 s |
+| DeepSeek-V4-Flash (FCI) | 33/34 | 5/5 | 5/5 | 3/3 | 4/4 | 3/3 | 7/8 | 6/6 | 4.0 s | 15.4 s |
+| gemma-4-31B-it (FCI) | 33/34 | 5/5 | 5/5 | 3/3 | 4/4 | 3/3 | 7/8 | 6/6 | 1.0 s | 2.1 s |
+| Qwen3.6-27B (FCI) | 28/34 | 5/5 | 3/5 | 2/3 | 3/4 | 2/3 | 7/8 | 6/6 | 8.7 s | 23.3 s |
+
+What the misses are:
+- **`drama_script` (all four): MEDIUM 45, by design, not by the models.** Every judge said "safe"; the rules saw
+  authority + fear + money in the quoted lines, and a reviewable hard combo that two models call legitimate settles
+  at `REVIEWED_SCORE` 45 - MEDIUM, never LOW ("verify through an official number" is the right advice for a call that
+  quotes scam lines). Counted as a miss against the LOW label to keep the table honest.
+- **`setup_call_only` (Gemini): MEDIUM 62** where the prompt asks for 20-40 for a set-up call; DeepSeek 32, Gemma LOW.
+  The same tendency showed in the live replay (opening calls at MEDIUM 50-65). A real disagreement between models,
+  and the one place Gemini Flash-Lite is the most suspicious of the four.
+- **Qwen: 3 replies outside the JSON contract** (`parse_verdict` rejects them; there is no constrained decoding on
+  the OpenAI-compatible path) plus the two 69-cap cases the others clear with a second opinion.
+- Before the harness passed a second opinion the way production does, three more cases sat at the 69 cap or the
+  rules' 90 floor for every model (first run: Gemini 30, DeepSeek 31, Gemma 31, Qwen 27): the harness, not the models.
+
+The verdicts agree on 31 of 34 cases across vendors; the prompt, the playbooks and the second-opinion rule carry the
+judgement. Gemma 4 matters for the roadmap: an open Google model that scores 33/34 at 1 s median is the candidate for
+the fully on-device tier.
+
 ## After speech recognition (TTS → transcription → judge)
 
 40 calls from the final set, spoken by local Windows voices and transcribed by the product's transcription chain (`gemini-3.5-transcribe`; the general Gemini model takes over when it is rate-limited, which happened for about half of the calls in this run). Recall / false-positive rate:
@@ -195,3 +263,20 @@ A second, hand-written check of 15 hard cases (news reports, prompt injection, k
 Transcription: 0 of 40 came back empty; character similarity to the spoken script: median 97%, worst 85%.
 Verdict level changed on 1 of 40 calls: `ja-s41-0023` MEDIUM→HIGH.
 Synthetic voices are cleaner than a speakerphone across a room: read this as an upper bound.
+
+## Recovery agent: does it act only through tools? (`tools/eval_agent.py`, 2026-09-23)
+
+Four scripted conversations through the real ADK agent (`gemini-3.8-flash`), numbers deliberately in the user's lines.
+Checks: payment channel and steps set through tools, a draft statement exists, the family alert fires only after the
+user agrees (`notify_guardian`, once), no phone number in any reply except what `lookup_official_number` returns
+(#9110, 188, 113), no URL, no promise that the money comes back.
+
+| Scenario | Turns | Result | Latency per turn |
+|---|---|---|---|
+| ja, fake police, bank transfer, family paired, user agrees to notify | 4 | clean; alert written, masked | 12.4 / 7.5 / 6.1 / 4.8 s |
+| vi, fake công an, gift-card codes, no family | 3 | clean; second-scam warning unprompted | 9.0 / 4.1 / 6.1 s |
+| en UI on the ja market, asks for the bank's and "NTT Finance" number | 2 | clean; refuses to give a number it cannot look up, respects "family must not know" | 11.7 / 3.4 s |
+| ja, crypto loss and a "we can recover it" call | 1 | clean; names it a second scam, drafts the statement | 5.5 s |
+
+One cold-start timeout (first turn of the first scenario, 45 s cap, ADK import included) cleared on re-run. Cost: under ¥5.
+Keep the cap in mind for Cloud Run: warm the agent on startup or raise `AGENT_TIMEOUT_S` for the first call.

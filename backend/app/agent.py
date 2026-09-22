@@ -7,8 +7,12 @@ Sagi Shield - F6 recovery agent ("I already paid"), built on google-adk 2.x.
 Split of responsibilities:
   * The CHECKLIST is server-owned and deterministic: steps and phone numbers come from CHECKLISTS below,
     never from the model - an LLM must not be able to invent a hotline number.
-  * The AGENT (Gemini via ADK) talks to the user, and changes state only through three tools:
-    set_payment_channel / mark_step_done / save_police_statement.
+  * The AGENT (Gemini via ADK) talks to the user, and acts only through five tools:
+    set_payment_channel / mark_step_done / save_police_statement change the checklist state,
+    lookup_official_number is the ONLY source of phone numbers it may quote (a curated table per market),
+    notify_guardian raises a family alert (same store as Live Guard) once the user agrees.
+  * Defence in depth on the model boundary: before_model_callback re-masks digit runs in every user part
+    (input is already masked by build_evidence; this catches anything that slips, e.g. a pasted receipt).
   * Phone and account numbers are masked before the message reaches the model; the drafted statement
     keeps blanks for the user to fill in by hand.
   * No LLM (USE_LLM=0, no credentials, timeout, 503): a scripted reply keeps the screen working.
@@ -38,6 +42,22 @@ AGENT_TIMEOUT_S, MAX_TURNS, MAX_TURN_CHARS = 45, 16, 600
 
 CHANNELS = ("bank_transfer", "cash_card", "e_money", "crypto", "cash_handover")
 STEP_IDS = ("stop_money", "police", "evidence", "family")
+
+# The only numbers the agent may quote, per market. Anything else -> "unknown" and the model must point to the
+# official website / the back of the card. Extending a market = extending this table, never the prompt.
+OFFICIAL_NUMBERS = {
+    "ja": {
+        "police": {"tel": "#9110", "name": "警察相談専用電話"},
+        "consumer": {"tel": "188", "name": "消費者ホットライン"},
+        "bank": {"tel": None, "note": "the number printed on the back of the cash card / passbook"},
+    },
+    "vi": {
+        "police": {"tel": "113", "name": "Công an"},
+        "bank": {"tel": None, "note": "the hotline printed on the back of the card or in the bank's app"},
+    },
+}
+ORG_ALIASES = {"police": "police", "警察": "police", "công an": "police", "cong an": "police",
+               "consumer": "consumer", "消費者": "consumer", "bank": "bank", "銀行": "bank", "ngân hàng": "bank", "ngan hang": "bank"}
 
 # ui language -> strings. {market: tel} keeps numbers tied to the market (ja / vi), not to the UI language.
 POLICE_TEL = {"ja": "#9110", "vi": "113"}
@@ -108,7 +128,8 @@ CHANNEL_HINTS = {  # scripted fallback only; the agent decides by itself
 
 
 def new_state() -> dict:
-    return {"channel": None, "done": [], "draft": "", "ui_lang": "ja", "market": "ja", "turns": []}  # turns: [{role, text}], masked (Firestore has no nested arrays)
+    return {"channel": None, "done": [], "draft": "", "ui_lang": "ja", "market": "ja", "turns": [],
+            "family_id": None, "notified": False}  # turns: [{role, text}], masked (Firestore has no nested arrays)
 
 
 def checklist(state: dict, market: str, ui_lang: str) -> list[dict]:
@@ -158,6 +179,54 @@ def save_police_statement(statement: str, tool_context) -> dict:
     return {"status": "ok"}
 
 
+def lookup_official_number(organisation: str, tool_context) -> dict:
+    """Look up the official contact for an organisation in the user's market. The only source of phone numbers you may quote.
+
+    Args:
+      organisation: police, consumer (consumer hotline) or bank. Anything else returns status unknown.
+    """
+    key = ORG_ALIASES.get(organisation.strip().lower())
+    entry = OFFICIAL_NUMBERS.get(tool_context.state.get("market", "ja"), {}).get(key or "")
+    if not entry:
+        return {"status": "unknown", "advice": "tell the user to use the number on the organisation's official website or documents"}
+    return {"status": "ok", "organisation": key, **entry}
+
+
+def notify_guardian(summary: str, tool_context) -> dict:
+    """Send an alert to the family members paired with this device, only after the user agreed to it.
+
+    Args:
+      summary: one neutral sentence for the family, no names or numbers (e.g. "Paid a fake police caller by bank transfer, needs help calling the bank").
+    """
+    st = tool_context.state
+    if not st.get("family_id"):
+        return {"status": "no_family", "advice": "no guardian is paired with this device; suggest calling a family member instead"}
+    if st.get("notified"):
+        return {"status": "already_sent"}
+    alert = STORE.add_alert(st["family_id"], "HIGH", "recovery", 5, _mask(summary)[:300])
+    if not alert:
+        return {"status": "no_family"}
+    st["notified"] = True
+    return {"status": "ok"}
+
+
+_DIGITS = re.compile(r"(?<![\w<])\d[\d\-\s()]{4,}\d(?![\w>])")  # 6+ digits with separators: phone / account / card
+
+
+def _mask(text: str) -> str:
+    return _DIGITS.sub("<NUMBER>", text)
+
+
+def _guard_request(callback_context, llm_request):  # ADK before_model_callback: the last check before the model
+    for content in llm_request.contents or []:
+        if getattr(content, "role", None) != "user":
+            continue
+        for part in content.parts or []:
+            if part.text and _DIGITS.search(part.text):
+                part.text = _mask(part.text)
+    return None  # None = proceed with the (edited) request
+
+
 def _transcript(turns: list) -> str:
     return "\n".join(f"{t['role']}: {t['text']}" for t in turns) or "(nothing yet)"
 
@@ -176,9 +245,10 @@ Tools:
 - mark_step_done only when the user says they did that step.
 - save_police_statement once you know roughly: when, who the caller claimed to be, what was asked, how much, how it was paid.
   Ask for missing facts one at a time, but save a first draft early and improve it. Write it in the first person, in the language the local police read (market code \"{st.get('market', 'ja')}\"), whatever the chat language.
-
+- lookup_official_number before you mention any phone number; if it says unknown, point to the official website or the back of the card.
+- notify_guardian when the user agrees that their family should know (offer it once, early; family paired = {bool(st.get('family_id'))}, already notified = {st.get('notified', False)}).
 Hard rules:
-- Never state a phone number, URL or organisation contact yourself; point to the checklist instead.
+- Never state a phone number, URL or organisation contact from memory; only what lookup_official_number or the checklist gives.
 - Never promise the money will come back. Never ask for PINs, passwords, card numbers or one-time codes.
 - Tokens like <PHONE> or <ACCOUNT> are masked on purpose: keep them as blanks for the user to fill in by hand.
 - Warn once that "we can recover your money" calls are a second scam.
@@ -205,7 +275,8 @@ def _adk():
             model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
             description="Guides a scam victim through the first hour after paying.",
             instruction=_instruction,
-            tools=[set_payment_channel, mark_step_done, save_police_statement],
+            tools=[set_payment_channel, mark_step_done, save_police_statement, lookup_official_number, notify_guardian],
+            before_model_callback=_guard_request,
             generate_content_config=types.GenerateContentConfig(
                 temperature=0.3,
                 thinking_config=types.ThinkingConfig(thinking_level="low"),
@@ -251,6 +322,7 @@ class RecoveryIn(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     lang: Literal["ja", "vi"] = "ja"                  # market: hotlines
     ui_lang: Literal["ja", "vi", "en"] | None = None  # reply language; defaults to the market's
+    family_id: str | None = Field(default=None, max_length=40, pattern=r"^[A-Za-z0-9_-]+$")  # paired family, from the app
 
 
 @router.post("/agent/recovery")
@@ -258,6 +330,7 @@ async def recovery(body: RecoveryIn):
     saved = await asyncio.to_thread(STORE.get_recovery, body.session_id) or {}
     state = {k: saved.get(k, v) for k, v in new_state().items()}
     state["ui_lang"], state["market"] = body.ui_lang or body.lang, body.lang
+    state["family_id"] = body.family_id or state.get("family_id")
     if body.message.strip() == INIT_MESSAGE:
         reply = SCRIPT[state["ui_lang"]]["welcome"]  # instant and free: no model call to open the screen
     else:

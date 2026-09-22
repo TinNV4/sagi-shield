@@ -70,7 +70,7 @@ def test_manual_reset_and_silence_timeout_start_a_new_session(client, monkeypatc
 def test_llm_is_asked_only_from_medium_and_can_lower_the_score(client, monkeypatch):
     asked = []
 
-    def verdict(text, lang, backend=None, model=None):
+    def verdict(text, lang, backend=None, model=None, context=None):
         asked.append(text)
         return live.engine.LlmVerdict(stage=0, scam_type="safe", confidence=0.95, reasons=[])
 
@@ -96,7 +96,7 @@ def test_periodic_gate_consults_the_model_even_when_the_rules_are_silent(client,
     # real recordings: a call the model scores 97 gets 0-50 from the rules - a rules-only gate never asks the judge
     asked = []
 
-    def verdict(text, lang, backend=None, model=None):
+    def verdict(text, lang, backend=None, model=None, context=None):
         asked.append(text)
         return live.engine.LlmVerdict(stage=5, scam_type="family_impersonation", confidence=0.9, reasons=["x"], risk=95)
 
@@ -119,7 +119,7 @@ def test_a_batch_of_unseen_lines_triggers_a_look_before_the_clock_does(client, m
     # a short call ends, and a fast talker fills the window, long before LIVE_PERIODIC_S has passed
     asked = []
 
-    def verdict(text, lang, backend=None, model=None):
+    def verdict(text, lang, backend=None, model=None, context=None):
         asked.append(text.count("\n") + 1)
         return live.engine.LlmVerdict(stage=0, scam_type="safe", confidence=0.9, reasons=[], risk=5)
 
@@ -132,3 +132,58 @@ def test_a_batch_of_unseen_lines_triggers_a_look_before_the_clock_does(client, m
             say(ws, f"今日はいい天気ですね、その{i}。")
             time.sleep(0.05)
     assert asked[:2] == [4, 10]                         # first look at 4 lines, the next one 6 lines later
+
+
+def test_judge_keeps_the_opening_and_the_call_state_once_the_window_rolls(client, monkeypatch):
+    # minute 6 of a fake-police call: the 12-line window no longer holds "this is the police", so the judge would
+    # read "transfer before 3 pm" cold. The opening lines stay pinned and the tracker's state travels as context.
+    asked = []
+
+    def verdict(text, lang, backend=None, model=None, context=None):
+        asked.append((text, context))
+        return live.engine.LlmVerdict(stage=2, scam_type="fake_police", confidence=0.9, reasons=["x"], risk=80)
+
+    monkeypatch.setenv("USE_LLM", "1")
+    monkeypatch.setenv("LIVE_PERIODIC_S", "3600")
+    monkeypatch.setenv("LIVE_LLM_EVERY_S", "0")
+    monkeypatch.setattr(live.engine, "llm_verdict", verdict)
+    with client.websocket_connect("/ws/live?lang=ja&prior=precursor") as ws:
+        say(ws, "警視庁の田中です。")
+        say(ws, "あなたの口座が犯罪に使われています。")
+        for i in range(18):
+            say(ws, f"その{i}、担当者に代わります。")
+            time.sleep(0.03)
+        time.sleep(0.5)
+    first_text, first_ctx = asked[0]
+    assert first_text.startswith("警視庁の田中です。") and live.OPENING_GAP not in first_text   # nothing rolled out yet
+    assert "set-up call" in first_ctx and "playbook" not in first_ctx                          # rules spoke, the model has not yet
+    last_text, last_ctx = asked[-1]
+    assert last_text.startswith("警視庁の田中です。" + chr(10) + "あなたの口座が犯罪に使われています。") and live.OPENING_GAP in last_text
+    assert len(last_text.splitlines()) <= live.PIN_LINES + 1 + live.WINDOW_LINES
+    assert "authority" in last_ctx and "fear" in last_ctx and "fake_police" in last_ctx and "set-up call" in last_ctx
+    assert "<transcript>" not in last_ctx and "警視庁" not in last_ctx                            # state, never text
+
+
+def test_call_state_is_forgotten_on_reset(client, monkeypatch):
+    asked = []
+
+    def verdict(text, lang, backend=None, model=None, context=None):
+        asked.append(context)
+        return live.engine.LlmVerdict(stage=5, scam_type="fake_police", confidence=0.9, reasons=["x"], risk=95)
+
+    monkeypatch.setenv("USE_LLM", "1")
+    monkeypatch.setenv("LIVE_PERIODIC_S", "0")
+    monkeypatch.setenv("LIVE_LLM_EVERY_S", "0")
+    monkeypatch.setattr(live.engine, "llm_verdict", verdict)
+    with client.websocket_connect("/ws/live?lang=ja") as ws:
+        for line in ["警察です。", "口座が犯罪に使われています。", "LINEで逮捕状を送ります。", "振り込んでください。", "急いで。", "早く。"]:
+            say(ws, line)
+            time.sleep(0.05)
+        time.sleep(0.4)
+        ws.send_json({"type": "reset"})
+        for line in ["もしもし母さん？", "元気？", "今度帰るよ。", "週末にね。", "じゃあね。", "また。"]:
+            say(ws, line)
+            time.sleep(0.05)
+        time.sleep(0.4)
+    assert asked and "fake_police" in (asked[0] or "") or any(c and "stages" in c for c in asked[:3])
+    assert asked[-1] is None or "fake_police" not in asked[-1]

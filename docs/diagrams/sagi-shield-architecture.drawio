@@ -1,0 +1,111 @@
+<mxGraphModel adaptiveColors="auto">
+  <root>
+    <mxCell id="0"/>
+    <mxCell id="1" parent="0"/>
+    <mxCell id="title" value="Sagi Shield · architecture (all Google Cloud, one deployable service)" style="text;html=1;align=left;verticalAlign=middle;fontSize=22;fontStyle=1;fontColor=#202124;" vertex="1" parent="1">
+      <mxGeometry x="40" y="16" width="900" height="40" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="home" value="HOME · browser PWA, no install, no audio upload" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E8F0FE;strokeColor=#4285F4;strokeWidth=2;verticalAlign=top;fontSize=14;fontStyle=1;fontColor=#174EA6;spacingTop=6;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="40" y="80" width="400" height="760" as="geometry"/>
+    </mxCell>
+    <mxCell id="tablet" value="&lt;b&gt;Senior&#39;s tablet or phone · Live Guard kiosk&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#5F6368&quot;&gt;on-device speech recognition (Web Speech API)&lt;br&gt;number masking before anything is sent&lt;br&gt;risk meter · full-screen takeover · spoken alert&lt;br&gt;Quick Check: text, screenshot, link, phone, recording&lt;br&gt;振込前チェック pre-transfer check&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4285F4;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="70" y="130" width="340" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="guardian" value="&lt;b&gt;Guardian phone · same PWA&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#5F6368&quot;&gt;paired by QR or 6-digit code&lt;br&gt;receives one sentence and the stage, never the transcript&lt;br&gt;call-back on a saved number&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4285F4;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="70" y="600" width="340" height="110" as="geometry"/>
+    </mxCell>
+    <mxCell id="audio" value="Audio never leaves the device" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FCE8E6;strokeColor=#EA4335;strokeWidth=2;fontSize=13;fontStyle=1;fontColor=#C5221F;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="70" y="760" width="340" height="50" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="boundary" style="endArrow=none;dashed=1;dashPattern=8 8;strokeColor=#EA4335;strokeWidth=2;html=1;" edge="1" parent="1">
+      <mxGeometry width="50" height="50" relative="1" as="geometry">
+        <mxPoint x="500" y="80" as="sourcePoint"/>
+        <mxPoint x="500" y="840" as="targetPoint"/>
+      </mxGeometry>
+    </mxCell>
+    <mxCell id="boundaryLabel" value="privacy boundary · only masked text crosses" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=2;fontColor=#C5221F;" vertex="1" parent="1">
+      <mxGeometry x="360" y="846" width="280" height="24" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="run" value="CLOUD RUN · asia-northeast1 · one service, one URL (API + built PWA)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E6F4EA;strokeColor=#34A853;strokeWidth=2;verticalAlign=top;fontSize=14;fontStyle=1;fontColor=#0D652D;spacingTop=6;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="560" y="80" width="460" height="760" as="geometry"/>
+    </mxCell>
+    <mxCell id="api" value="&lt;b&gt;API layer · FastAPI&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#5F6368&quot;&gt;/check · /precheck · /report · /stats · WebSocket /ws/live&lt;br&gt;rate limit · PII-free access log · serves the PWA&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#34A853;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="590" y="130" width="400" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="engine" value="&lt;b&gt;Risk engine&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#5F6368&quot;&gt;kill-chain rules: authority → fear → isolation → channel switch → money&lt;br&gt;rules / Gemini fusion, hard combos the model cannot veto&lt;br&gt;LiveTracker: per-call state, cross-call precursor flag, HIGH latch&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#34A853;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="590" y="340" width="400" height="170" as="geometry"/>
+    </mxCell>
+    <mxCell id="agent" value="&lt;b&gt;Recovery agent · ADK 2.x&lt;/b&gt;&lt;br&gt;&lt;font color=&quot;#5F6368&quot;&gt;three tools, server-owned checklist, drafted police statement&lt;br&gt;stateless per turn, scripted fallback&lt;/font&gt;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#34A853;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="590" y="600" width="400" height="110" as="geometry"/>
+    </mxCell>
+    <mxCell id="degrade" value="Every enrichment degrades to nothing; a failed analysis is never &quot;safe&quot;" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FEF7E0;strokeColor=#FBBC04;strokeWidth=2;fontSize=13;fontStyle=1;fontColor=#202124;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="590" y="760" width="400" height="50" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="gcpLabel" value="GOOGLE CLOUD SERVICES" style="text;html=1;align=left;verticalAlign=middle;fontSize=14;fontStyle=1;fontColor=#202124;" vertex="1" parent="1">
+      <mxGeometry x="1140" y="80" width="400" height="30" as="geometry"/>
+    </mxCell>
+    <mxCell id="gData" value="Data" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8F9FA;strokeColor=#34A853;strokeWidth=2;verticalAlign=top;fontSize=13;fontStyle=1;fontColor=#0D652D;spacingTop=4;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="1140" y="120" width="520" height="170" as="geometry"/>
+    </mxCell>
+    <mxCell id="firestore" value="&lt;b&gt;Firestore&lt;/b&gt; · family pairing, alerts, recovery sessions, HMAC-keyed community reports" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#34A853;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1170" y="160" width="460" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="bq" value="&lt;b&gt;BigQuery → Looker Studio&lt;/b&gt; · one anonymous row per verdict, whitelisted columns, scam map" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#34A853;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1170" y="225" width="460" height="50" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="gAI" value="AI · Gemini on Agent Platform" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8F9FA;strokeColor=#4285F4;strokeWidth=2;verticalAlign=top;fontSize=13;fontStyle=1;fontColor=#174EA6;spacingTop=4;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="1140" y="300" width="520" height="250" as="geometry"/>
+    </mxCell>
+    <mxCell id="judge" value="&lt;b&gt;Gemini 3.5 Flash-Lite&lt;/b&gt; · judge: structured verdict on the masked window, ~1.3 s" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4285F4;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1170" y="340" width="460" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="confirm" value="&lt;b&gt;Gemini 3.8 Flash&lt;/b&gt; · second opinion before an alarm the rules cannot back · vision for screenshots" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4285F4;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1170" y="405" width="460" height="50" as="geometry"/>
+    </mxCell>
+    <mxCell id="stt" value="&lt;b&gt;Speech-to-Text&lt;/b&gt; · gemini-3.5-transcribe → Chirp 3, uploaded recordings only" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#4285F4;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1170" y="470" width="460" height="50" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="gSec" value="Security" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8F9FA;strokeColor=#FBBC04;strokeWidth=2;verticalAlign=top;fontSize=13;fontStyle=1;fontColor=#7A5A00;spacingTop=4;arcSize=4;" vertex="1" parent="1">
+      <mxGeometry x="1140" y="580" width="520" height="150" as="geometry"/>
+    </mxCell>
+    <mxCell id="webrisk" value="&lt;b&gt;Web Risk&lt;/b&gt; · URL reputation; links are never fetched" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FBBC04;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1170" y="615" width="460" height="45" as="geometry"/>
+    </mxCell>
+    <mxCell id="secrets" value="&lt;b&gt;Secret Manager&lt;/b&gt; · HASH_KEY, STT key, read at start-up" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFFFFF;strokeColor=#FBBC04;fontSize=13;fontColor=#202124;align=left;spacingLeft=12;arcSize=8;" vertex="1" parent="1">
+      <mxGeometry x="1170" y="670" width="460" height="45" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="e_tablet_api" value="masked text only" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#4285F4;strokeWidth=2;fontSize=12;fontColor=#202124;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="tablet" target="api">
+      <mxGeometry relative="1" as="geometry"><mxPoint x="0" y="-16" as="offset"/></mxGeometry>
+    </mxCell>
+    <mxCell id="e_api_guardian" value="alerts (poll 5 s)" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#4285F4;strokeWidth=2;fontSize=12;fontColor=#202124;labelBackgroundColor=#FFFFFF;exitX=0;exitY=0.85;exitDx=0;exitDy=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="api" target="guardian">
+      <mxGeometry relative="1" as="geometry">
+        <Array as="points"><mxPoint x="530" y="250"/><mxPoint x="530" y="655"/></Array>
+        <mxPoint x="0" y="-12" as="offset"/>
+      </mxGeometry>
+    </mxCell>
+
+    <mxCell id="e_api_engine" value="every line, every check" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#34A853;strokeWidth=2;fontSize=12;fontColor=#202124;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="api" target="engine">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+    <mxCell id="e_engine_agent" value="after a loss" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#34A853;strokeWidth=2;fontSize=12;fontColor=#202124;labelBackgroundColor=#FFFFFF;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="engine" target="agent">
+      <mxGeometry relative="1" as="geometry"/>
+    </mxCell>
+
+    <mxCell id="e_api_data" value="pairing · alerts · rows" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#5F6368;strokeWidth=2;fontSize=12;fontColor=#202124;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="api" target="gData">
+      <mxGeometry relative="1" as="geometry"><mxPoint x="0" y="-14" as="offset"/></mxGeometry>
+    </mxCell>
+    <mxCell id="e_engine_ai" value="judge · vision · STT" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#5F6368;strokeWidth=2;fontSize=12;fontColor=#202124;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="engine" target="gAI">
+      <mxGeometry relative="1" as="geometry"><mxPoint x="0" y="-14" as="offset"/></mxGeometry>
+    </mxCell>
+    <mxCell id="e_agent_sec" value="URLs · keys" style="edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;strokeColor=#5F6368;strokeWidth=2;fontSize=12;fontColor=#202124;labelBackgroundColor=#FFFFFF;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="agent" target="gSec">
+      <mxGeometry relative="1" as="geometry"><mxPoint x="0" y="-14" as="offset"/></mxGeometry>
+    </mxCell>
+  </root>
+</mxGraphModel>

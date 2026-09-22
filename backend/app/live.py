@@ -21,6 +21,10 @@ goes to Gemini. Two gates (?gate=, default LIVE_LLM_GATE or "periodic"):
             scores 97 got 50 from the rules, another 0 - so a rules-only gate never consults the judge on real calls.
   rules     strict privacy: only once the rules reach MEDIUM (20 after a set-up call), at most every LIVE_LLM_EVERY_S s.
 Audio never leaves the device in either mode.
+What the judge sees: the last WINDOW_LINES lines (~30 s), with the first PIN_LINES lines of the call pinned on top once
+they have rolled out (the authority claim is said once, in minute 1), plus a text-free <call_state> block from the
+tracker (stages reached so far, playbook, minutes, set-up call remembered). Without both, minute 6 of a fake-police
+call ("transfer before 3 pm") reads like a bank calling. About 30 extra tokens per look.
 Nothing is stored; the window lives in this coroutine's memory and dies with the socket.
 """
 from __future__ import annotations
@@ -37,9 +41,11 @@ from input_layer import build_evidence
 
 from .analytics import log_event
 from .notifier import alert_family
+from .verdict_log import log_verdict
 
 router = APIRouter()
 WINDOW_LINES, MAX_LINE = 12, 500   # ~30 s of speech
+PIN_LINES, OPENING_GAP = 3, "[...]"  # the opening of the call stays in every window: "this is the police" is said once
 
 
 def _use_llm() -> bool:
@@ -58,19 +64,34 @@ async def live(ws: WebSocket):
     periodic_s = float(os.getenv("LIVE_PERIODIC_S", "20"))
     periodic_lines = int(os.getenv("LIVE_PERIODIC_LINES", "6"))  # half a window: no line is ever dropped unjudged
     periodic = (ws.query_params.get("gate") or os.getenv("LIVE_LLM_GATE", "periodic")) == "periodic"
+    # ?context=off / LIVE_CONTEXT=0: the judge reads the bare window (A/B runs in tools/replay_live.py); on by default
+    with_context = (ws.query_params.get("context") or os.getenv("LIVE_CONTEXT", "on")) not in ("off", "0")
     pack = engine.LANG_PACKS[lang]
     tracker, window = engine.LiveTracker(), deque(maxlen=WINDOW_LINES)
     tracker.prior_precursor = ws.query_params.get("prior") == "precursor"
     family_id = ws.query_params.get("family_id")
     state = {"session": uuid.uuid4().hex[:12], "spoken": False, "last_llm": 0.0, "task": None,
-             "scam_type": "unknown", "reasons": [], "unseen": 0}
+             "scam_type": "unknown", "reasons": [], "unseen": 0, "started": time.monotonic(), "opening": [], "lines": 0, "looks": 0}
 
     def reset():
         tracker.reset()
         window.clear()
         if state["task"]:
             state["task"].cancel()
-        state.update(session=uuid.uuid4().hex[:12], spoken=False, last_llm=0.0, task=None, scam_type="unknown", reasons=[], unseen=0)
+        state.update(session=uuid.uuid4().hex[:12], spoken=False, last_llm=0.0, task=None, scam_type="unknown", reasons=[],
+                     unseen=0, started=time.monotonic(), opening=[], lines=0, looks=0)
+
+    def judge_text() -> str:
+        # once the first lines have rolled out of the window they come back on top: the kill chain starts with the
+        # authority claim, and a window from minute 6 read without it looks like a bank calling
+        if with_context and state["lines"] > WINDOW_LINES:
+            return "\n".join([*state["opening"], OPENING_GAP, *window])
+        return "\n".join(window)
+
+    def call_state() -> str | None:
+        if not with_context:
+            return None
+        return tracker.call_state((time.monotonic() - state["started"]) / 60, state["scam_type"])
 
     async def send(score: float, trigger: str = ""):
         # HIGH is only announced once latched (2 consecutive windows) - no one-window red flashes
@@ -93,23 +114,45 @@ async def live(ws: WebSocket):
             reasons = state["reasons"] or engine.rule_reasons(tracker.hits, lang)
             await asyncio.to_thread(alert_family, family_id, {**msg, "scam_type": state["scam_type"], "reasons": reasons}, lang)
 
-    async def ask_llm(text: str, session: str):
+    async def ask_llm(text: str, session: str, trigger: str):
         # during a call every second counts: flash-lite scored 15/15 on tools/compare_llm.py at ~2.3 s median,
         # against ~6.9 s for the Quick Check model (2026-09-21)
-        v = await asyncio.to_thread(engine.llm_verdict, text, lang, None, os.getenv("GEMINI_LIVE_MODEL", "gemini-3.5-flash-lite"))
+        ctx = call_state()  # what the rest of the call already showed: stages, playbook, minutes - never its words
+        model = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.5-flash-lite")
+        t0 = time.monotonic()
+        v = await asyncio.to_thread(engine.llm_verdict, text, lang, None, model, ctx)
+        look = {"session": session, "lang": lang, "look": state["looks"], "trigger": trigger, "gate": "periodic" if periodic else "rules",
+                "window_lines": len(window), "pinned": with_context and state["lines"] > WINDOW_LINES, "call_state": ctx,
+                "rules": {"score": engine.rule_score(tracker.hits, tracker.reporting, combos=False),
+                          "hits": {engine.Stage(s).name: m for s, m in tracker.hits.items() if m},
+                          "hard": bool(engine.hard_floor(tracker.hits)), "reporting": tracker.reporting},
+                "llm": {"model": model, **v.model_dump()} if v else None, "second": None, "text": text}
+        state["looks"] += 1
+        if v is None:
+            log_verdict("live_look", **look, llm_error="no verdict", latency_ms=round((time.monotonic() - t0) * 1000))
         if v and session == state["session"]:  # the call may have been reset while we waited
             state["scam_type"], state["reasons"] = v.scam_type, v.reasons
             tracker.precursor = tracker.precursor or engine.is_setup_call(v)  # the model hears what regexes miss
+
+            def second_opinion():
+                s = engine.second_opinion(text, lang, ctx)
+                look["second"] = {"model": os.getenv("GEMINI_CONFIRM_MODEL", "gemini-3.8-flash"), **s.model_dump()} if s else {"error": "no verdict"}
+                return s
+
             if engine.calm(v) and engine.hard_floor(tracker.hits) and not engine.hard_floor(tracker.hits, reviewable=False):
                 # authority + fear + money, and the fast judge says legitimate (a bank's fraud desk sounds like this):
                 # only a second, different model may lift the floor
-                second = await asyncio.to_thread(engine.second_opinion, text, lang)
+                second = await asyncio.to_thread(second_opinion)
                 tracker.review_veto = engine.calm(second)
             rules_now = engine.rule_score(tracker.hits, tracker.reporting, combos=False)
             # one flaky verdict would stay in the EMA and latch: an uncorroborated alarm needs a second model to agree
-            llm = await asyncio.to_thread(engine.llm_score_confirmed, v, rules_now, lambda: engine.second_opinion(text, lang))
+            llm = await asyncio.to_thread(engine.llm_score_confirmed, v, rules_now, second_opinion)
             if session == state["session"]:
-                await send(tracker.update({}, llm, v.stage, v.confidence))
+                fused = tracker.update({}, llm, v.stage, v.confidence)
+                log_verdict("live_look", **look, llm_score=llm, score=round(fused), level=engine.level(fused),
+                            latched=tracker.latched, review_veto=tracker.review_veto, precursor=tracker.precursor,
+                            latency_ms=round((time.monotonic() - t0) * 1000))
+                await send(fused)
 
     try:
         while True:
@@ -133,6 +176,9 @@ async def live(ws: WebSocket):
                 continue
             text = build_evidence(lang=lang, text=text).text  # numbers masked before anything else sees them
             window.append(text)
+            state["lines"] += 1
+            if len(state["opening"]) < PIN_LINES:
+                state["opening"].append(text)
             hits = engine.rule_stages(text, lang)
             tracker.note_precursor(engine.precursor_hits(text, lang))
             score = tracker.update(hits, reporting=engine.is_reporting(text, lang))
@@ -148,8 +194,9 @@ async def live(ws: WebSocket):
             by_clock = periodic and len(window) >= 4 and since >= llm_every_s and (
                 (state["unseen"] >= 3 and since >= periodic_s) or state["unseen"] >= periodic_lines)
             if _use_llm() and idle and (by_rules or by_clock):
+                trigger = "rules" if by_rules else ("lines" if state["unseen"] >= periodic_lines else "clock")
                 state["last_llm"], state["unseen"] = time.monotonic(), 0
-                state["task"] = asyncio.create_task(ask_llm("\n".join(window), state["session"]))
+                state["task"] = asyncio.create_task(ask_llm(judge_text(), state["session"], trigger))
     except WebSocketDisconnect:
         pass
     finally:

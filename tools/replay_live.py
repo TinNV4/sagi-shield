@@ -17,9 +17,9 @@ def sentences(text: str) -> list[str]:
     return [s.strip() for s in re.split(r"(?<=[。？！?!])|\n", text) if s and s.strip()]
 
 
-async def replay(url: str, name: str, lines: list[str], prior: bool, pace: float, gate: str) -> dict:
+async def replay(url: str, name: str, lines: list[str], prior: bool, pace: float, gate: str, context: str = "on") -> dict:
     import websockets
-    ws_url = url.replace("https://", "wss://").replace("http://", "ws://").rstrip("/") + f"/ws/live?lang=ja&input=text&gate={gate}" + ("&prior=precursor" if prior else "")
+    ws_url = url.replace("https://", "wss://").replace("http://", "ws://").rstrip("/") + f"/ws/live?lang=ja&input=text&gate={gate}&context={context}" + ("&prior=precursor" if prior else "")
     seen = {"max": 0, "high_at_line": None, "precursor": False, "speak": False, "msgs": 0}
     order = {"LOW": 0, "MEDIUM": 1, "HIGH": 2}
     async with websockets.connect(ws_url) as ws:
@@ -53,6 +53,7 @@ def main() -> None:
     ap.add_argument("--dir", default=str(ROOT / "backend" / "eval" / "real_heldout"))
     ap.add_argument("--pace", type=float, default=2.5, help="seconds between lines (speech is ~1 sentence / 3-4 s)")
     ap.add_argument("--gate", default="periodic", choices=["periodic", "rules"])
+    ap.add_argument("--context", default="on", choices=["on", "off"], help="off = the judge reads the bare 12-line window (A/B)")
     ap.add_argument("--no-memory", action="store_true", help="do not carry the set-up-call flag between calls")
     ap.add_argument("--by-case", action="store_true", help="files named case-N.ext belong to one scam: memory is reset when the case changes")
     ap.add_argument("--fresh", action="store_true", help="transcribe again instead of using the cached transcript")
@@ -84,7 +85,7 @@ def main() -> None:
         t = time.time()
         for attempt in (1, 2, 3):
             try:
-                r = asyncio.run(replay(a.url, name, sentences(heard), prior and not a.no_memory, a.pace, a.gate))
+                r = asyncio.run(replay(a.url, name, sentences(heard), prior and not a.no_memory, a.pace, a.gate, a.context))
                 break
             except Exception as e:  # cold start / handshake timeout on Cloud Run
                 print(f"  {name}: {type(e).__name__}, retry {attempt}")

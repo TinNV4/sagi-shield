@@ -43,7 +43,7 @@ https://www.npa.go.jp/bureau/criminal/souni/tokusyusagi/hurikomesagi_toukei2025.
 | 3 | Family pairing by QR; guardian gets one sentence, never the transcript; "call Taro on the saved number" button | `FamilyScreen.tsx`, `TrustedContact.tsx` |
 | 4 | Quick Check: message, screenshot (Gemini vision reads the fake warrant), link (never fetched), phone number, recording | `/check`, `services.py` |
 | 5 | Cross-call memory: a flag on the device for 48 h, no text stored | `LiveTracker.prior_precursor`, `sagi_precursor_until` |
-| 6 | ADK recovery agent: server-owned checklist, three tools, drafts the police statement | `backend/app/agent.py` |
+| 6 | ADK recovery agent: server-owned checklist, five tools (state, official-number lookup, family alert), drafts the police statement, model-boundary masking callback | `backend/app/agent.py` |
 | privacy | audio never leaves the device; numbers masked before any model; strict mode = rules first | PLAN 6.9 |
 
 Gen AI surface (judging: 40%): Gemini 3.5 Flash-Lite judge with structured output (~1.3 s) · Gemini 3.8 Flash second
@@ -65,12 +65,12 @@ Secret Manager · BigQuery event stream → Looker Studio · PWA at 360 px, ligh
 | Held-out synthetic set (117 calls, written by a different model family), any warning | rules only 64.7% recall / 49.0% false alarms → rules + Gemini **100% / 4.1%** | [OK] |
 | Same set, alarm level | rules only 29.4% → rules + Gemini 91.2% (ablation table) / 97.1% (re-measured after the second-opinion step), 0% false alarms | [CHECK] quote one: re-run the ablation so the table and the text agree |
 | Real police recordings, uploaded file (36 recordings, 15 scam cases) | **15 / 15 cases warned, 14 / 15 alarmed** | [OK] private data - numbers only, never the audio |
-| Real police recordings, live path (34 recordings, 14 cases) | 13 / 14 cases warned, 11 / 14 alarmed; set-up call remembered → money call alarms at sentence 8 | [OK] gate study in progress, see EVAL |
+| Real police recordings, live path (34 recordings, 14 cases) | **14 / 14 cases warned, 13 / 14 alarmed** with the pinned opening + call state (A/B vs bare window 13 / 12; 7 recordings up, 0 down; 11 alarms earlier); set-up call remembered → money call alarms at sentence 5 of 33 (one-call replay) | [OK] 2026-09-22, `docs/EVAL.md`; hard negatives not yet replayed through the live path |
 | Real non-scam speech (93 min, LibriVox) | **0 / 14** above LOW | [OK] audiobooks, not phone calls - say so |
 | 79 hard-negative legitimate calls (bank fraud desk, real refund, son borrowing money) | alarms 13.9% → **6.3%** after the two-model review | [OK] development number |
 | After speech recognition (40 calls, TTS → STT → judge) | transcripts 97% similar, recall unchanged | [OK] upper bound: synthetic voices |
 | Latency | text check ~1.3 s judge, `/check` 5-15 s end to end, agent turn ~22 s | [OK] |
-| Cost per protected call | - | [CHECK] compute from the current flash-lite price list; no number until then |
+| Cost per protected call | **about ¥3 per 10-minute scam call**, under ¥1 per ordinary 3-minute call, about ¥16 per hour of listening | [OK] measured 2026-09-22: one judge call = 1,257 input + ~80 output tokens (12-line window + system prompt, `usage_metadata`); periodic gate = one call per 20 s; Gemini API list price Flash-Lite $0.30 in / $2.50 out per 1M, 3.8 Flash $0.75 / $3.75 (through 2026-12-31, doubles from 2027-01-01); ¥150/$ assumed; model cost only. Quick Check text ≈ ¥0.1, screenshot ≈ ¥0.4, 3-min recording ≈ ¥1.4 (transcribe $0.003/min). Re-check the price page before export |
 
 **Screens to capture for the deck** (all from the live URL, no police audio, no real phone numbers):
 home · Quick Check result HIGH for a fake-warrant screenshot · Live Guard meter climbing → red takeover · guardian

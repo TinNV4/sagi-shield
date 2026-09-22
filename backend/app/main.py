@@ -31,6 +31,7 @@ from .guard import GuardMiddleware  # noqa: E402
 from .live import router as live_router  # noqa: E402
 from .notifier import alert_family  # noqa: E402
 from .storage import STORE, _today as storage_today  # noqa: E402
+from .verdict_log import log_verdict  # noqa: E402
 
 MAX_IMAGE, MAX_AUDIO, MAX_TEXT = 8 * 2**20, 20 * 2**20, 20_000
 FLAG_BONUS = {"international_number": 10, "url_lookalike": 15}
@@ -103,6 +104,9 @@ def finish(result: dict, flags: list[str], community_hits: int, kind: str = "che
     store.record_check(result["risk_level"])
     log_event(kind, lang=lang, source=source, risk_level=result["risk_level"], risk_score=result["risk_score"],
               scam_type=result["scam_type"], stage=result["stage"], llm_used=llm_used)  # aggregate fields only
+    log_verdict(kind, lang=lang, source=source, score=result["risk_score"], level=result["risk_level"], stage=result["stage"],
+                scam_type=result["scam_type"], reasons=result["reasons"], rules={"hits": result.get("rule_hits")},
+                flags=result["evidence_flags"], community_hits=community_hits, llm_used=llm_used)  # the "why"
     return result
 
 

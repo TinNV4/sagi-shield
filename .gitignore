@@ -24,3 +24,9 @@ tools/test_audio/
 tools/stt_eval_audio/
 tools/stt_eval_calls.json
 backend/eval/real_benign/
+
+backend/eval/logs/
+
+infra/terraform/.terraform/
+infra/terraform/*.tfstate*
+infra/terraform/.terraform.lock.hcl
