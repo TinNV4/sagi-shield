@@ -70,7 +70,7 @@ async def live(ws: WebSocket):
     tracker, window = engine.LiveTracker(), deque(maxlen=WINDOW_LINES)
     tracker.prior_precursor = ws.query_params.get("prior") == "precursor"
     family_id = ws.query_params.get("family_id")
-    state = {"session": uuid.uuid4().hex[:12], "spoken": False, "last_llm": 0.0, "task": None,
+    state = {"session": uuid.uuid4().hex[:12], "spoken": False, "last_llm": float("-inf"), "task": None,  # -inf = never: monotonic() is small on a freshly booted machine
              "scam_type": "unknown", "reasons": [], "unseen": 0, "started": time.monotonic(), "opening": [], "lines": 0, "looks": 0}
 
     def reset():
@@ -78,7 +78,7 @@ async def live(ws: WebSocket):
         window.clear()
         if state["task"]:
             state["task"].cancel()
-        state.update(session=uuid.uuid4().hex[:12], spoken=False, last_llm=0.0, task=None, scam_type="unknown", reasons=[],
+        state.update(session=uuid.uuid4().hex[:12], spoken=False, last_llm=float("-inf"), task=None, scam_type="unknown", reasons=[],
                      unseen=0, started=time.monotonic(), opening=[], lines=0, looks=0)
 
     def judge_text() -> str:
