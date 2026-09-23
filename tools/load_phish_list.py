@@ -67,6 +67,7 @@ def main() -> None:
     ap.add_argument("--file", help="local CSV path or <year>/<yyyymm>.csv repo path")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--gcloud-token", action="store_true", help="no ADC on this machine: sign Firestore calls with `gcloud auth print-access-token`")
+    ap.add_argument("--project", help="Firestore project (with --gcloud-token); default GOOGLE_CLOUD_PROJECT - note .env may hold the API-key project, not the Cloud Run one")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
 
@@ -93,7 +94,7 @@ def main() -> None:
         from app.storage import FirestoreStore
         token = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True, shell=True, check=True).stdout.strip()
         store = FirestoreStore.__new__(FirestoreStore)
-        store.fs, store.db = firestore, firestore.Client(project=os.environ["GOOGLE_CLOUD_PROJECT"], credentials=Credentials(token))
+        store.fs, store.db = firestore, firestore.Client(project=a.project or os.environ["GOOGLE_CLOUD_PROJECT"], credentials=Credentials(token))
     else:
         from app.storage import STORE as store  # STORE=firestore for the real thing, memory for a dry test
     t0 = time.time()
