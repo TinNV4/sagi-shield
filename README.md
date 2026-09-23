@@ -61,7 +61,7 @@ PWA (React + Vite, served by the API)
   │                  ├─ image  ─▶ Gemini 3.8 Flash (vision)
   │                  ├─ audio  ─▶ gemini-3.5-transcribe ─▶ Chirp 3 fallback
   │                  └─ url    ─▶ Web Risk
-  ├─ POST /agent/recovery ─▶ ADK 2.x agent (5 tools) · JPCERT/CC phishing list in Firestore (`tools/load_phish_list.py`) · opt-in deep check (`/deepcheck`, Gemini grounded with Google Search) ─▶ Firestore session (24 h TTL)
+  ├─ POST /agent/recovery ─▶ ADK 2.x agent (5 tools) · CI on every push, auto-deploy to Cloud Run after CI passes on main (`.github/workflows/`, WIF via `infra/setup_cd.sh`) · JPCERT/CC phishing list in Firestore (`tools/load_phish_list.py`) · opt-in deep check (`/deepcheck`, Gemini grounded with Google Search) ─▶ Firestore session (24 h TTL)
   ├─ /family/*, /report ─▶ Firestore (lookups while the user waits: reported numbers, pairing, alerts)
   └─ every verdict ─▶ BigQuery `sagi.events` (anonymous: no text, numbers or ids) ─▶ Looker Studio scam map
 Cloud Run (asia-northeast1) · Gemini on Agent Platform (global) · Firestore · BigQuery · Web Risk · Speech-to-Text · Secret Manager

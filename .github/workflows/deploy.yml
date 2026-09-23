@@ -1,8 +1,12 @@
 name: Deploy
 
-# Deliberately not on every push to main: the demo must not change under a video shoot or a judging session.
-# Trigger by tag (v1.2.3) or by hand. Setup: infra/setup_cd.sh (Workload Identity Federation, no stored key).
+# Automatic: every push to main that passes CI is rolled to Cloud Run (docs-only pushes skip CI, so they do not
+# deploy). Tags (v1.2.3) and manual runs also work. Setup: infra/setup_cd.sh (Workload Identity Federation, no key).
 on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
   push:
     tags: ["v*"]
   workflow_dispatch:
@@ -19,34 +23,19 @@ env:
   REGION: asia-northeast1
   SERVICE: sagi-shield-api
   IMAGE: asia-northeast1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/sagi/sagi-shield-api
+  # the commit to deploy: the one CI just tested, or the tag / branch this run was started on
+  SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
 
 jobs:
-  test:
-    name: Backend tests
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: backend
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-          cache: pip
-          cache-dependency-path: backend/requirements.txt
-      - run: pip install -r requirements.txt pytest httpx
-      - run: python -m pytest tests -q
-        env:
-          USE_LLM: "0"
-          STORE: memory
-
   deploy:
     name: Build image and roll Cloud Run
-    needs: test
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     environment: production
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.ref }}
 
       # The PWA ships inside the API image (one URL, same origin) - same order as infra/deploy.sh
       - uses: actions/setup-node@v4
@@ -71,8 +60,8 @@ jobs:
 
       - name: Build and push image
         run: |
-          docker build -t "$IMAGE:${GITHUB_SHA::12}" -t "$IMAGE:latest" backend
-          docker push "$IMAGE:${GITHUB_SHA::12}"
+          docker build -t "$IMAGE:${SHA::12}" -t "$IMAGE:latest" backend
+          docker push "$IMAGE:${SHA::12}"
           docker push "$IMAGE:latest"
 
       - name: Deploy
@@ -83,7 +72,7 @@ jobs:
           # both secrets exist in this project and are read by the runtime account sagi-api, not by the deployer
           SECRETS="HASH_KEY=sagi-hash-key:latest,STT_API_KEY=sagi-stt-api-key:latest"
           gcloud run deploy "$SERVICE" --project "${{ vars.GCP_PROJECT }}" --region "$REGION" \
-            --image "$IMAGE:${GITHUB_SHA::12}" \
+            --image "$IMAGE:${SHA::12}" \
             --service-account "sagi-api@${{ vars.GCP_PROJECT }}.iam.gserviceaccount.com" --allow-unauthenticated \
             --timeout 3600 --session-affinity --min-instances 0 --max-instances 3 \
             --concurrency 40 --cpu 1 --memory 1Gi --no-use-http2 \
