@@ -158,7 +158,7 @@
     "label_text": "Nội dung tin nhắn SMS, Zalo, email",
     "text_placeholder": "Dán nội dung tin nhắn đáng ngờ vào đây (ví dụ: thông báo vi phạm giao thông, giấy triệu tập giả...)",
     "label_screenshot": "Ảnh chụp màn hình (nhận diện chữ qua OCR)",
-    "image_drag_prompt": "Chạm hoặc kéo thả để tải ảnh lên",
+    "image_drag_prompt": "Chạm hoặc kéo thả ảnh vào đây (tối đa 5 ảnh, theo thứ tự)",
     "image_formats": "Hỗ trợ PNG, JPG, HEIC",
     "label_phone": "Số điện thoại gọi đến",
     "phone_placeholder": "Ví dụ: +84 987 654 321 hoặc 024...",
@@ -188,7 +188,10 @@
     "audio_clip_analysis_default": "Phân tích đoạn ghi âm trực tiếp",
     "audio_file_analysis_default": "Phân tích tệp âm thanh",
     "checking_subtext": "Đang đối soát cơ sở dữ liệu các thủ đoạn lừa đảo mới nhất...",
-    "error_general": "Đã xảy ra lỗi trong quá trình phân tích."
+    "error_general": "Đã xảy ra lỗi trong quá trình phân tích.",
+    "images_hint": "{n} / {max} ảnh. Các trang của cùng một cuộc trò chuyện được xét chung.",
+    "images_limit": "Mỗi lần kiểm tra tối đa 5 ảnh. Đã giữ 5 ảnh đầu.",
+    "remove_image": "Bỏ ảnh"
   },
   "pay": {
     "title": "Trước khi chuyển tiền",
@@ -293,7 +296,10 @@
     "share_title": "【KẾT QUẢ PHÂN TÍCH SAGI SHIELD】",
     "share_risk_label": "Mức độ nguy hiểm",
     "share_type_label": "Thủ đoạn",
-    "share_advice_label": "Khuyến nghị"
+    "share_advice_label": "Khuyến nghị",
+    "images_combined": "{n} ảnh chụp màn hình được xét như một cuộc trò chuyện.",
+    "images_separate": "Các ảnh không liên quan nhau nên được xét riêng từng ảnh. Ở trên là ảnh đáng ngại nhất.",
+    "image_n": "Ảnh {n}"
   },
   "recovery": {
     "title": "Hỗ trợ khẩn cấp sau khi chuyển tiền",

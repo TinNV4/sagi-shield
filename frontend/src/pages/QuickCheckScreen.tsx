@@ -30,6 +30,7 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
   const [phoneNumber, setPhoneNumber] = useState('');
   const [linkUrl, setLinkUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [screenshots, setScreenshots] = useState<File[]>([]); // up to MAX_SCREENSHOTS, in the order they were taken
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
   const [isRecordingAudio, setIsRecordingAudio] = useState(false);
 
@@ -77,17 +78,12 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
     setErrorMsg('');
   };
 
-  const handleFileDrop = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setSelectedFile(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setSelectedFile(e.target.files[0]);
-    }
+  const MAX_SCREENSHOTS = 5;
+  const addScreenshots = (files: FileList | null) => {
+    if (!files) return;
+    const next = [...screenshots, ...Array.from(files).filter((f) => f.type.startsWith('image/'))];
+    setScreenshots(next.slice(0, MAX_SCREENSHOTS));
+    setErrorMsg(next.length > MAX_SCREENSHOTS ? t('quick.images_limit') : '');
   };
 
   // Listen to the recording before / after sending it (object URL lives only in this tab)
@@ -106,7 +102,7 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
       setErrorMsg(t('quick.input_placeholder'));
       return;
     }
-    if (activeTab === 'screenshot' && !selectedFile) {
+    if (activeTab === 'screenshot' && screenshots.length === 0) {
       setErrorMsg(t('quick.validation_file'));
       return;
     }
@@ -138,8 +134,9 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
       } else if (activeTab === 'link') {
         formData.append('url', linkUrl);
         formData.append('text', linkUrl); // lets the model reason about the domain itself
-      } else if (activeTab === 'screenshot' && selectedFile) {
-        formData.append('image', selectedFile);
+      } else if (activeTab === 'screenshot') {
+        // one field per image, in order: the server reads them as one story when they belong together
+        screenshots.forEach((f) => formData.append('images', f));
       } else if (activeTab === 'recording' && audioBlob) {
         formData.append('audio', audioBlob, 'recording.wav');
       } else if (activeTab === 'recording' && selectedFile) {
@@ -274,32 +271,49 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
             </label>
             <div
               onDragOver={(e) => e.preventDefault()}
-              onDrop={handleFileDrop}
+              onDrop={(e) => { e.preventDefault(); addScreenshots(e.dataTransfer.files); }}
               className="border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-2xl p-6 text-center hover:border-emerald-600 dark:hover:border-emerald-400 transition cursor-pointer bg-gray-50 dark:bg-slate-800/60 relative"
             >
               <input
                 id="screenshot-file-input"
                 type="file"
                 accept="image/*"
-                onChange={handleFileChange}
+                multiple
+                onChange={(e) => { addScreenshots(e.target.files); e.target.value = ''; }}
                 className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
               />
               <Upload className="w-10 h-10 mx-auto text-[#1B4D3E] dark:text-emerald-400 mb-2" />
-              {selectedFile ? (
-                <div className="text-emerald-700 dark:text-emerald-300 font-bold text-base">
-                  {t('quick.file_selected')}{selectedFile.name} ({(selectedFile.size / 1024).toFixed(0)} KB)
+              <div className="space-y-1">
+                <div className="text-base font-bold text-gray-800 dark:text-gray-200">
+                  {t('quick.image_drag_prompt')}
                 </div>
-              ) : (
-                <div className="space-y-1">
-                  <div className="text-base font-bold text-gray-800 dark:text-gray-200">
-                    {t('quick.image_drag_prompt')}
-                  </div>
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {t('quick.image_formats')}
-                  </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  {t('quick.image_formats')}
                 </div>
-              )}
+              </div>
             </div>
+            {screenshots.length > 0 && (
+              <ul id="screenshot-list" className="space-y-1">
+                {screenshots.map((f, i) => (
+                  <li key={`${f.name}-${i}`} className="flex items-center justify-between text-sm bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-xl px-3 py-2">
+                    <span className="truncate text-emerald-700 dark:text-emerald-300 font-bold">
+                      {i + 1}. {f.name} ({(f.size / 1024).toFixed(0)} KB)
+                    </span>
+                    <button
+                      type="button"
+                      aria-label={t('quick.remove_image')}
+                      onClick={() => setScreenshots(screenshots.filter((_, j) => j !== i))}
+                      className="ml-3 text-gray-500 hover:text-red-600 font-bold"
+                    >
+                      ×
+                    </button>
+                  </li>
+                ))}
+                <li className="text-xs text-gray-500 dark:text-gray-400 px-1">
+                  {t('quick.images_hint').replace('{n}', String(screenshots.length)).replace('{max}', String(MAX_SCREENSHOTS))}
+                </li>
+              </ul>
+            )}
           </div>
         )}
 

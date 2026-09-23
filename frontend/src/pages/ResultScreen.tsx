@@ -215,6 +215,29 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
           </div>
         )}
 
+        {/* Several screenshots: say how they were read, and show each verdict when they were unrelated */}
+        {result.images_mode === 'combined' && result.images && (
+          <div id="images-combined-notice" className="mt-4 text-sm font-bold opacity-80">
+            {t('result.images_combined').replace('{n}', String(result.images.length))}
+          </div>
+        )}
+        {result.images_mode === 'separate' && result.images && (
+          <div id="images-separate" className="mt-4 space-y-2">
+            <div className="text-sm font-bold opacity-80">{t('result.images_separate')}</div>
+            {result.images.map((img) => (
+              <div key={img.index} className="flex items-start gap-3 p-3 rounded-xl bg-white/70 dark:bg-slate-900/70 border border-current/20 text-sm">
+                <span className={`px-2 py-0.5 rounded-lg font-black text-xs ${img.risk_level === 'HIGH' ? 'bg-red-600 text-white' : img.risk_level === 'MEDIUM' ? 'bg-amber-400 text-black' : 'bg-emerald-600 text-white'}`}>
+                  {img.risk_level}
+                </span>
+                <div className="min-w-0">
+                  <div className="font-bold">{t('result.image_n').replace('{n}', String(img.index))} · {t(`types.${img.scam_type}`).startsWith('types.') ? t('types.unknown') : t(`types.${img.scam_type}`)}</div>
+                  {img.reasons?.[0] && <div className="opacity-80">{img.reasons[0]}</div>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
         {/* Rule Evidence Chips */}
         {result.evidence_flags && result.evidence_flags.length > 0 && (
           <div className="mt-4 flex flex-wrap gap-2">

@@ -158,7 +158,7 @@
     "label_text": "SMS、LINE、メール、留守電のテキスト",
     "text_placeholder": "怪しいSMSやLINE、メールの文面をここに貼り付けてください（例: 警視庁捜査二課を名乗るメッセージ等）",
     "label_screenshot": "画面のスクリーンショット（OCRで文字を読み取り判定）",
-    "image_drag_prompt": "画像をタップまたはドラッグして選択",
+    "image_drag_prompt": "画像をタップまたはドラッグして選択（順番に最大5枚）",
     "image_formats": "PNG, JPG, HEIC 対応",
     "label_phone": "かかってきた電話番号",
     "phone_placeholder": "例: +81 80 1234 5678 または 050...",
@@ -188,7 +188,10 @@
     "audio_clip_analysis_default": "音声録音クリップ解析",
     "audio_file_analysis_default": "音声ファイル解析",
     "checking_subtext": "最新の特殊詐欺パターンデータベースと照合中...",
-    "error_general": "チェック中にエラーが発生しました。"
+    "error_general": "チェック中にエラーが発生しました。",
+    "images_hint": "{n} / {max} 枚。同じ会話の続きはまとめて判定します。",
+    "images_limit": "1回に確認できるのは5枚までです。最初の5枚を使います。",
+    "remove_image": "画像を外す"
   },
   "pay": {
     "title": "振り込む前にチェック",
@@ -293,7 +296,10 @@
     "share_title": "【サギシールド診断結果】",
     "share_risk_label": "危険度",
     "share_type_label": "手口",
-    "share_advice_label": "アドバイス"
+    "share_advice_label": "アドバイス",
+    "images_combined": "{n}枚のスクリーンショットを1つの会話として判定しました。",
+    "images_separate": "画像同士に関係がないため、1枚ずつ判定しました。上はいちばん危険な画像の結果です。",
+    "image_n": "画像{n}"
   },
   "recovery": {
     "title": "被害相談・緊急初動対応",

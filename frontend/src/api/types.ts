@@ -26,6 +26,18 @@ export interface CheckResult {
   summary?: string;
   suggested_actions?: string[];
   helpline_recommended?: boolean;
+  // several screenshots: "combined" = read as one story, "separate" = each judged alone (the worst one leads)
+  images_mode?: 'combined' | 'separate';
+  images?: ImageVerdictItem[];
+}
+
+export interface ImageVerdictItem {
+  index: number;
+  doc_type: string;
+  risk_level?: RiskLevel;
+  risk_score?: number;
+  scam_type?: ScamType;
+  reasons?: string[];
 }
 
 export interface PrecheckPayload {

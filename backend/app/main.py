@@ -34,6 +34,7 @@ from .storage import STORE, _today as storage_today  # noqa: E402
 from .verdict_log import log_verdict  # noqa: E402
 
 MAX_IMAGE, MAX_AUDIO, MAX_TEXT = 8 * 2**20, 20 * 2**20, 20_000
+MAX_IMAGES = 5  # a story captured page by page; more than this is a batch job, not a quick check
 FLAG_BONUS = {"international_number": 10, "url_lookalike": 15}
 
 # Localized one-liners for verdicts that come from a rule outside the text engine.
@@ -118,7 +119,7 @@ def healthz():
 
 @app.post("/check")
 async def check(request: Request):
-    image = audio = None
+    images, audio = [], None
     if request.headers.get("content-type", "").startswith("application/json"):
         try:
             body = await request.json()
@@ -128,27 +129,62 @@ async def check(request: Request):
             raise HTTPException(422, "body must be a JSON object")
     else:
         body = await request.form()
-        image, audio = body.get("image"), body.get("audio")
+        # `image` (one file, the original contract) and `images` (several, in the order they were taken)
+        images = [f for f in [body.get("image")] + body.getlist("images") if f is not None and hasattr(f, "read")]
+        audio = body.get("audio")
     lang = check_lang(str(body.get("lang") or "ja"))
     text = str(body.get("text") or "")[:MAX_TEXT]
     phone, url = (str(body.get(k) or "").strip() or None for k in ("phone", "url"))
-    if not (text.strip() or phone or url or image or audio):
+    if not (text.strip() or phone or url or images or audio):
         raise HTTPException(422, "send at least one of: text, image, audio, phone, url")
+    if len(images) > MAX_IMAGES:
+        raise HTTPException(413, f"at most {MAX_IMAGES} images per check")
 
-    flags, doc_type = [], None
-    if image is not None:
-        raw = await image.read()
-        if len(raw) > MAX_IMAGE:
-            raise HTTPException(413, "image too large")
-        try:
-            jpeg = prepare_image(io.BytesIO(raw))  # resized, EXIF stripped
-        except Exception:
-            raise HTTPException(422, "image could not be read")
-        seen = services.describe_image(jpeg) if use_llm() else None
-        if seen:
-            doc_type, text = seen.doc_type, f"{text}\n{seen.ocr_text}"
-        else:
+    flags, doc_type, per_image = [], None, None
+    if images:
+        jpegs = []
+        for image in images:
+            raw = await image.read()
+            if len(raw) > MAX_IMAGE:
+                raise HTTPException(413, "image too large")
+            try:
+                jpegs.append(prepare_image(io.BytesIO(raw)))  # resized, EXIF stripped
+            except Exception:
+                raise HTTPException(422, "image could not be read")
+        seen = same_story = None
+        if use_llm():
+            if len(jpegs) == 1:
+                one = services.describe_image(jpegs[0])
+                seen, same_story = ([one] if one else None), True
+            else:
+                sset = services.describe_images(jpegs)
+                if sset:
+                    seen, same_story = sset.images, sset.same_story
+                else:  # the joint look failed: read them one by one and treat them as one story
+                    seen, same_story = [services.describe_image(j) for j in jpegs], True
+                    if not all(seen):
+                        seen = None
+        if not seen:
             flags.append("image_not_analyzed")
+        elif same_story or len(seen) == 1:
+            # one incident captured in pieces: the pieces are judged as one text, in order
+            doc_type = next((s.doc_type for s in seen if s.doc_type in services.OFFICIAL_DOCS), seen[0].doc_type)
+            pieces = [s.ocr_text if len(seen) == 1 else f"[image {i + 1}]\n{s.ocr_text}" for i, s in enumerate(seen)]
+            text = "\n".join([text] + pieces)
+            if len(seen) > 1:
+                per_image = {"mode": "combined", "items": [{"index": i + 1, "doc_type": s.doc_type} for i, s in enumerate(seen)]}
+        else:
+            # unrelated images: each gets its own verdict, the worst one leads the answer
+            items = []
+            for i, s in enumerate(seen):
+                sub = analyze(build_evidence(lang=lang, text=s.ocr_text[:MAX_TEXT] or None).text, lang, use_llm=use_llm())
+                if s.doc_type in services.OFFICIAL_DOCS:
+                    raise_to(sub, 90, lang, MSG["official_doc"][lang], "fake_police")
+                items.append({"index": i + 1, "doc_type": s.doc_type, "risk_level": sub["risk_level"],
+                              "risk_score": sub["risk_score"], "scam_type": sub["scam_type"], "reasons": sub["reasons"][:1]})
+            lead = max(range(len(seen)), key=lambda i: items[i]["risk_score"])
+            doc_type, text = seen[lead].doc_type, f"{text}\n{seen[lead].ocr_text}"
+            per_image = {"mode": "separate", "items": items}
     if audio is not None:
         raw = await audio.read()
         if len(raw) > MAX_AUDIO:
@@ -201,7 +237,9 @@ async def check(request: Request):
         # an unreported number is unknown, not safe - say exactly that
         result["scam_type"] = "unknown" if result["scam_type"] == "safe" else result["scam_type"]
         result["reasons"] = ([MSG["phone_no_reports"][lang]] + result["reasons"])[:2]
-    source = "image" if image is not None else "audio" if audio is not None else "phone" if phone and not text.strip() else "url" if url else "text"
+    if per_image:
+        result["images_mode"], result["images"] = per_image["mode"], per_image["items"]
+    source = "image" if images else "audio" if audio is not None else "phone" if phone and not text.strip() else "url" if url else "text"
     return finish(result, flags, community_hits, "check", source, lang)
 
 

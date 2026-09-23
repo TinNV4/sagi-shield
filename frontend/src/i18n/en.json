@@ -158,7 +158,7 @@
     "label_text": "Text from SMS, chat, email, or voicemail",
     "text_placeholder": "Paste suspicious SMS, LINE message, or email body here...",
     "label_screenshot": "Screenshot (reads text via OCR)",
-    "image_drag_prompt": "Tap or drag screenshot image to upload",
+    "image_drag_prompt": "Tap or drag screenshots here (up to 5, in order)",
     "image_formats": "Supports PNG, JPG, HEIC",
     "label_phone": "Incoming phone number",
     "phone_placeholder": "e.g. +81 80 1234 5678 or 050...",
@@ -188,7 +188,10 @@
     "audio_clip_analysis_default": "Audio Recording Clip Analysis",
     "audio_file_analysis_default": "Audio File Analysis",
     "checking_subtext": "Cross-referencing latest fraud pattern database...",
-    "error_general": "An error occurred during the fraud check."
+    "error_general": "An error occurred during the fraud check.",
+    "images_hint": "{n} of {max} images. Pages of one conversation are read together.",
+    "images_limit": "Up to 5 images per check. The first 5 were kept.",
+    "remove_image": "Remove image"
   },
   "pay": {
     "title": "Before You Pay",
@@ -293,7 +296,10 @@
     "share_title": "[Sagi Shield Analysis Result]",
     "share_risk_label": "Risk Level",
     "share_type_label": "Scam Type",
-    "share_advice_label": "Advice"
+    "share_advice_label": "Advice",
+    "images_combined": "{n} screenshots read as one conversation.",
+    "images_separate": "The images look unrelated, so each was judged on its own. The most serious one is shown above.",
+    "image_n": "Image {n}"
   },
   "recovery": {
     "title": "Emergency Recovery Triage",

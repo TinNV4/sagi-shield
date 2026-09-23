@@ -198,9 +198,9 @@ Data:
 
 ## 9. API contract
 
-`POST /check` (multipart or JSON)
+`POST /check` (multipart or JSON; `images` = up to 5 screenshots in order - one story is judged as one text, unrelated images one by one → `images_mode`, `images[]`)
 ```json
-{ "text": "...", "image": "<file>", "audio": "<file>", "phone": "+44...", "url": "https://...", "lang": "ja" }
+{ "text": "...", "image": "<file>", "images": ["<file>", "..."], "audio": "<file>", "phone": "+44...", "url": "https://...", "lang": "ja" }
 ```
 Response:
 ```json

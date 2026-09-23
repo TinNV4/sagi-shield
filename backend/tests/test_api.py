@@ -230,3 +230,33 @@ def test_katakana_long_vowel_survives_normalisation(client):
     assert normalize_text("キャッシュカード 03ー1234ー5678") == "キャッシュカード 03-1234-5678"
     out = client.post("/check", json={"lang": "ja", "text": "警察です。マネーロンダリングの疑いです。キャッシュカードを預かります"}).json()
     assert out["risk_level"] == "HIGH"
+
+
+def test_screenshots_of_one_story_are_judged_together(client, monkeypatch):
+    # a chat captured page by page: each page alone is one link (LOW), the whole conversation is the kill chain
+    monkeypatch.setenv("USE_LLM", "1")
+    pages = ["警察です。あなたの口座が犯罪に使われています", "このことは家族にも話さないでください", "LINEで逮捕状を送ります"]
+    monkeypatch.setattr(services, "describe_images", lambda jpegs: services.ImageSet(
+        images=[services.ImageVerdict(doc_type="chat_screenshot", ocr_text=p) for p in pages], same_story=True))
+    monkeypatch.setattr(main, "analyze", lambda text, lang, **kw: __import__("risk_engine").analyze(text, lang, use_llm=False))
+    files = [("images", (f"p{i}.png", png(), "image/png")) for i in range(3)]
+    body = client.post("/check", data={"lang": "ja"}, files=files).json()
+    assert body["risk_level"] == "HIGH" and body["images_mode"] == "combined" and len(body["images"]) == 3
+
+
+def test_unrelated_screenshots_get_their_own_verdicts(client, monkeypatch):
+    monkeypatch.setenv("USE_LLM", "1")
+    monkeypatch.setattr(services, "describe_images", lambda jpegs: services.ImageSet(images=[
+        services.ImageVerdict(doc_type="chat_screenshot", ocr_text="明日の飲み会、19時に駅前で"),
+        services.ImageVerdict(doc_type="arrest_warrant", ocr_text="逮捕状"),
+    ], same_story=False))
+    monkeypatch.setattr(main, "analyze", lambda text, lang, **kw: __import__("risk_engine").analyze(text, lang, use_llm=False))
+    files = [("images", ("a.png", png(), "image/png")), ("images", ("b.png", png(), "image/png"))]
+    body = client.post("/check", data={"lang": "ja"}, files=files).json()
+    assert body["images_mode"] == "separate" and [i["risk_level"] for i in body["images"]] == ["LOW", "HIGH"]
+    assert body["risk_level"] == "HIGH" and "image_arrest_warrant" in body["evidence_flags"]  # the worst image leads
+
+
+def test_more_than_five_images_is_refused(client):
+    files = [("images", (f"{i}.png", png(), "image/png")) for i in range(6)]
+    assert client.post("/check", data={"lang": "ja"}, files=files).status_code == 413
