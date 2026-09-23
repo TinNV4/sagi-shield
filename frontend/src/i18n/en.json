@@ -299,7 +299,16 @@
     "share_advice_label": "Advice",
     "images_combined": "{n} screenshots read as one conversation.",
     "images_separate": "The images look unrelated, so each was judged on its own. The most serious one is shown above.",
-    "image_n": "Image {n}"
+    "image_n": "Image {n}",
+    "deep_title": "Deep check (optional)",
+    "deep_hint": "Searches public reports about the link's domain or the organisation named. Phone numbers are never searched, and the link itself is never opened.",
+    "deep_org_placeholder": "Organisation or sender name (optional)",
+    "deep_button": "Search public reports",
+    "deep_running": "Searching...",
+    "deep_found": "Public reports found",
+    "deep_not_found": "No public report found. That is not proof of safety.",
+    "deep_searched": "Searched:",
+    "deep_error": "The search could not be completed."
   },
   "recovery": {
     "title": "Emergency Recovery Triage",

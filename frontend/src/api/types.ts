@@ -31,6 +31,23 @@ export interface CheckResult {
   images?: ImageVerdictItem[];
 }
 
+// Opt-in deep check: public reports about the domains / organisation of a check (Google Search grounding)
+export interface DeepCheckPayload {
+  lang: string;
+  url?: string;
+  text?: string;
+  org?: string;
+}
+
+export interface DeepCheckResult {
+  subjects: string[];
+  found: boolean;
+  summary: string;
+  sources: {title: string; uri: string}[];
+  queries: string[];
+  evidence_flags: string[];
+}
+
 export interface ImageVerdictItem {
   index: number;
   doc_type: string;

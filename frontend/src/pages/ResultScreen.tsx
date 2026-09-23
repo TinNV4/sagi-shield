@@ -15,7 +15,7 @@ import {
   Send,
 } from 'lucide-react';
 import {api} from '../api/client';
-import {CheckResult} from '../api/types';
+import {CheckResult, DeepCheckResult} from '../api/types';
 import {KillChainBar} from '../components/KillChainBar';
 import {RiskMeter} from '../components/RiskMeter';
 import {DeepfakeNotice} from '../components/DeepfakeNotice';
@@ -24,6 +24,7 @@ import * as speech from '../lib/speak';
 
 interface ResultScreenProps {
   result: CheckResult;
+  checkInput?: {url?: string; text?: string};
   onBack: () => void;
   onGoRecovery: () => void;
   onNotifyFamily: () => void;
@@ -31,6 +32,7 @@ interface ResultScreenProps {
 
 export const ResultScreen: React.FC<ResultScreenProps> = ({
   result,
+  checkInput = {},
   onBack,
   onGoRecovery,
   onNotifyFamily,
@@ -45,6 +47,27 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   const [consentChecked, setConsentChecked] = useState(true);
   const [isReporting, setIsReporting] = useState(false);
   const [copiedNote, setCopiedNote] = useState(false);
+
+  // Opt-in deep check: search public reports about the link's domain / the organisation named. Never the number.
+  const [deepOrg, setDeepOrg] = useState('');
+  const [deepBusy, setDeepBusy] = useState(false);
+  const [deepError, setDeepError] = useState('');
+  const [deep, setDeep] = useState<DeepCheckResult | null>(null);
+  const hasLink = /(?:https?:\/\/|www\.)\S+|\b[a-z0-9-]+\.(?:com|net|vn|jp|xyz|top|info|site|online|shop)\b/i.test(
+    `${checkInput.url || ''} ${checkInput.text || ''}`,
+  );
+  const runDeepCheck = async () => {
+    speech.warmUp();
+    setDeepBusy(true);
+    setDeepError('');
+    try {
+      setDeep(await api.deepcheck({lang, url: checkInput.url, text: checkInput.text, org: deepOrg.trim() || undefined}));
+    } catch (err: any) {
+      setDeepError(err.message || t('result.deep_error'));
+    } finally {
+      setDeepBusy(false);
+    }
+  };
 
   const isHigh = result.risk_level === 'HIGH';
   const isMedium = result.risk_level === 'MEDIUM';
@@ -249,6 +272,57 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
                 #{flag}
               </span>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Opt-in deep check: public reports about the domain / organisation (Google Search grounding) */}
+      <div id="deep-check" className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 space-y-3">
+        <div className="text-sm font-black text-gray-800 dark:text-gray-100">{t('result.deep_title')}</div>
+        <p className="text-xs text-gray-600 dark:text-gray-300">{t('result.deep_hint')}</p>
+        {!deep && (
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              id="deep-check-org"
+              type="text"
+              maxLength={80}
+              value={deepOrg}
+              onChange={(e) => setDeepOrg(e.target.value)}
+              placeholder={t('result.deep_org_placeholder')}
+              className="flex-1 px-3 py-2 rounded-xl border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-slate-900 text-sm"
+            />
+            <button
+              id="deep-check-run"
+              type="button"
+              disabled={deepBusy || (!hasLink && !deepOrg.trim())}
+              onClick={runDeepCheck}
+              className="px-4 py-2 rounded-xl bg-[#1B4D3E] text-white font-bold text-sm disabled:opacity-40"
+            >
+              {deepBusy ? t('result.deep_running') : t('result.deep_button')}
+            </button>
+          </div>
+        )}
+        {deepError && <div className="text-xs font-bold text-red-700 dark:text-red-300">{deepError}</div>}
+        {deep && (
+          <div className="space-y-2">
+            <div className={`text-sm font-black ${deep.found ? 'text-red-700 dark:text-red-300' : 'text-gray-800 dark:text-gray-100'}`}>
+              {deep.found ? t('result.deep_found') : t('result.deep_not_found')}
+            </div>
+            <p className="text-sm text-gray-800 dark:text-gray-100">{deep.summary}</p>
+            {deep.sources.length > 0 && (
+              <ul className="space-y-1">
+                {deep.sources.map((s, i) => (
+                  <li key={i} className="text-xs truncate">
+                    <a href={s.uri} target="_blank" rel="noopener noreferrer" className="underline text-blue-700 dark:text-blue-300">
+                      {s.title}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <div className="text-[11px] text-gray-500 dark:text-gray-400">
+              {t('result.deep_searched')} {deep.subjects.join(' · ')}
+            </div>
           </div>
         )}
       </div>

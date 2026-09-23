@@ -210,6 +210,22 @@ def notify_guardian(summary: str, tool_context) -> dict:
     return {"status": "ok"}
 
 
+def deep_check(subject: str, tool_context) -> dict:
+    """Search public reports (Google Search) about a domain or an organisation name the user mentions. Never a phone number.
+
+    Args:
+      subject: a domain such as example.com or an organisation name as the caller gave it.
+    """
+    from . import services
+    subject = _mask(subject.strip())[:80]
+    if not subject or "<NUMBER>" in subject or "<PHONE>" in subject:
+        return {"status": "refused", "advice": "phone numbers are never searched; ask for the organisation name or a link"}
+    found = services.deep_check([subject], tool_context.state.get("ui_lang", "ja"))
+    if found is None:
+        return {"status": "unavailable"}
+    return {"status": "ok", "found": found.found, "summary": found.summary, "sources": [s["title"] for s in found.sources][:4]}
+
+
 _DIGITS = re.compile(r"(?<![\w<])\d[\d\-\s()]{4,}\d(?![\w>])")  # 6+ digits with separators: phone / account / card
 
 
@@ -246,6 +262,7 @@ Tools:
 - save_police_statement once you know roughly: when, who the caller claimed to be, what was asked, how much, how it was paid.
   Ask for missing facts one at a time, but save a first draft early and improve it. Write it in the first person, in the language the local police read (market code \"{st.get('market', 'ja')}\"), whatever the chat language.
 - lookup_official_number before you mention any phone number; if it says unknown, point to the official website or the back of the card.
+- deep_check when the user names the organisation or a link the caller used and wants to know whether others reported it; report only what it returns, and say that no report is not proof of safety.
 - notify_guardian when the user agrees that their family should know (offer it once, early; family paired = {bool(st.get('family_id'))}, already notified = {st.get('notified', False)}).
 Hard rules:
 - Never state a phone number, URL or organisation contact from memory; only what lookup_official_number or the checklist gives.
@@ -275,7 +292,7 @@ def _adk():
             model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
             description="Guides a scam victim through the first hour after paying.",
             instruction=_instruction,
-            tools=[set_payment_channel, mark_step_done, save_police_statement, lookup_official_number, notify_guardian],
+            tools=[set_payment_channel, mark_step_done, save_police_statement, lookup_official_number, notify_guardian, deep_check],
             before_model_callback=_guard_request,
             generate_content_config=types.GenerateContentConfig(
                 temperature=0.3,

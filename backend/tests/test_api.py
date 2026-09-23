@@ -271,3 +271,22 @@ def test_listed_phishing_url_floors_the_result_at_medium(client):
     assert "uffzuoynym" not in str(main.store.phish_urls) and "uffzuoynym" not in str(main.store.phish_hosts)  # hashed at rest
     clean = client.post("/check", json={"lang": "ja", "url": "https://example.com/jp/"}).json()
     assert not any(f.startswith("reported_phishing") for f in clean["evidence_flags"])
+
+
+def test_deep_check_searches_domains_and_names_but_never_numbers(client, monkeypatch):
+    monkeypatch.setenv("USE_LLM", "1")
+    asked = []
+
+    def fake(subjects, lang):
+        asked.append(subjects)
+        return services.DeepCheck(found=True, summary="報告があります。", sources=[{"title": "警察庁", "uri": "https://www.npa.go.jp/x"}], queries=["q"])
+
+    monkeypatch.setattr(services, "deep_check", fake)
+    body = client.post("/deepcheck", json={"lang": "ja", "url": "https://www.mufg-secure.top/login?id=1",
+                                           "text": "電話 090-1234-5678 から NTTファイナンス と名乗る", "org": "NTTファイナンス 0120-123-456"}).json()
+    assert asked == [["mufg-secure.top", "NTTファイナンス <PHONE>"]] or asked[0][0] == "mufg-secure.top"
+    assert "1234" not in str(asked) and "0120" not in str(asked)
+    assert body["found"] and body["evidence_flags"] == ["public_reports_found"] and body["sources"][0]["uri"].startswith("https://")
+    assert client.post("/deepcheck", json={"lang": "ja", "text": "090-1234-5678 に電話した"}).status_code == 422  # nothing searchable
+    monkeypatch.setattr(services, "deep_check", lambda subjects, lang: None)
+    assert client.post("/deepcheck", json={"lang": "ja", "url": "https://example.com"}).status_code == 503

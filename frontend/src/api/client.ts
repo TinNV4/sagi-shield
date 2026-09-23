@@ -1,5 +1,7 @@
 import {
   CheckResult,
+  DeepCheckPayload,
+  DeepCheckResult,
   FamilyAlertItem,
   LiveSocketCallbacks,
   LiveSocketConnection,
@@ -14,6 +16,7 @@ export interface SagiApi {
   isMock: boolean;
   check(formData: FormData): Promise<CheckResult>;
   precheck(payload: PrecheckPayload): Promise<CheckResult>;
+  deepcheck(payload: DeepCheckPayload): Promise<DeepCheckResult>;
   recovery(sessionId: string, message: string, lang: string): Promise<RecoveryResponse>;
   report(data: {
     scam_type: string;
@@ -115,6 +118,19 @@ class RealApi implements SagiApi {
     });
     if (!res.ok) {
       throw new Error(`Precheck failed with status: ${res.status}`);
+    }
+    return res.json();
+  }
+
+  async deepcheck(payload: DeepCheckPayload): Promise<DeepCheckResult> {
+    const res = await fetch(`${this.baseUrl}/deepcheck`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({...payload, lang: apiLang(payload.lang)}),
+    });
+    if (!res.ok) {
+      const detail = await res.json().then((b) => b?.detail).catch(() => null);
+      throw new Error(typeof detail === 'string' ? detail : `Deep check failed with status: ${res.status}`);
     }
     return res.json();
   }
@@ -469,6 +485,19 @@ class MockApi implements SagiApi {
       evidence_flags: ['未確認の送信元', '急迫性の誘導'],
       rule_hits: {'RULE-SUSP-URGENT': ['至急', '確認']},
       community_hits: 38,
+    };
+  }
+
+  async deepcheck(payload: DeepCheckPayload): Promise<DeepCheckResult> {
+    await new Promise((r) => setTimeout(r, 900));
+    const subjects = [payload.url?.replace(/^https?:\/\/(www\.)?/, '').split('/')[0], payload.org].filter(Boolean) as string[];
+    return {
+      subjects,
+      found: true,
+      summary: 'Demo: public warnings mention this sender pattern. Finding nothing would not mean it is safe.',
+      sources: [{title: 'National Police Agency (demo)', uri: 'https://www.npa.go.jp/'}],
+      queries: subjects.map((s) => `${s} 詐欺`),
+      evidence_flags: ['public_reports_found'],
     };
   }
 
@@ -981,6 +1010,9 @@ export const api: SagiApi = {
   },
   precheck(payload: PrecheckPayload) {
     return getActiveApi().precheck(payload);
+  },
+  deepcheck(payload: DeepCheckPayload) {
+    return getActiveApi().deepcheck(payload);
   },
   recovery(sessionId: string, message: string, lang: string) {
     return getActiveApi().recovery(sessionId, message, lang);

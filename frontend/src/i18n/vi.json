@@ -299,7 +299,16 @@
     "share_advice_label": "Khuyến nghị",
     "images_combined": "{n} ảnh chụp màn hình được xét như một cuộc trò chuyện.",
     "images_separate": "Các ảnh không liên quan nhau nên được xét riêng từng ảnh. Ở trên là ảnh đáng ngại nhất.",
-    "image_n": "Ảnh {n}"
+    "image_n": "Ảnh {n}",
+    "deep_title": "Kiểm tra sâu (tùy chọn)",
+    "deep_hint": "Tìm các cảnh báo, báo cáo công khai về tên miền của đường link hoặc tổ chức được nêu. Không tìm số điện thoại, không mở đường link.",
+    "deep_org_placeholder": "Tên tổ chức / người gửi (tùy chọn)",
+    "deep_button": "Tìm báo cáo công khai",
+    "deep_running": "Đang tìm...",
+    "deep_found": "Có báo cáo công khai",
+    "deep_not_found": "Không thấy báo cáo công khai. Điều đó không có nghĩa là an toàn.",
+    "deep_searched": "Đã tìm:",
+    "deep_error": "Không hoàn tất được tìm kiếm."
   },
   "recovery": {
     "title": "Hỗ trợ khẩn cấp sau khi chuyển tiền",

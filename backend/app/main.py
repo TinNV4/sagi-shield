@@ -257,6 +257,51 @@ async def check(request: Request):
     return finish(result, flags, community_hits, "check", source, lang)
 
 
+class DeepCheckIn(BaseModel):
+    """Opt-in: search public reports about the domains / organisation in a check. Phone numbers are never searched."""
+    lang: str = "ja"
+    url: str | None = Field(default=None, max_length=2000)
+    text: str | None = Field(default=None, max_length=MAX_TEXT)
+    org: str | None = Field(default=None, max_length=80)   # organisation or sender name typed by the user
+
+
+MAX_DEEP_SUBJECTS = 3
+
+
+def deep_subjects(url: str | None, text: str | None, org: str | None, lang: str) -> list[str]:
+    """Domains (host only, no path or query) plus an optional organisation name - masked first, so a number pasted
+    with the text can never become a search query."""
+    from urllib.parse import urlsplit
+    subjects: list[str] = []
+    masked = build_evidence(lang=lang, text="\n".join(filter(None, [url, text]))).text if (url or text) else ""
+    for u in URL_RE.findall(normalize_text(masked)):
+        host = (urlsplit(u if u.lower().startswith("http") else "http://" + u).hostname or "").lower().removeprefix("www.")
+        if host and host not in subjects:
+            subjects.append(host)
+    if org:
+        name = build_evidence(lang=lang, text=org).text.strip()
+        if name and name not in subjects:
+            subjects.append(name)
+    return subjects[:MAX_DEEP_SUBJECTS]
+
+
+@app.post("/deepcheck")
+def deepcheck(body: DeepCheckIn):
+    lang = check_lang(body.lang)
+    subjects = deep_subjects(body.url, body.text, body.org, lang)
+    if not subjects:
+        raise HTTPException(422, "nothing to search: give a link or an organisation name")
+    if not use_llm():
+        raise HTTPException(503, "deep check needs the model")
+    found = services.deep_check(subjects, lang)
+    if found is None:
+        raise HTTPException(503, "The search could not be completed right now. Please try again later.")
+    out = {"subjects": subjects, "found": found.found, "summary": found.summary, "sources": found.sources,
+           "queries": found.queries, "evidence_flags": ["public_reports_found"] if found.found else []}
+    log_verdict("deepcheck", lang=lang, subjects=subjects, found=found.found, sources=len(found.sources))
+    return out
+
+
 class PreCheck(BaseModel):
     reason_text: str = Field(max_length=2000)
     amount: float | str | None = None  # the UI sends free text ("300万円"); informational only

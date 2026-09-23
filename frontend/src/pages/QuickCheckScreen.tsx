@@ -18,8 +18,13 @@ import * as speech from '../lib/speak';
 
 export type QuickCheckTab = 'text' | 'screenshot' | 'recording' | 'phone' | 'link';
 
+export interface CheckInput {
+  url?: string;
+  text?: string;
+}
+
 interface QuickCheckScreenProps {
-  onCheckCompleted: (result: CheckResult) => void;
+  onCheckCompleted: (result: CheckResult, input: CheckInput) => void;
 }
 
 export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckCompleted}) => {
@@ -145,7 +150,8 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
 
       const result = await api.check(formData);
       setIsLoading(false);
-      onCheckCompleted(result);
+      // what the deep check may search later: a link or the pasted text (domains only; never the number)
+      onCheckCompleted(result, activeTab === 'link' ? {url: linkUrl} : activeTab === 'text' ? {text: inputText} : {});
     } catch (err: any) {
       setIsLoading(false);
       setErrorMsg(err.message || t('quick.error_general'));

@@ -181,3 +181,18 @@ def test_model_boundary_masks_digit_runs_in_user_parts():
     assert Req.contents[0].parts[1].text == "tel <NUMBER>"
     assert "1234" in Req.contents[1].parts[0].text
     assert agent._mask("50万円 in 2026, <PHONE> stays") == "50万円 in 2026, <PHONE> stays"  # short numbers and tokens untouched
+
+
+def test_deep_check_tool_refuses_numbers_and_reports_only_tool_output(monkeypatch):
+    from app import services
+
+    class Ctx:
+        state = {"ui_lang": "ja"}
+
+    monkeypatch.setattr(services, "deep_check", lambda subjects, lang: services.DeepCheck(
+        found=False, summary="公開の報告は見つかりませんでした。", sources=[], queries=["x"]))
+    assert agent.deep_check("090-1234-5678", Ctx)["status"] == "refused"
+    out = agent.deep_check("mufg-secure.top", Ctx)
+    assert out["status"] == "ok" and out["found"] is False and out["sources"] == []
+    monkeypatch.setattr(services, "deep_check", lambda subjects, lang: None)
+    assert agent.deep_check("example.com", Ctx)["status"] == "unavailable"

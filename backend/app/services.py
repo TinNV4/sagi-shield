@@ -104,6 +104,54 @@ def describe_images(jpegs: list[bytes]) -> ImageSet | None:
         return None
 
 
+class DeepCheck(BaseModel):
+    found: bool                 # public reports naming the subject as scam / phishing were found
+    summary: str                # 2-3 calm sentences in the user's language, from the model
+    sources: list[dict]         # [{title, uri}] from grounding metadata - the only links we show
+    queries: list[str]          # what was searched (transparency; never contains a phone number)
+
+
+DEEP_PROMPT = """You are helping a scam-detection tool. Search the web for public reports that the following subjects
+(domains or organisation names) are used in phishing, fake billing, fake police or other scams, in Japan or Vietnam.
+Subjects: {subjects}
+Rules: rely only on what the search returns; do not open or describe the sites themselves; a scammer may reuse a
+legitimate brand name, so a well-known brand being mentioned is not evidence by itself.
+Answer in the language with code "{lang}". First line exactly "VERDICT: reported" if at least one credible public
+report names a subject as scam or phishing, else "VERDICT: not_found". Then 2-3 short sentences for an elderly reader:
+what was found, and that finding nothing is not proof of safety. No URLs in the text."""
+
+
+def deep_check(subjects: list[str], lang: str) -> DeepCheck | None:
+    """Opt-in 'deep check': one Gemini call grounded with Google Search over domains / organisation names.
+    Never called with phone numbers (PII) and never fetches the suspicious site itself. None = unavailable."""
+    try:
+        from google.genai import types
+        from risk_engine import safety_settings
+        resp = _generate(
+            model=os.getenv("GEMINI_DEEP_MODEL") or os.getenv("GEMINI_CONFIRM_MODEL", "gemini-3.8-flash"),
+            contents=DEEP_PROMPT.format(subjects=", ".join(subjects), lang=lang),
+            config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())],
+                                               temperature=0.0,
+                                               thinking_config=types.ThinkingConfig(thinking_level="low"),
+                                               safety_settings=safety_settings()),
+        )
+        text = (resp.text or "").strip()
+        first, _, rest = text.partition("\n")
+        found = "reported" in first.lower() and "not_found" not in first.lower()
+        summary = rest.strip() if first.upper().startswith("VERDICT") else text
+        meta = resp.candidates[0].grounding_metadata if resp.candidates else None
+        sources, queries = [], []
+        if meta:
+            for ch in meta.grounding_chunks or []:
+                if ch.web and ch.web.uri:
+                    sources.append({"title": (ch.web.title or ch.web.uri)[:120], "uri": ch.web.uri})
+            queries = list(meta.web_search_queries or [])[:6]
+        return DeepCheck(found=found, summary=summary[:600], sources=sources[:6], queries=queries)
+    except Exception as e:
+        _warn("deep check", e)
+        return None
+
+
 STT_MODEL = "gemini-3.5-transcribe"
 _stt = {"client": None, "retry_after": 0.0}  # client that last served STT_MODEL / when to probe again after 404s
 STT_RETRY_S = 3600

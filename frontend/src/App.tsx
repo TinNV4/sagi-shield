@@ -17,6 +17,7 @@ import {LiveGuardScreen} from './pages/LiveGuardScreen';
 import {QuickCheckScreen} from './pages/QuickCheckScreen';
 import {RecoveryScreen} from './pages/RecoveryScreen';
 import {ResultScreen} from './pages/ResultScreen';
+import type {CheckInput} from './pages/QuickCheckScreen';
 import {SettingsScreen} from './pages/SettingsScreen';
 
 type FullTabType = TabType | 'result';
@@ -78,6 +79,7 @@ function AppContent() {
 
   const [navHistory, setNavHistory] = useState<FullTabType[]>([]);
   const [activeCheckResult, setActiveCheckResult] = useState<CheckResult | null>(null);
+  const [activeCheckInput, setActiveCheckInput] = useState<CheckInput>({});
   const [isDemoHelperOpen, setIsDemoHelperOpen] = useState<boolean>(() => {
     return window.location.pathname.includes('demo') || window.location.hash.includes('demo');
   });
@@ -233,8 +235,9 @@ function AppContent() {
 
         {currentTab === 'quick' && (
           <QuickCheckScreen
-            onCheckCompleted={(result) => {
+            onCheckCompleted={(result, input) => {
               setActiveCheckResult(result);
+              setActiveCheckInput(input);
               navigateTo('result');
             }}
           />
@@ -244,6 +247,7 @@ function AppContent() {
           <BeforeYouPayScreen
             onPrecheckCompleted={(result) => {
               setActiveCheckResult(result);
+              setActiveCheckInput({});
               navigateTo('result');
             }}
             onCancel={() => navigateTo('home')}
@@ -253,6 +257,7 @@ function AppContent() {
         {currentTab === 'result' && activeCheckResult && (
           <ResultScreen
             result={activeCheckResult}
+            checkInput={activeCheckInput}
             onBack={handleGoBack}
             onGoRecovery={() => navigateTo('recovery')}
             onNotifyFamily={() => {
