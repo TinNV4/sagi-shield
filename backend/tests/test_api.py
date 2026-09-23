@@ -260,3 +260,14 @@ def test_unrelated_screenshots_get_their_own_verdicts(client, monkeypatch):
 def test_more_than_five_images_is_refused(client):
     files = [("images", (f"{i}.png", png(), "image/png")) for i in range(6)]
     assert client.post("/check", data={"lang": "ja"}, files=files).status_code == 413
+
+
+def test_listed_phishing_url_floors_the_result_at_medium(client):
+    main.store.add_phish_urls([{"url": "https://uffzuoynym.top/jp/", "brand": "SAISON CARD", "date": "2026-05-01", "source": "jpcertcc"}])
+    exact = client.post("/check", json={"lang": "ja", "url": "https://uffzuoynym.top/jp"}).json()  # trailing slash ignored
+    assert exact["risk_level"] == "MEDIUM" and "reported_phishing_jpcertcc" in exact["evidence_flags"]
+    host = client.post("/check", json={"lang": "ja", "text": "請求はこちら http://www.uffzuoynym.top/new/path?x=1"}).json()
+    assert host["risk_level"] == "MEDIUM" and "reported_phishing_host_jpcertcc" in host["evidence_flags"]
+    assert "uffzuoynym" not in str(main.store.phish_urls) and "uffzuoynym" not in str(main.store.phish_hosts)  # hashed at rest
+    clean = client.post("/check", json={"lang": "ja", "url": "https://example.com/jp/"}).json()
+    assert not any(f.startswith("reported_phishing") for f in clean["evidence_flags"])

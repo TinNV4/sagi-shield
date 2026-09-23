@@ -111,6 +111,8 @@ Notes:
 
 ## 7. What Sagi Shield can use today
 
+*Status 2026-09-23: item 2 is implemented - `tools/load_phish_list.py` loads the monthly CSVs into Firestore (`phish_urls`, `phish_hosts`, hashed keys) and `/check` floors a listed URL or host at MEDIUM with the `reported_phishing_jpcertcc` / `reported_phishing_host_jpcertcc` flag. Last 12 months loaded: 28,479 URLs, 25,976 hosts.*
+
 Ranked by legal certainty first, then usefulness. The contest wants Google Cloud; items 2-4 are optional enrichments and must degrade to nothing, like every other call in `services.py`.
 
 1. **Google Web Risk Lookup API (URLs)** - already wired in. Keep it as the only URL reputation source in the demo; it is Google-stack, commercial-clean, free at our volume (100,000 lookups/month). State plainly that Web Risk is a global list and that our own URL-shape rules (lookalike, punycode, shortener, odd TLD) are what catch a fresh `vneid-xacminh.top` before any list does.

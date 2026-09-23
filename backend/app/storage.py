@@ -11,6 +11,8 @@ import time
 import uuid
 from collections import Counter
 from datetime import datetime, timezone
+from hashlib import sha256
+from urllib.parse import urlsplit
 
 
 PAIR_CODE_TTL_S, MAX_ALERTS = 15 * 60, 50
@@ -30,6 +32,20 @@ def _new_family(member_name: str) -> dict:
 def _alert(risk_level: str, scam_type: str, stage: int, summary: str, member_name: str) -> dict:
     return {"id": uuid.uuid4().hex[:12], "created_at": _now_iso(), "member_name": member_name,
             "risk_level": risk_level, "scam_type": scam_type, "stage": stage, "summary": summary[:300]}
+
+
+def phish_keys(url: str) -> tuple[str, str]:
+    """(url_key, host_key) for a known-phishing-URL lookup. The URL is normalised (scheme and host lower-cased,
+    query / fragment / trailing slash dropped) and hashed so the collection never stores a victim's URL in clear;
+    the host key lets a reused phishing host match even when the path changed. Never fetches anything."""
+    u = url.strip()
+    if not u.lower().startswith(("http://", "https://")):
+        u = "http://" + u
+    p = urlsplit(u)
+    host = (p.hostname or "").lower().removeprefix("www.")
+    path = p.path.rstrip("/")
+    norm = f"{host}{path}".lower()
+    return sha256(norm.encode()).hexdigest()[:32], sha256(host.encode()).hexdigest()[:32]
 
 
 def _today() -> str:
@@ -54,11 +70,32 @@ class MemoryStore:
         self.families: dict[str, dict] = {}
         self.alerts: dict[str, list[dict]] = {}
         self.recovery: dict[str, dict] = {}  # insertion-ordered: oldest first
+        self.phish_urls: dict[str, dict] = {}   # url_key -> {brand, date, source}
+        self.phish_hosts: dict[str, dict] = {}  # host_key -> {count, latest}
 
     def add_report(self, scam_type: str, phone_hash: str | None, keywords: list[str], prefecture: str | None,
                    reporter: str | None = None) -> None:
         self.reports.append({"scam_type": scam_type, "phone_hash": phone_hash, "keywords": keywords[:10],
                              "prefecture": prefecture, "date": _today(), "reporter": reporter})
+
+    def add_phish_urls(self, entries: list[dict]) -> int:
+        """entries: [{url, brand, date, source}] from a published phishing list. Returns the number stored."""
+        for e in entries:
+            uk, hk = phish_keys(e["url"])
+            self.phish_urls[uk] = {"brand": e.get("brand", ""), "date": e.get("date", ""), "source": e.get("source", "")}
+            h = self.phish_hosts.setdefault(hk, {"count": 0, "latest": ""})
+            h["count"] += 1
+            h["latest"] = max(h["latest"], e.get("date", ""))
+        return len(entries)
+
+    def phish_lookup(self, url: str) -> dict | None:
+        """Exact URL hit -> {"match": "url", ...}; a host seen in the list -> {"match": "host", ...}; else None."""
+        uk, hk = phish_keys(url)
+        if uk in self.phish_urls:
+            return {"match": "url", **self.phish_urls[uk]}
+        if hk in self.phish_hosts:
+            return {"match": "host", **self.phish_hosts[hk]}
+        return None
 
     def count_phone(self, phone_hash: str) -> int:
         """Distinct reporters of this number (reports without a reporter key count once each)."""
@@ -129,6 +166,31 @@ class FirestoreStore:
     def add_report(self, scam_type, phone_hash, keywords, prefecture, reporter=None) -> None:
         self.db.collection("reports").add({"scam_type": scam_type, "phone_hash": phone_hash, "keywords": keywords[:10],
                                            "prefecture": prefecture, "date": _today(), "reporter": reporter})
+
+    def add_phish_urls(self, entries: list[dict]) -> int:
+        """Batched writes: one doc per URL key, one counter doc per host (Firestore batches take 500 ops)."""
+        n = 0
+        for start in range(0, len(entries), 200):
+            batch = self.db.batch()
+            for e in entries[start:start + 200]:
+                uk, hk = phish_keys(e["url"])
+                batch.set(self.db.collection("phish_urls").document(uk),
+                          {"brand": e.get("brand", ""), "date": e.get("date", ""), "source": e.get("source", "")})
+                batch.set(self.db.collection("phish_hosts").document(hk),
+                          {"count": self.fs.Increment(1), "latest": e.get("date", "")}, merge=True)
+                n += 1
+            batch.commit()
+        return n
+
+    def phish_lookup(self, url: str) -> dict | None:
+        uk, hk = phish_keys(url)
+        doc = self.db.collection("phish_urls").document(uk).get()
+        if doc.exists:
+            return {"match": "url", **doc.to_dict()}
+        doc = self.db.collection("phish_hosts").document(hk).get()
+        if doc.exists:
+            return {"match": "host", **doc.to_dict()}
+        return None
 
     def count_phone(self, phone_hash: str) -> int:
         """Distinct reporters of this number (capped read: beyond 200 reports the answer is "many" either way)."""

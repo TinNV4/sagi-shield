@@ -43,6 +43,8 @@ MSG = {
                      "vi": "Công an, tòa án không bao giờ gửi ảnh thẻ ngành hay lệnh bắt qua tin nhắn."},
     "webrisk": {"ja": "このリンクは危険なサイトとして報告されています。開かないでください。",
                 "vi": "Đường link này đã bị báo cáo là trang nguy hiểm. Đừng mở."},
+    "phish_list": {"ja": "このリンク先はフィッシングサイトとして公開リストに載っています。開かず、公式アプリや公式サイトから確認してください。",
+                   "vi": "Đường link này nằm trong danh sách trang giả mạo đã công bố. Đừng mở, hãy kiểm tra qua ứng dụng hoặc trang chính thức."},
     "police_money": {"ja": "警察がお金の振込や預金の移動を求めることは絶対にありません。",
                      "vi": "Công an không bao giờ yêu cầu chuyển tiền hay chuyển tiền tiết kiệm sang tài khoản khác."},
     "official_to_person": {"ja": "役所や銀行が、個人の口座へ振り込むよう求めることはありません。",
@@ -211,12 +213,24 @@ async def check(request: Request):
     if doc_type in services.OFFICIAL_DOCS:
         flags.append(f"image_{doc_type}")
         raise_to(result, 90, lang, MSG["official_doc"][lang], "fake_police")
+    urls = list(dict.fromkeys(URL_RE.findall(normalize_text(text)) + ([url] if url else [])))
     if os.getenv("USE_WEBRISK", "0") == "1":
-        for u in dict.fromkeys(URL_RE.findall(normalize_text(text)) + ([url] if url else [])):
+        for u in urls:
             threats = services.webrisk_threats(u if u.startswith("http") else "http://" + u)
             if threats:
                 flags += [f"url_webrisk_{t}" for t in threats]
                 raise_to(result, 90, lang, MSG["webrisk"][lang])
+    for u in urls:
+        # published phishing lists loaded into the store (tools/load_phish_list.py: JPCERT/CC). A listed URL or a
+        # host seen in the list floors the result at MEDIUM - lists lag by weeks, so absence proves nothing.
+        try:
+            hit = store.phish_lookup(u)
+        except Exception as e:  # noqa: BLE001 - a lookup failing must never fail a check
+            print(f"[main] phish lookup unavailable: {type(e).__name__}", file=sys.stderr)
+            hit = None
+        if hit:
+            flags.append("reported_phishing_jpcertcc" if hit["match"] == "url" else "reported_phishing_host_jpcertcc")
+            raise_to(result, 50, lang, MSG["phish_list"][lang], "fake_billing")
     if len(engine_precursor(ev.text, lang)) >= 2 and result["risk_level"] == "LOW":
         # not a verdict - a set-up call asks for nothing - but the one piece of advice that defeats it
         flags.append("precursor_call")
