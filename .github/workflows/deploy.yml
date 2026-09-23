@@ -1,0 +1,97 @@
+name: Deploy
+
+# Deliberately not on every push to main: the demo must not change under a video shoot or a judging session.
+# Trigger by tag (v1.2.3) or by hand. Setup: infra/setup_cd.sh (Workload Identity Federation, no stored key).
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ vars.GCP_PROJECT }}
+  cancel-in-progress: false   # never abort a deploy half-way; the next one waits
+
+permissions:
+  contents: read
+  id-token: write   # OIDC token for Workload Identity Federation
+
+env:
+  REGION: asia-northeast1
+  SERVICE: sagi-shield-api
+  IMAGE: asia-northeast1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/sagi/sagi-shield-api
+
+jobs:
+  test:
+    name: Backend tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt pytest httpx
+      - run: python -m pytest tests -q
+        env:
+          USE_LLM: "0"
+          STORE: memory
+
+  deploy:
+    name: Build image and roll Cloud Run
+    needs: test
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      # The PWA ships inside the API image (one URL, same origin) - same order as infra/deploy.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+        env:
+          VITE_API_BASE: same-origin
+      - run: rm -rf backend/static && cp -r frontend/dist backend/static
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        run: |
+          docker build -t "$IMAGE:${GITHUB_SHA::12}" -t "$IMAGE:latest" backend
+          docker push "$IMAGE:${GITHUB_SHA::12}"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy
+        run: |
+          # one --set-env-vars only (gcloud keeps the last); "^@^" makes @ the separator so CORS_ORIGINS may hold commas
+          ENV="GOOGLE_GENAI_USE_ENTERPRISE=true@GOOGLE_CLOUD_PROJECT=${{ vars.GCP_PROJECT }}@GOOGLE_CLOUD_LOCATION=global"
+          ENV="$ENV@GEMINI_MODEL=gemini-3.5-flash-lite@GEMINI_VISION_MODEL=gemini-3.8-flash@STORE=firestore@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=*"
+          # both secrets exist in this project and are read by the runtime account sagi-api, not by the deployer
+          SECRETS="HASH_KEY=sagi-hash-key:latest,STT_API_KEY=sagi-stt-api-key:latest"
+          gcloud run deploy "$SERVICE" --project "${{ vars.GCP_PROJECT }}" --region "$REGION" \
+            --image "$IMAGE:${GITHUB_SHA::12}" \
+            --service-account "sagi-api@${{ vars.GCP_PROJECT }}.iam.gserviceaccount.com" --allow-unauthenticated \
+            --timeout 3600 --session-affinity --min-instances 0 --max-instances 3 \
+            --concurrency 40 --cpu 1 --memory 1Gi --no-use-http2 \
+            --set-env-vars "^@^$ENV" --set-secrets "$SECRETS" --quiet
+
+      - name: Smoke test
+        run: |
+          URL="$(gcloud run services describe "$SERVICE" --project "${{ vars.GCP_PROJECT }}" --region "$REGION" --format 'value(status.url)')"
+          echo "Deployed: $URL"
+          curl -fsS "$URL/health"
+          curl -fsS -X POST "$URL/check" -H 'Content-Type: application/json' -d '{"lang":"ja","text":"こんにちは"}' >/dev/null
