@@ -266,7 +266,7 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   <div className="text-sm font-black tracking-wide text-white flex items-center gap-2">
                     <span>{t('onboarding.step2_zero_cloud_badge')}</span>
                     <span className="px-2 py-0.5 rounded-md bg-emerald-400/20 text-emerald-300 text-[10px] font-bold">
-                      100% On-Device
+                      On-Device
                     </span>
                   </div>
                   <p className="text-xs text-emerald-100/90 mt-0.5 leading-relaxed">
