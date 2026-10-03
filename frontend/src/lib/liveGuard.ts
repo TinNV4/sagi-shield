@@ -130,6 +130,11 @@ export function startLiveGuard(
   let isPausedState = false;
   let pauseTimeout: any = null;
   let recognition: any = null;
+  // PRIVACY: null until checkOnDeviceSpeechSupport() decides. Every (re)start goes through
+  // mayListen(), so pause/resume or the auto-restart can never turn a 'blocked' session into
+  // one that streams audio to the browser's cloud recognizer.
+  let speechMode: SpeechMode | null = null;
+  const mayListen = () => speechMode === 'local' || speechMode === 'cloud';
 
   // Initialize socket connection via API client
   const socketConn: LiveSocketConnection = api.connectLiveSocket(lang, mode, {
@@ -145,10 +150,7 @@ export function startLiveGuard(
   });
 
   // Setup Web Speech Recognition
-  const SpeechRec =
-    typeof window !== 'undefined'
-      ? window.SpeechRecognition || window.webkitSpeechRecognition
-      : null;
+  const SpeechRec = speechRec();
 
   let canProcessLocally = false;
   // With a test track: recognize the file. If this browser's start() ignores the argument it would silently
@@ -193,12 +195,12 @@ export function startLiveGuard(
       recognition.onend = () => {
         // Auto-restart while running to maintain continuous guard
         if (options.audioTrack && options.audioTrack.readyState === 'ended') return; // the file is over
-        if (isRunning && !isPausedState) {
+        if (isRunning && !isPausedState && mayListen()) {
           try {
             startRec();
           } catch (e) {
             setTimeout(() => {
-              if (isRunning && !isPausedState) {
+              if (isRunning && !isPausedState && mayListen()) {
                 try {
                   startRec();
                 } catch {}
@@ -214,9 +216,9 @@ export function startLiveGuard(
         canProcessLocally = support.canProcessLocally;
         controller.canProcessLocally = canProcessLocally;
         if (canProcessLocally) recognition.processLocally = true;
-        const mode: SpeechMode = canProcessLocally ? 'local' : options.allowCloudFallback ? 'cloud' : 'blocked';
-        if (options.onSpeechMode) options.onSpeechMode(mode);
-        if (mode !== 'blocked' && !isPausedState) {
+        speechMode = canProcessLocally ? 'local' : options.allowCloudFallback ? 'cloud' : 'blocked';
+        if (options.onSpeechMode) options.onSpeechMode(speechMode);
+        if (mayListen() && !isPausedState) {
           try {
             startRec();
           } catch (e) {
@@ -259,7 +261,7 @@ export function startLiveGuard(
     resume: () => {
       isPausedState = false;
       if (pauseTimeout) clearTimeout(pauseTimeout);
-      if (isRunning && recognition) {
+      if (isRunning && recognition && mayListen()) {
         try {
           startRec();
         } catch {}

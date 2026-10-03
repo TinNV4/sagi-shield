@@ -5,7 +5,7 @@
 How to use:
 1. Open AI Studio → **Build** → paste **Prompt 1** below.
 2. Iterate with the follow-up prompts (section "Follow-ups"), one at a time.
-3. Export / download the code into `frontend/`. Copy `frontend/lib/audioCapture.js` into `src/lib/` if the generated one differs.
+3. Export / download the code into `frontend/`. (The raw-audio `audioCapture.js` this prompt once referred to was removed on 2026-10-03; Live Guard sends on-device transcript lines only.)
 
 ---
 
@@ -187,6 +187,6 @@ Set `VITE_API_BASE=https://<cloud-run-url>` in `.env` → MockApi turns off auto
 
 ## After export — manual checks
 
-- `src/lib/audioCapture.ts` vs `frontend/lib/audioCapture.js`: keep one; the VAD gate and `pause()` must survive.
+- No `audioCapture` module: Live Guard uses `src/lib/liveGuard.ts` (on-device recognizer, text lines only).
 - Types in `src/api/types.ts` must match `docs/PLAN.md` section 9 exactly.
 - Spoken alert on a real tablet: iOS Safari and Android Chrome both need the first-tap `warmUp()`; check volume with the landline speaker playing.
