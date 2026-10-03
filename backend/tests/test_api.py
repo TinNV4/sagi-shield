@@ -170,6 +170,34 @@ def test_transcription_reads_the_right_field_and_falls_back_in_order(monkeypatch
     assert services.transcribe_audio(b"RIFF", "audio/wav", "vi") == "chirp:vi" and len(calls) == 2
 
 
+
+def test_transcription_degrades_when_a_transcriber_cannot_even_be_set_up(monkeypatch):
+    # enterprise mode with no project id: probing locations raised KeyError out of transcribe_audio (an upload -> 500)
+    monkeypatch.setitem(services._stt, "client", None)
+    monkeypatch.setitem(services._stt, "retry_after", 0.0)
+    monkeypatch.delenv("STT_API_KEY", raising=False)
+    monkeypatch.delenv("GOOGLE_CLOUD_PROJECT", raising=False)
+    monkeypatch.setenv("GOOGLE_GENAI_USE_ENTERPRISE", "true")
+
+    def broken(**kw):
+        raise RuntimeError("no credentials")
+    monkeypatch.setattr(services, "_generate", broken)
+    monkeypatch.setattr(services, "transcribe_chirp", lambda data, lang: None)
+    assert services.transcribe_audio(b"RIFF", "audio/wav", "ja") is None
+
+
+def test_persistent_store_refuses_the_default_hash_key(monkeypatch):
+    # phone hashes in Firestore keyed with input_layer's dev default ("change-me") could be reversed by brute force
+    from app import storage
+    monkeypatch.setenv("STORE", "firestore")
+    monkeypatch.delenv("HASH_KEY", raising=False)
+    monkeypatch.delenv("HASH_SALT", raising=False)
+    with pytest.raises(RuntimeError, match="HASH_KEY"):
+        storage.get_store()
+    monkeypatch.setenv("STORE", "memory")
+    assert isinstance(storage.get_store(), storage.MemoryStore)  # local runs and tests keep working without a key
+
+
 def test_missing_llm_verdict_is_flagged_not_hidden(client, monkeypatch):
     # seen on Cloud Run: Gemini 429 -> rules only -> an ore-ore call came back "LOW / safe" with no hint
     import risk_engine

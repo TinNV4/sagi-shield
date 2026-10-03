@@ -12,7 +12,10 @@ import uuid
 from collections import Counter
 from datetime import datetime, timezone
 from hashlib import sha256
+from typing import Annotated
 from urllib.parse import urlsplit
+
+from pydantic import Field
 
 
 PAIR_CODE_TTL_S, MAX_ALERTS = 15 * 60, 50
@@ -21,6 +24,10 @@ RECOVERY_TTL_S, MAX_RECOVERY = 24 * 3600, 500  # a recovery chat is useful for a
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+# One shape for family_id in every request model (secrets.token_urlsafe(16) = 22 chars)
+FamilyId = Annotated[str, Field(max_length=40, pattern=r"^[A-Za-z0-9_-]+$")]
 
 
 def _new_family(member_name: str) -> dict:
@@ -266,7 +273,13 @@ class FirestoreStore:
 
 
 def get_store():
-    return FirestoreStore() if os.getenv("STORE", "memory") == "firestore" else MemoryStore()
+    if os.getenv("STORE", "memory") != "firestore":
+        return MemoryStore()
+    # Fail closed: hashes stored with input_layer's dev default key could be reversed by brute force (the phone-number
+    # space is small) and would no longer match once a real key is set.
+    if not (os.getenv("HASH_KEY") or os.getenv("HASH_SALT") or "").strip():
+        raise RuntimeError("STORE=firestore needs HASH_KEY (mounted from Secret Manager); refusing the dev default key")
+    return FirestoreStore()
 
 
 STORE = get_store()  # one instance per process, shared by the HTTP routes and the live socket

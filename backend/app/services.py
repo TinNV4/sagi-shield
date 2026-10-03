@@ -1,8 +1,7 @@
 """
 Sagi Shield - calls to Google services used by /check. Every function degrades to None / [] when the
 SDK, credentials or network are missing, so a check never fails because an enrichment did.
-
-NOT YET RUN against real credentials (2026-09-21): verify model IDs and request shapes in P0.
+Verified on Cloud Run since 2026-09-21 (see CLAUDE.md "Known gaps" for what each call returned).
 """
 from __future__ import annotations
 import os
@@ -47,6 +46,11 @@ def _client():
     return genai.Client()
 
 
+def _model(job: str) -> str:
+    from model_ids import model_id  # app.main put backend/core on sys.path
+    return model_id(job)
+
+
 def _generate(**kwargs):
     """generate_content with one quick retry: free-tier 503 / 429 spikes are common and short."""
     for attempt in (1, 2):
@@ -68,7 +72,7 @@ def describe_image(jpeg: bytes) -> ImageVerdict | None:
         from risk_engine import safety_settings  # app.main put backend/core on sys.path
         resp = _generate(
             # reading a photographed warrant is the one job kept on the larger model; text judging runs on flash-lite
-            model=os.getenv("GEMINI_VISION_MODEL") or os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+            model=_model("GEMINI_VISION_MODEL"),
             contents=[types.Part.from_bytes(data=jpeg, mime_type="image/jpeg"), IMAGE_PROMPT],
             config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=ImageVerdict,
                                                temperature=0.0,
@@ -88,7 +92,7 @@ def describe_images(jpegs: list[bytes]) -> ImageSet | None:
         from risk_engine import safety_settings
         parts = [types.Part.from_bytes(data=j, mime_type="image/jpeg") for j in jpegs]
         resp = _generate(
-            model=os.getenv("GEMINI_VISION_MODEL") or os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+            model=_model("GEMINI_VISION_MODEL"),
             contents=parts + [IMAGES_PROMPT.format(n=len(jpegs))],
             config=types.GenerateContentConfig(response_mime_type="application/json", response_schema=ImageSet,
                                                temperature=0.0,
@@ -128,7 +132,7 @@ def deep_check(subjects: list[str], lang: str) -> DeepCheck | None:
         from google.genai import types
         from risk_engine import safety_settings
         resp = _generate(
-            model=os.getenv("GEMINI_DEEP_MODEL") or os.getenv("GEMINI_CONFIRM_MODEL", "gemini-3.8-flash"),
+            model=_model("GEMINI_DEEP_MODEL"),
             contents=DEEP_PROMPT.format(subjects=", ".join(subjects), lang=lang),
             config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())],
                                                temperature=0.0,
@@ -152,8 +156,7 @@ def deep_check(subjects: list[str], lang: str) -> DeepCheck | None:
         return None
 
 
-STT_MODEL = "gemini-3.5-transcribe"
-_stt = {"client": None, "retry_after": 0.0}  # client that last served STT_MODEL / when to probe again after 404s
+_stt = {"client": None, "retry_after": 0.0}  # client that last served STT_BATCH_MODEL / when to probe again after 404s
 STT_RETRY_S = 3600
 
 
@@ -175,9 +178,12 @@ def _stt_clients():
     if os.getenv("GOOGLE_GENAI_USE_ENTERPRISE", "").lower() != "true":
         yield _client()
         return
+    project = os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
+    if not project:
+        return  # enterprise mode without a project: nothing to probe, the next transcriber takes over
     _stt["retry_after"] = time.time() + STT_RETRY_S  # cleared again as soon as one location answers
     for location in os.getenv("STT_LOCATIONS", "us-central1,asia-northeast1,us,europe-west4").split(","):
-        yield genai.Client(enterprise=True, project=os.environ["GOOGLE_CLOUD_PROJECT"], location=location.strip())
+        yield genai.Client(enterprise=True, project=project, location=location.strip())
 
 
 def _transcript_of(resp) -> str:
@@ -218,27 +224,34 @@ def transcribe_audio(data: bytes, mime_type: str, lang: str = "ja") -> str | Non
 
     Measured 2026-09-21 on a synthetic fake-police call: the transcribe model returns it verbatim in ~3 s; the
     general model refuses the same audio (`block_reason=SAFETY`, even with BLOCK_NONE) - hence it is only second."""
-    from google.genai import types
-    from risk_engine import safety_settings  # app.main put backend/core on sys.path
-    audio = types.Part.from_bytes(data=data, mime_type=mime_type or "audio/wav")
-    for client in _stt_clients():
-        try:
-            resp = client.models.generate_content(model=os.getenv("STT_BATCH_MODEL", STT_MODEL), contents=[audio])
-            _stt["client"], _stt["retry_after"] = client, 0.0
-            text = _usable(_transcript_of(resp), "transcribe model")
-            if text:
-                return text
-            _warn("transcribe model", RuntimeError(f"no usable transcript, feedback={resp.prompt_feedback}"))
-            break
-        except Exception as e:
-            _warn("transcribe model", e)
-            if getattr(e, "code", None) in (401, 402, 403):  # key / billing problem: not going to heal in a minute
-                _stt["retry_after"] = time.time() + STT_RETRY_S
-            if getattr(e, "code", None) != 404:  # 404 = not served from this location: try the next one
+    try:
+        from google.genai import types
+        from risk_engine import safety_settings  # app.main put backend/core on sys.path
+        audio = types.Part.from_bytes(data=data, mime_type=mime_type or "audio/wav")
+    except Exception as e:
+        _warn("transcription", e)
+        return None
+    try:  # also covers building the clients: a setup error must fall through to the next transcriber, not fail the upload
+        for client in _stt_clients():
+            try:
+                resp = client.models.generate_content(model=_model("STT_BATCH_MODEL"), contents=[audio])
+                _stt["client"], _stt["retry_after"] = client, 0.0
+                text = _usable(_transcript_of(resp), "transcribe model")
+                if text:
+                    return text
+                _warn("transcribe model", RuntimeError(f"no usable transcript, feedback={resp.prompt_feedback}"))
                 break
+            except Exception as e:
+                _warn("transcribe model", e)
+                if getattr(e, "code", None) in (401, 402, 403):  # key / billing problem: not going to heal in a minute
+                    _stt["retry_after"] = time.time() + STT_RETRY_S
+                if getattr(e, "code", None) != 404:  # 404 = not served from this location: try the next one
+                    break
+    except Exception as e:
+        _warn("transcribe model setup", e)
     try:
         resp = _generate(
-            model=os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+            model=_model("GEMINI_MODEL"),
             contents=[audio, "Transcribe this phone call verbatim in its original language. Output the transcript only."],
             config=types.GenerateContentConfig(
                 system_instruction="You transcribe phone calls for a fraud-detection service that protects elderly people. "

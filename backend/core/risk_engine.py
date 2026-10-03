@@ -21,9 +21,11 @@ import argparse, json, os, re, sys, time, unicodedata
 from collections import deque
 from dataclasses import dataclass, field
 from enum import IntEnum
+from functools import lru_cache
 from typing import Literal
 from pathlib import Path
 from pydantic import BaseModel
+from model_ids import model_id
 
 try:  # local dev: pick up the repo-root .env (Cloud Run injects real env vars, which win)
     from dotenv import load_dotenv
@@ -178,7 +180,7 @@ def is_setup_call(v: "LlmVerdict") -> bool:
 
 def second_opinion(text: str, lang: str, context: str | None = None):
     """A larger model re-reads the call. Used only when the fast judge wants an alarm the rules cannot back up."""
-    return llm_verdict(text, lang, "gemini", os.getenv("GEMINI_CONFIRM_MODEL", "gemini-3.8-flash"), context)
+    return llm_verdict(text, lang, "gemini", model_id("GEMINI_CONFIRM_MODEL"), context)
 
 
 def llm_score_confirmed(v: "LlmVerdict", r_score: float, confirm=None) -> int:
@@ -266,9 +268,16 @@ def judge_input(text: str, context: str | None = None) -> str:
     return f"{head}<transcript>\n{text}\n</transcript>"
 
 
+@lru_cache(maxsize=1)
+def _genai_client():
+    """One client per process (reads GEMINI_API_KEY or the Agent Platform env vars): a new client per verdict
+    means a new connection and TLS handshake on the latency-critical live path."""
+    from google import genai
+    return genai.Client()
+
+
 def _gemini_verdict(text: str, lang: str, model: str | None = None, context: str | None = None) -> LlmVerdict | None:
     try:
-        from google import genai
         from google.genai import types
     except ImportError:
         return None
@@ -284,8 +293,7 @@ def _gemini_verdict(text: str, lang: str, model: str | None = None, context: str
     # missing verdict means rules only - which misses keyword-free scams. Worth ~6 s of retries.
     for attempt in (1, 2, 3):
         try:
-            client = genai.Client()  # reads GEMINI_API_KEY or Agent Platform env vars
-            resp = client.models.generate_content(model=model or os.getenv("GEMINI_MODEL", "gemini-3.8-flash"),
+            resp = _genai_client().models.generate_content(model=model or model_id("GEMINI_MODEL"),
                                                   contents=judge_input(text, context), config=config)
             return resp.parsed
         except Exception as e:  # no credentials / quota / network: degrade to rules only, never fail the check

@@ -83,6 +83,7 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("cmd", choices=["prepare", "score"])
     ap.add_argument("--n", type=int, default=20, help="prepare: calls per language")
-    ap.add_argument("--model", default="gemini-3.5-flash-lite")
+    from model_ids import model_id
+    ap.add_argument("--model", default=model_id("GEMINI_LIVE_MODEL"), help="judge model (default: GEMINI_LIVE_MODEL)")
     a = ap.parse_args()
     prepare(a.n) if a.cmd == "prepare" else score(a.model)

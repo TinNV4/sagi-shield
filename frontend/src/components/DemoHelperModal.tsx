@@ -44,7 +44,7 @@ export const DemoHelperModal: React.FC<DemoHelperModalProps> = ({
   }>({
     tested: false,
     geminiConfigured: false,
-    model: 'gemini-3.8-flash',
+    model: '',
     loading: false,
   });
 
@@ -65,7 +65,7 @@ export const DemoHelperModal: React.FC<DemoHelperModalProps> = ({
         setHealthStatus({
           tested: true,
           geminiConfigured: !!data.llm,
-          model: data.model || 'gemini-3.8-flash',
+          model: data.model || 'Gemini', // /health reports the text model the server actually uses
           loading: false,
         });
       } else {

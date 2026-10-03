@@ -14,7 +14,8 @@ from urllib.parse import urlparse
 from pydantic import BaseModel, Field
 
 # HMAC key: the phone-number space is small, so a plain salted hash is brute-forceable once the salt
-# leaks. In production HASH_KEY comes from Secret Manager (mounted as an env var on Cloud Run).
+# leaks. In production HASH_KEY comes from Secret Manager (mounted as an env var on Cloud Run). "change-me" is for
+# CLI / test runs only: app.storage refuses to start a persistent store (STORE=firestore) without a real key.
 HASH_KEY = (os.getenv("HASH_KEY") or os.getenv("HASH_SALT", "change-me")).strip().encode()  # secrets piped from a shell end in a newline
 
 def phone_hmac(digits: str) -> str:

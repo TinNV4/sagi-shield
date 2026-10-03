@@ -22,6 +22,7 @@ from pydantic import BaseModel, Field
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core"))
 from input_layer import URL_RE, analyze_phone, build_evidence, normalize_text, phone_hmac, prepare_image  # noqa: E402
+from model_ids import model_id  # noqa: E402
 from risk_engine import LANG_PACKS, analyze, level, precursor_hits as engine_precursor  # noqa: E402
 
 from . import services  # noqa: E402
@@ -30,7 +31,7 @@ from .analytics import log_event  # noqa: E402
 from .guard import GuardMiddleware  # noqa: E402
 from .live import router as live_router  # noqa: E402
 from .notifier import alert_family  # noqa: E402
-from .storage import STORE, _today as storage_today  # noqa: E402
+from .storage import STORE, FamilyId, _today as storage_today  # noqa: E402
 from .verdict_log import log_verdict  # noqa: E402
 
 MAX_IMAGE, MAX_AUDIO, MAX_TEXT = 8 * 2**20, 20 * 2**20, 20_000
@@ -116,7 +117,7 @@ def finish(result: dict, flags: list[str], community_hits: int, kind: str = "che
 @app.get("/health")
 @app.get("/healthz", include_in_schema=False)  # local alias; Cloud Run reserves paths ending in "z"
 def healthz():
-    return {"ok": True, "llm": use_llm(), "store": type(store).__name__}
+    return {"ok": True, "llm": use_llm(), "store": type(store).__name__, "model": model_id("GEMINI_MODEL")}
 
 
 @app.post("/check")
@@ -312,7 +313,7 @@ class PreCheck(BaseModel):
 
 @app.post("/precheck")
 def precheck(body: PreCheck):
-    """振込前チェック: "I am about to send money because ..." """
+    """Before-you-pay check (furikomi-mae): "I am about to send money because ..." """
     lang = check_lang(body.lang)
     ev = build_evidence(lang=lang, text=body.reason_text)
     result = analyze(ev.text, lang, use_llm=use_llm())
@@ -352,7 +353,7 @@ def report(body: Report, request: Request):
 
 class FamilyCode(BaseModel):
     member_name: str = Field(default="", max_length=40)
-    family_id: str | None = Field(default=None, max_length=64)  # existing family: issue a fresh code
+    family_id: FamilyId | None = None  # existing family: issue a fresh code
 
 
 @app.post("/family/code")
@@ -385,7 +386,7 @@ def family_alerts(family_id: str):
 
 
 class FamilyNotify(BaseModel):
-    family_id: str = Field(max_length=64)
+    family_id: FamilyId
     risk_level: Literal["LOW", "MEDIUM", "HIGH"]
     scam_type: str = Field(default="unknown", max_length=40)
     stage: int = Field(default=0, ge=0, le=5)

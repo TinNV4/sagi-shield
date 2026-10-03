@@ -87,7 +87,7 @@ args = ap.parse_args()
 if args.gemini_model:
     os.environ["GEMINI_MODEL"] = args.gemini_model
 BACKENDS = [b for b in args.backends.split(",") if b in ("gemini", "fci")]
-NAMES = {"gemini": "deployed API (/check)" if args.gemini_url else os.getenv("GEMINI_MODEL", "gemini-3.8-flash"), "fci": os.getenv("FCI_MODEL", "fci")}
+NAMES = {"gemini": "deployed API (/check)" if args.gemini_url else engine.model_id("GEMINI_MODEL"), "fci": os.getenv("FCI_MODEL", "fci")}
 score = {"gemini": 0, "fci": 0}
 per_pattern: dict = {}
 lat = {"gemini": [], "fci": []}

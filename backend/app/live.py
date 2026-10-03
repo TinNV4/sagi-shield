@@ -38,6 +38,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 import risk_engine as engine  # app.main put backend/core on sys.path
 from input_layer import build_evidence
+from model_ids import model_id
 
 from .analytics import log_event
 from .notifier import alert_family
@@ -118,7 +119,7 @@ async def live(ws: WebSocket):
         # during a call every second counts: flash-lite scored 15/15 on tools/compare_llm.py at ~2.3 s median,
         # against ~6.9 s for the Quick Check model (2026-09-21)
         ctx = call_state()  # what the rest of the call already showed: stages, playbook, minutes - never its words
-        model = os.getenv("GEMINI_LIVE_MODEL", "gemini-3.5-flash-lite")
+        model = model_id("GEMINI_LIVE_MODEL")
         t0 = time.monotonic()
         v = await asyncio.to_thread(engine.llm_verdict, text, lang, None, model, ctx)
         look = {"session": session, "lang": lang, "look": state["looks"], "trigger": trigger, "gate": "periodic" if periodic else "rules",
@@ -136,7 +137,7 @@ async def live(ws: WebSocket):
 
             def second_opinion():
                 s = engine.second_opinion(text, lang, ctx)
-                look["second"] = {"model": os.getenv("GEMINI_CONFIRM_MODEL", "gemini-3.8-flash"), **s.model_dump()} if s else {"error": "no verdict"}
+                look["second"] = {"model": model_id("GEMINI_CONFIRM_MODEL"), **s.model_dump()} if s else {"error": "no verdict"}
                 return s
 
             if engine.calm(v) and engine.hard_floor(tracker.hits) and not engine.hard_floor(tracker.hits, reviewable=False):

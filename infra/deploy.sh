@@ -16,8 +16,11 @@ cd ../backend
 # one --set-env-vars only: gcloud keeps the last one when the flag is repeated. "^@^" = use @ as the separator,
 # so CORS_ORIGINS may contain commas.
 ENV="GOOGLE_GENAI_USE_ENTERPRISE=true@GOOGLE_CLOUD_PROJECT=$PROJECT@GOOGLE_CLOUD_LOCATION=global"
-# flash-lite judges text and runs the agent (15/15 hard cases, 96% recall in docs/EVAL.md, ~2 s); vision stays on 3.8
-ENV="$ENV@GEMINI_MODEL=${GEMINI_MODEL:-gemini-3.5-flash-lite}@GEMINI_VISION_MODEL=${GEMINI_VISION_MODEL:-gemini-3.8-flash}@STORE=firestore@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=${CORS_ORIGINS:-*}"
+ENV="$ENV@STORE=firestore@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=${CORS_ORIGINS:-*}"
+# Models: backend/core/model_ids.py holds the defaults Cloud Run runs; a job's env var set in this shell overrides it
+for job in GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL; do
+  if [ -n "${!job:-}" ]; then ENV="$ENV@$job=${!job}"; fi
+done
 
 # Optional: gemini-3.5-transcribe is served by the Gemini Developer API only (not Agent Platform, 2026-09-21).
 # Create the secret yourself (the key never goes through this script):

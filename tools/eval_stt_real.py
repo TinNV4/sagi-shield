@@ -25,7 +25,7 @@ def reference(pdf: pathlib.Path) -> str:
     if not cache.exists():
         from google.genai import types
         from app import services
-        resp = services._generate(model="gemini-3.8-flash", contents=[
+        resp = services._generate(model=services._model("GEMINI_VISION_MODEL"), contents=[
             types.Part.from_bytes(data=pdf.read_bytes(), mime_type="application/pdf"),
             "Transcribe the spoken dialogue in this document verbatim. Output the dialogue text only: no speaker labels, no headings, no notes."])
         cache.write_text(resp.text or "", encoding="utf-8")
