@@ -7,10 +7,11 @@ Sagi Shield - F6 recovery agent ("I already paid"), built on google-adk 2.x.
 Split of responsibilities:
   * The CHECKLIST is server-owned and deterministic: steps and phone numbers come from CHECKLISTS below,
     never from the model - an LLM must not be able to invent a hotline number.
-  * The AGENT (Gemini via ADK) talks to the user, and acts only through five tools:
+  * The AGENT (Gemini via ADK) talks to the user, and acts only through six tools:
     set_payment_channel / mark_step_done / save_police_statement change the checklist state,
     lookup_official_number is the ONLY source of phone numbers it may quote (a curated table per market),
-    notify_guardian raises a family alert (same store as Live Guard) once the user agrees.
+    notify_guardian raises a family alert (same store as Live Guard) once the user agrees,
+    deep_check searches public reports about a domain / organisation (never a number).
   * Defence in depth on the model boundary: before_model_callback re-masks digit runs in every user part
     (input is already masked by build_evidence; this catches anything that slips, e.g. a pasted receipt).
   * Phone and account numbers are masked before the message reaches the model; the drafted statement

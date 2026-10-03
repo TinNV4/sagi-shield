@@ -23,10 +23,10 @@ the deck is exported.
 6. **What Gen AI does here** (Technical merit 40%) - Gemini 3.5 Flash-Lite judges the masked transcript with structured
    output (stage, risk, playbook, reasons in the user's language) in ~1.3 s; Gemini 3.8 Flash gives the second opinion
    before an alarm the rules cannot back, and reads screenshots (fake warrants); `gemini-3.5-transcribe` + Chirp 3 for
-   uploaded audio; an ADK 2.x agent with three tools for the first hour after a loss. Rules + LLM fusion: hard combos
+   uploaded audio; an ADK 2.x agent with six tools for the first hour after a loss. Rules + LLM fusion: hard combos
    cannot be vetoed, everything else is confidence-weighted.
 7. **Evidence** - the ablation table: rules only 64.7% recall / 49.0% false alarms → rules + Gemini 100% / 4.1%
-   (alarm level: 29.4% → 97.1%, 0% false alarms), on a held-out set written by a different model family. Real police
+   (alarm level: 29.4% → 91.2%, 0% false alarms), on a held-out set written by a different model family. Real police
    recordings: 15 of 15 scam cases warned, 14 of 15 alarmed. 93 minutes of real non-scam speech: 0 false alarms.
    Live path (sentence by sentence over the socket): 13 of 14 cases warned, 11 of 14 alarmed; a remembered set-up call
    brings the alarm on the money call to sentence 8 of 33.

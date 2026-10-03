@@ -43,7 +43,7 @@ https://www.npa.go.jp/bureau/criminal/souni/tokusyusagi/hurikomesagi_toukei2025.
 | 3 | Family pairing by QR; guardian gets one sentence, never the transcript; "call Taro on the saved number" button | `FamilyScreen.tsx`, `TrustedContact.tsx` |
 | 4 | Quick Check: message, screenshot (Gemini vision reads the fake warrant), link (never fetched), phone number, recording | `/check`, `services.py` |
 | 5 | Cross-call memory: a flag on the device for 48 h, no text stored | `LiveTracker.prior_precursor`, `sagi_precursor_until` |
-| 6 | ADK recovery agent: server-owned checklist, five tools (state, official-number lookup, family alert), drafts the police statement, model-boundary masking callback | `backend/app/agent.py` |
+| 6 | ADK recovery agent: server-owned checklist, six tools (state, official-number lookup, family alert, grounded deep check), drafts the police statement, model-boundary masking callback | `backend/app/agent.py` |
 | privacy | audio never leaves the device; numbers masked before any model; strict mode = rules first | PLAN 6.9 |
 
 Gen AI surface (judging: 40%): Gemini 3.5 Flash-Lite judge with structured output (~1.3 s) · Gemini 3.8 Flash second
@@ -63,7 +63,7 @@ Secret Manager · BigQuery event stream → Looker Studio · PWA at 360 px, ligh
 | Evidence | Number | Status |
 |---|---|---|
 | Held-out synthetic set (117 calls, written by a different model family), any warning | rules only 64.7% recall / 49.0% false alarms → rules + Gemini **100% / 4.1%** | [OK] |
-| Same set, alarm level | rules only 29.4% → rules + Gemini 91.2% (ablation table) / 97.1% (re-measured after the second-opinion step), 0% false alarms | [CHECK] quote one: re-run the ablation so the table and the text agree |
+| Same set, alarm level | rules only 29.4% → rules + Gemini **91.2%**, 0% false alarms | [OK] 2026-10-03: quote the run-once table everywhere. A later re-run after the second-opinion step measured 97.1%, but the final set is not re-run for headline numbers |
 | Real police recordings, uploaded file (36 recordings, 15 scam cases) | **15 / 15 cases warned, 14 / 15 alarmed** | [OK] private data - numbers only, never the audio |
 | Real police recordings, live path (34 recordings, 14 cases) | **14 / 14 cases warned, 13 / 14 alarmed** with the pinned opening + call state (A/B vs bare window 13 / 12; 7 recordings up, 0 down; 11 alarms earlier); set-up call remembered → money call alarms at sentence 5 of 33 (one-call replay) | [OK] 2026-09-22, `docs/EVAL.md`; hard negatives not yet replayed through the live path |
 | Real non-scam speech (93 min, LibriVox) | **0 / 14** above LOW | [OK] audiobooks, not phone calls - say so |

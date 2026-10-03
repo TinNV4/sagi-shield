@@ -104,7 +104,7 @@ Stretch (Milestone B): VN Live Guard (if STT bake-off passes); BigQuery export +
 2. **Hybrid scoring — fusion rule.** Rules (<1 ms, explainable) + Gemini structured output (JSON schema).
    - **Hard-HIGH combos** (e.g. 警察 + LINE + 逮捕状; công an + Zalo + chuyển khoản): rules alone decide HIGH, LLM cannot veto.
    - **Everything else:** LLM may *downgrade* a rule score (e.g. TV drama, news, a real bank reminder). `final = llm_score` when LLM confidence is high, else weighted blend. Plain `max(rule, LLM)` is gone — it unions both sides' false positives.
-   - ✅ **Rule score reworked (2026-09-19).** The old `rule_score` took the *deepest single keyword*, so one word was enough for HIGH (legit bank reminder mentioning キャッシュカード → 95; son saying 「LINEで写真送るね」 → 80; TV news about scams → 100). Now rules score **co-occurring links of the chain**: 1 link = LOW (≤ 30), 2 links = MEDIUM (45–55), 3+ links = HIGH (≥ 70). Never-legit combos floor the score: AUTHORITY + CHANNEL_SWITCH → 90, AUTHORITY + FEAR + MONEY → 90, ISOLATION + MONEY → 80. Text *about* scams (news / warnings: 名乗, によりますと, 手口, giả danh, cảnh báo…) caps the **rules** at 55; the LLM can still raise it, so a scammer cannot silence the alert with those words. `stage` only counts deep stages when a second link exists. `LiveTracker` now **accumulates hits for the whole call** (the chain unfolds over minutes, a window holds ~30 s) and has `reset()` for the silence timeout. Same cases now: 30 LOW / 25 LOW / 55 MEDIUM; seeds stay HIGH. Regression tests: `backend/tests/test_risk_engine.py` (23 tests).
+   - ✅ **Rule score reworked (2026-09-19).** The old `rule_score` took the *deepest single keyword*, so one word was enough for HIGH (legit bank reminder mentioning キャッシュカード → 95; son saying 「LINEで写真送るね」 → 80; TV news about scams → 100). Now rules score **co-occurring links of the chain**: 1 link = LOW (≤ 30), 2 links = MEDIUM (45–55), 3+ links = HIGH (≥ 70). Never-legit combos floor the score: AUTHORITY + CHANNEL_SWITCH → 90, ISOLATION + MONEY → 80 (final). AUTHORITY + FEAR + MONEY → 90 was moved to `REVIEWABLE_COMBOS` on 2026-09-21 after hard negatives (a real bank fraud desk says all three): it drops to MEDIUM 45 only when two different models call the text calm, never to LOW. Text *about* scams (news / warnings: 名乗, によりますと, 手口, giả danh, cảnh báo…) caps the **rules** at 55; the LLM can still raise it, so a scammer cannot silence the alert with those words. `stage` only counts deep stages when a second link exists. `LiveTracker` now **accumulates hits for the whole call** (the chain unfolds over minutes, a window holds ~30 s) and has `reset()` for the silence timeout. Same cases now: 30 LOW / 25 LOW / 55 MEDIUM; seeds stay HIGH. Regression tests: `backend/tests/test_risk_engine.py` (23 tests).
    - Known rules-only limits, left to the LLM: FEAR + MONEY without an authority claim (fake billing) stops at MEDIUM; AUTHORITY + MONEY (real police returning a wallet with a cash card) is MEDIUM; a long TV police drama in kiosk mode will eventually accumulate 3 links → needs the LLM downgrade path + silence reset (P3 TV test).
 3. **Transcript first.** Audio → STT → Gemini text. (Published study on Gemini 2.5 & others: transcript input beat raw audio for scam detection.)
 4. **Live smoothing.** EMA + latch (once HIGH, stays HIGH *within a session*), stages never go backwards within a call. **Session reset on N s silence** so a TV drama at 8 pm does not poison the 9 pm call. Latch requires ≥ 2 consecutive HIGH windows.
@@ -118,7 +118,7 @@ Stretch (Milestone B): VN Live Guard (if STT bake-off passes); BigQuery export +
    | Tier | Runs where | What leaves the device | Status |
    |---|---|---|---|
    | **0 — always on** | Tablet: VAD + **on-device STT** (Chrome Web Speech API, `processLocally`, Chrome 139+) | **No audio, ever.** Finalized transcript lines go to our backend over WSS, phone/account numbers are masked on arrival, rules run, nothing is stored | MVP — `/ws/live?input=text` done; STT quality for ja-JP / vi-VN **unverified** → P0.5 branch 3 |
-   | **1 — on suspicion** | Cloud Run → Gemini | Only once rules reach MEDIUM: the masked rolling window (~30 s of text), at most every 5 s. Gemini confirms, downgrades, or explains | MVP — done, LLM side never run |
+   | **1 — on suspicion** | Cloud Run → Gemini | The masked rolling window (last 12 lines + the pinned opening, no audio): by default on a clock (`gate=periodic`, every ~20 s once 4 lines exist), because rules stay below MEDIUM on real speech; Settings → strict privacy switches to `gate=rules` (only once rules reach MEDIUM). Gemini confirms, downgrades, or explains | Done, verified on real recordings |
    | **2 — fully local** | Tablet: rules in JS (packs served as JSON — the regexes are JS-compatible) + Gemma 3n / Gemini Nano via MediaPipe LLM Inference (WebGPU) or Chrome Prompt API | Nothing; works offline | Roadmap slide. Stretch in Milestone B: rules in the browser |
 
    - **Fallback, only if on-device STT fails the bake-off:** server-side `gemini-3.5-transcribe-live` (audio → cloud, not stored). Must be an explicit opt-in in the UI and called out on the privacy slide.
@@ -150,7 +150,7 @@ flowchart TD
   U -->|REST| C[/check · /precheck<br/>Cloud Run/]
   U -->|REST| AG[/agent/recovery<br/>ADK/]
   L -->|rules every line| E
-  L -.MEDIUM+ only: masked window.-> G[Gemini 3.8 Flash]
+  L -.every ~20 s or MEDIUM+: masked window.-> G[Gemini 3.8 Flash]
   U -.opt-in fallback: audio.-> STT[transcribe-live<br/>rotated every 10 min] -.-> L
   C --> IN[input_layer<br/>Evidence]
   IN --> E[risk_engine<br/>rules + Gemini 3.8 Flash]
@@ -295,7 +295,7 @@ gantt
 - [x] Gemini-written `reasons` (from `LlmVerdict`) with canned per-link sentences as the rules-only fallback; canned action line + hotlines — verified with real calls 2026-09-21
 - [x] Image path: Gemini vision → doc type + OCR text → engine; official document → HIGH by rule — real call on a self-made 逮捕状 prop returned `arrest_warrant` + full OCR (5 s)
 - [~] Audio file path: `gemini-3.5-transcribe` → transcript → engine. Request shape accepted by the API (tone-only WAV → empty transcript); **not yet tried with real speech**
-- [~] Web Risk lookup (`USE_WEBRISK=1`) + bank lookalike list (`BRANDS` in `input_layer.py`); community hit count by phone HMAC. Firestore backend and Web Risk call unverified
+- [x] Web Risk lookup (`USE_WEBRISK=1`) + bank lookalike list (`BRANDS` in `input_layer.py`); community hit count by phone HMAC. Firestore backend and a Web Risk hit verified on Cloud Run (2026-09-21)
 - [x] Phone numbers: HMAC-SHA256 keyed by `HASH_KEY` (mounted from Secret Manager in `infra/deploy.sh`), hashed on E.164
 - [x] `backend/Dockerfile` + `infra/deploy.sh` built and deployed through Cloud Build. Found on the way: Cloud Run reserves `/healthz` → `/health`; repeated `--set-env-vars` keeps only the last; Firestore refuses nested arrays
 
@@ -313,11 +313,11 @@ gantt
 - [ ] Record the re-enacted demo call on a real speaker + tablet; keep the footage as demo fallback
 
 ### P4 · Family & community (9/28–9/29)
-- [x] Pairing: `/family/code` (single-use 6-digit code, 15 min, refreshable) → `/family/link`; `family_id` is the family's shared secret. QR is still a placeholder icon in the UI
+- [x] Pairing: `/family/code` (single-use 6-digit code, 15 min, refreshable) → `/family/link`; `family_id` is the family's shared secret. Real QR (`qrcode`) opening `/#pair=123456`, verified in a browser
 - [ ] FCM push on HIGH: `notifier.py` written, **never run** (needs a Firebase project + web push token from the UI). Demo guardian on **Android or desktop Chrome** — iOS web push needs Home Screen install and is known to drop subscriptions
 - [x] Guardian view: alert stored before any push; UI polls `/family/alerts` every 5 s; live HIGH and "Notify my family" both create alerts; summary = first reason sentence (Gemini-written when the LLM ran), never the transcript. Firestore realtime listener → Milestone B
 - [x] `/report` opt-in → Firestore; `/stats` aggregates; seed ~200 synthetic reports for demo (label them as synthetic in the UI) (`tools/seed_dashboard.py`, keyword `demo-seed`)
-- [x] F6 recovery agent (`app/agent.py`, google-adk 2.9): five tools - three state-changing (payment channel / step done / police statement), `lookup_official_number` (curated table, the only numbers it may quote) and `notify_guardian` (family alert, 2026-09-23) - plus a `before_model_callback` that re-masks numbers; numbers masked before the model, scripted fallback when the model is down. Stateless per instance: state + masked turns live in the store (`recovery_sessions`, 24 h; **set a Firestore TTL policy on `expires_at` at deploy**). Real run 2026-09-21 (free tier): channel + statement tools called correctly, 14–26 s per turn; all three tools verified on Cloud Run (Agent Platform), state round-trips through Firestore; ~22 s per turn - try `gemini-3.5-flash-lite` for the agent
+- [x] F6 recovery agent (`app/agent.py`, google-adk 2.9): six tools - three state-changing (payment channel / step done / police statement), `lookup_official_number` (curated table, the only numbers it may quote) and `notify_guardian` (family alert, 2026-09-23), and a sixth, `deep_check` (Google-Search-grounded public reports about a domain or organisation; refuses numbers) - plus a `before_model_callback` that re-masks numbers; numbers masked before the model, scripted fallback when the model is down. Stateless per instance: state + masked turns live in the store (`recovery_sessions`, 24 h; **set a Firestore TTL policy on `expires_at` at deploy**). Real run 2026-09-21 (free tier): channel + statement tools called correctly, 14–26 s per turn; all three tools verified on Cloud Run (Agent Platform), state round-trips through Firestore; ~22 s per turn - try `gemini-3.5-flash-lite` for the agent
 
 ### P5 · Eval & freeze A (9/30)
 - [x] Dev set: 59 JP + 56 VN synthetic transcripts (~35% hard negatives), **written by DeepSeek-V4-Flash, judged by Gemini** so the evaluation is not circular; committed in `backend/eval/`
@@ -326,7 +326,7 @@ gantt
 - [x] Ablation (`docs/EVAL.md`): at MEDIUM rules 75.0% recall / 46.2% FPR → rules + LLM **96.1% / 2.6%**; at HIGH recall 35.5% → **78.9%**, FPR 2.6%. LLM-only column not run (the product never runs without rules)
 - [~] Targets: synthetic recall 96% ≥ 90% ✅; false alarms 1 in 39 benign ✅ (≤ 1 in 20); live alert ≈ 12 s into the scripted call, LLM verdict ≈ 1.5 s with flash-lite ✅; `/check` p50 ≈ 6 s ❌ (> 4 s: try flash-lite for text checks too). Not measured: real held-out calls, the TV test
 - [x] Audio upload verified on Cloud Run with six synthetic ja/vi calls (`tools/`): 6/6 as expected. Gemini blocks fake-police audio for SAFETY (not configurable) → Chirp 3 fallback; unanalyzed files return 503 instead of a false LOW
-- [x] Model comparison harness (`tools/compare_llm.py`, `LLM_BACKEND=fci`, comparison only): 15 hard cases, DeepSeek-V4-Flash 15/15 vs Gemini 14/15 (the miss = Agent Platform 429 → silent rules-only LOW; now retried and flagged `llm_unavailable`). Open: request a quota increase / provisioned throughput before demo week; show the flag in the UI
+- [x] Model comparison harness (`tools/compare_llm.py`, `LLM_BACKEND=fci`, comparison only): 15 hard cases, DeepSeek-V4-Flash 15/15 vs Gemini 14/15 (the miss = Agent Platform 429 → silent rules-only LOW; now retried and flagged `llm_unavailable`). Open: request a quota increase / provisioned throughput before demo week. The flag is shown on the result screen (`ResultScreen.tsx`)
 - [x] Quick Check: all five inputs verified on Cloud Run; phone and link no longer depend on the model (overseas / reported numbers, URL-shape floors). Open: de-duplicate community reports per reporter
 - [~] `app/guard.py`: per-client rate limit on HTTP + WS handshakes, access log without bodies / query strings / IPs (uvicorn's log off). Open: UI error states (429, offline), **budget alert on the billing account**
 - [ ] **FEATURE FREEZE A at end of day.** Only bug fixes until 10-04.
@@ -358,7 +358,7 @@ gantt
 
 ## 13. Privacy & responsible AI
 
-- **Audio never leaves the device** (tier 0, section 6.9): STT runs on the tablet; only transcript text reaches the backend, numbers masked on arrival, nothing stored; Gemini sees a ~30 s masked window and only after the rules reach MEDIUM.
+- **Audio never leaves the device** (tier 0, section 6.9): STT runs on the tablet; only transcript text reaches the backend, numbers masked on arrival, nothing stored; Gemini sees a masked text window (~every 20 s by default, or only from MEDIUM in strict-privacy mode). Exception the user must opt into: on a browser without an on-device language pack, Live Guard can use the browser's own cloud recognizer - the UI asks first and labels the mode.
 - Kiosk mode: VAD runs **on-device**; silence and non-speech never leave the tablet. Visible "listening" indicator at all times; one-tap pause.
 - If the opt-in cloud-STT fallback is used: audio processed in-stream, not stored. Transcripts kept only in memory for the rolling window. Agent Platform (Vertex AI) does not train on customer data — say so in the app. Be honest that speech is processed outside Japan (`global` / `us` endpoints) in this prototype.
 - Reports are opt-in and anonymized; phone numbers HMAC'd with a Secret Manager key.

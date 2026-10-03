@@ -160,8 +160,8 @@ What it exposed: 8 of the 11 alarms came from one "hard combo" - authority + fea
 allowed to overrule, although it called those calls safe with 0.95 confidence. A bank's real fraud desk says exactly
 those three things. That combo is now *reviewable*: it still floors the score at 90 unless **two different models**
 both call the text safe, and then it drops to a MEDIUM "verify via the official number", never to LOW ("police + move
-to LINE" and "tell no one + send money" stay final). Recall on the held-out scam set did not move (MEDIUM 100%,
-HIGH 97.1%). The 5 remaining alarms are model verdicts on calls such as "my son asks to borrow money": from the words
+to LINE" and "tell no one + send money" stay final). Recall on the held-out scam set did not move in a re-run
+(MEDIUM 100%, HIGH 97.1%; the headline stays the run-once 91.2% of the tables below). The 5 remaining alarms are model verdicts on calls such as "my son asks to borrow money": from the words
 alone that is indistinguishable from the scam, and "hang up and call the number you already have" is the right advice
 either way. This set was used to find and fix the fault, so its second row is a development number.
 

@@ -33,7 +33,7 @@ never used for tuning ([docs/EVAL.md](docs/EVAL.md) has the method, the dev / te
 | any warning (MEDIUM) | rules only | 64.7% | 49.0% |
 | any warning (MEDIUM) | **rules + Gemini** | **100%** | **4.1%** |
 | alarm (HIGH) | rules only | 29.4% | 0.0% |
-| alarm (HIGH) | **rules + Gemini** | **97.1%** | **0-2%** |
+| alarm (HIGH) | **rules + Gemini** | **91.2%** | **0.0%** |
 
 On real recordings published by the Nagano police (private check, never committed): 15 of 15 scam cases warned, 14 of 15
 alarmed. On 93 minutes of real non-scam speech: 0 false alarms. On 79 legitimate calls written to sound like scams: 6.3%
@@ -61,7 +61,7 @@ PWA (React + Vite, served by the API)
   │                  ├─ image  ─▶ Gemini 3.8 Flash (vision)
   │                  ├─ audio  ─▶ gemini-3.5-transcribe ─▶ Chirp 3 fallback
   │                  └─ url    ─▶ Web Risk
-  ├─ POST /agent/recovery ─▶ ADK 2.x agent (5 tools) · CI on every push, auto-deploy to Cloud Run after CI passes on main (`.github/workflows/`, WIF via `infra/setup_cd.sh`) · JPCERT/CC phishing list in Firestore (`tools/load_phish_list.py`) · opt-in deep check (`/deepcheck`, Gemini grounded with Google Search) ─▶ Firestore session (24 h TTL)
+  ├─ POST /agent/recovery ─▶ ADK 2.x agent (6 tools) · CI on every push, auto-deploy to Cloud Run after CI passes on main (`.github/workflows/`, WIF via `infra/setup_cd.sh`) · JPCERT/CC phishing list in Firestore (`tools/load_phish_list.py`) · opt-in deep check (`/deepcheck`, Gemini grounded with Google Search) ─▶ Firestore session (24 h TTL)
   ├─ /family/*, /report ─▶ Firestore (lookups while the user waits: reported numbers, pairing, alerts)
   └─ every verdict ─▶ BigQuery `sagi.events` (anonymous: no text, numbers or ids) ─▶ Looker Studio scam map
 Cloud Run (asia-northeast1) · Gemini on Agent Platform (global) · Firestore · BigQuery · Web Risk · Speech-to-Text · Secret Manager
@@ -75,7 +75,7 @@ Details, decisions and the phase checklist: [docs/PLAN.md](docs/PLAN.md). Workin
 cd backend
 pip install -r requirements.txt
 cp ../.env.example ../.env          # Gemini API key, or an Agent Platform project
-python -m pytest tests -q           # 101 tests, offline, no network
+python -m pytest tests -q           # 111 tests, offline, no network
 USE_LLM=0 uvicorn app.main:app --port 8080     # rules only; drop USE_LLM=0 to use Gemini
 
 cd ../frontend
