@@ -219,7 +219,7 @@ Response:
 
 `POST /precheck` → `{ reason_text, amount?, recipient_type?, who_asked?, lang }` → same response shape as `/check`.
 `POST /agent/recovery` → `{ session_id, message, lang, ui_lang?, family_id? }` → `{ reply, checklist: [{ step, done, tel? }], draft_statement? }`. `session_id` is a client-generated random id (≥ 16 chars) and the only key to the chat; `lang` = market (hotlines), `ui_lang` = reply language (ja/vi/en). `message = "INIT_RECOVERY"` returns the welcome without a model call. Checklist text and phone numbers are server-owned, never model output; the agent quotes a number only from its `lookup_official_number` tool and raises a family alert only through `notify_guardian` (needs `family_id`, fires once per session).
-`POST /report` → `{ phone_hmac, scam_type, prefecture, keywords[], created_at }` (opt-in).
+`POST /report` → `{ scam_type, phone?, keywords[], prefecture?, consent: true, lang, reporter_id? }` → `{ ok }` (opt-in). The server hashes `phone` on arrival and stores only `{ phone_hmac, scam_type, prefecture, keywords[], reporter (HMAC of `reporter_id`), created_at }`; the app sends `phone` only when the check was a phone check. No prefecture picker in the UI yet, so `by_region` holds seed data only.
 `POST /family/link` → `{ pair_code, fcm_token }`. `GET /family/alerts` (or Firestore listener) → Guardian view. `GET /stats` → aggregates for dashboard.
 
 ## 10. Repository layout (target)

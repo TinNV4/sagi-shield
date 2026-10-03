@@ -15,6 +15,18 @@ import {api, getFamilyId, PAIR_FROM_LINK} from '../api/client';
 import {FamilyAlertItem} from '../api/types';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
+import {telHref} from '../components/TrustedContact';
+
+// The protected person's number, kept on THIS (guardian) device only. The server never stores it,
+// so the call button must not invent one.
+const MEMBER_TEL_KEY = 'sagi_member_tel';
+const readMemberTel = () => {
+  try {
+    return localStorage.getItem(MEMBER_TEL_KEY) || '';
+  } catch {
+    return '';
+  }
+};
 
 interface GuardianViewScreenProps {
   onBack: () => void;
@@ -29,6 +41,17 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   const [linked, setLinked] = useState<boolean>(!PAIR_FROM_LINK && (api.isMock || !!getFamilyId()));
   const [codeInput, setCodeInput] = useState(PAIR_FROM_LINK);
   const [linkError, setLinkError] = useState(false);
+  const [memberTel, setMemberTel] = useState(readMemberTel);
+  const [telInput, setTelInput] = useState('');
+
+  const saveMemberTel = () => {
+    const tel = telInput.trim().slice(0, 30);
+    if (!tel) return;
+    try {
+      localStorage.setItem(MEMBER_TEL_KEY, tel);
+    } catch {}
+    setMemberTel(tel);
+  };
 
   // API labels (fake_police, ...) are contract values, not text for people
   const typeLabel = (code: string) => {
@@ -214,15 +237,37 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
                   {alert.summary}
                 </p>
 
-                {/* Big Call Now Button */}
+                {/* Big Call Now Button - only with a real number (mock alert or saved on this device) */}
                 <div className="pt-1">
-                  <a
-                    href={`tel:${alert.phone_tel || '090-1234-5678'}`}
-                    className="w-full min-h-[52px] rounded-2xl bg-[#1B4D3E] hover:bg-[#143C30] active:scale-98 text-white font-bold text-base flex items-center justify-center gap-2 shadow-md transition"
-                  >
-                    <PhoneCall className="w-5 h-5 text-yellow-300" />
-                    <span>{t('guardian.btn_call_member', {name: (alert.member_name || t('guardian.member_fallback')).split('（')[0]})}</span>
-                  </a>
+                  {alert.phone_tel || memberTel ? (
+                    <a
+                      href={telHref(alert.phone_tel || memberTel)}
+                      className="w-full min-h-[52px] rounded-2xl bg-[#1B4D3E] hover:bg-[#143C30] active:scale-98 text-white font-bold text-base flex items-center justify-center gap-2 shadow-md transition"
+                    >
+                      <PhoneCall className="w-5 h-5 text-yellow-300" />
+                      <span>{t('guardian.btn_call_member', {name: (alert.member_name || t('guardian.member_fallback')).split('（')[0]})}</span>
+                    </a>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold opacity-80">{t('guardian.member_tel_hint')}</p>
+                      <div className="flex gap-2">
+                        <input
+                          type="tel"
+                          inputMode="tel"
+                          value={telInput}
+                          onChange={(e) => setTelInput(e.target.value)}
+                          placeholder={t('guardian.member_tel_placeholder')}
+                          className="flex-1 min-w-0 p-3 rounded-2xl bg-white dark:bg-slate-800 border border-gray-300 dark:border-gray-700 text-base text-gray-900 dark:text-white"
+                        />
+                        <button
+                          onClick={saveMemberTel}
+                          className="px-4 rounded-2xl bg-[#1B4D3E] hover:bg-[#143C30] text-white text-sm font-bold"
+                        >
+                          {t('guardian.member_tel_save')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             );

@@ -278,6 +278,7 @@
     "consent_checkbox": "Share this anonymized report to the community fraud radar",
     "report_community": "Submit to Community Radar",
     "reporting": "Submitting...",
+    "report_failed": "Could not send the report. Please try again later.",
     "reported_success": "Shared to the community prevention network. Thank you!",
     "copy_result": "Copy Assessment Text",
     "copied_result": "Copied to clipboard!",
@@ -386,7 +387,10 @@
     "btn_call_member": "Call {{name}} Now",
     "link_title": "Enter the 6-digit code shown on your family member's device",
     "link_btn": "Link",
-    "link_fail": "That code is wrong or has expired. Ask for a new one."
+    "link_fail": "That code is wrong or has expired. Ask for a new one.",
+    "member_tel_hint": "Save the number of the person you protect to call them from here. It stays on this device.",
+    "member_tel_placeholder": "Their phone number",
+    "member_tel_save": "Save"
   },
   "community": {
     "title": "Community Fraud Radar",

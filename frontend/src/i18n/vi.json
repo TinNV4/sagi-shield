@@ -278,6 +278,7 @@
     "consent_checkbox": "Chia sẻ ẩn danh vào cơ sở dữ liệu phòng chống lừa đảo cộng đồng",
     "report_community": "Gửi thông tin cho cộng đồng",
     "reporting": "Đang gửi...",
+    "report_failed": "Chưa gửi được báo cáo. Vui lòng thử lại sau.",
     "reported_success": "Đã chia sẻ thông tin phòng ngừa cho cộng đồng. Cảm ơn bạn!",
     "copy_result": "Sao chép kết quả",
     "copied_result": "Đã sao chép!",
@@ -386,7 +387,10 @@
     "btn_call_member": "Gọi ngay cho {{name}}",
     "link_title": "Nhập mã 6 số hiển thị trên thiết bị của người thân",
     "link_btn": "Liên kết",
-    "link_fail": "Mã không đúng hoặc đã hết hạn. Hãy yêu cầu mã mới."
+    "link_fail": "Mã không đúng hoặc đã hết hạn. Hãy yêu cầu mã mới.",
+    "member_tel_hint": "Lưu số điện thoại của người thân để gọi ngay từ đây. Số chỉ được lưu trên thiết bị này.",
+    "member_tel_placeholder": "Số điện thoại của người thân",
+    "member_tel_save": "Lưu"
   },
   "community": {
     "title": "Bản đồ lừa đảo cộng đồng",

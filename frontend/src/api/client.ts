@@ -8,6 +8,7 @@ import {
   LiveWsClientMessage,
   LiveWsServerMessage,
   PrecheckPayload,
+  ReportPayload,
   RecoveryResponse,
   StatsResult,
 } from './types';
@@ -18,13 +19,7 @@ export interface SagiApi {
   precheck(payload: PrecheckPayload): Promise<CheckResult>;
   deepcheck(payload: DeepCheckPayload): Promise<DeepCheckResult>;
   recovery(sessionId: string, message: string, lang: string): Promise<RecoveryResponse>;
-  report(data: {
-    scam_type: string;
-    phone?: string;
-    keywords: string[];
-    prefecture?: string;
-    consent: boolean;
-  }): Promise<{ok: boolean}>;
+  report(data: ReportPayload): Promise<{ok: boolean}>;
   createFamilyCode(): Promise<{pair_code: string; guardians: string[]}>;
   linkFamily(pairCode: string, fcmToken?: string): Promise<{ok: boolean; guardian_name: string}>;
   notifyFamily(result: CheckResult, lang: string): Promise<boolean>;
@@ -147,13 +142,7 @@ class RealApi implements SagiApi {
     return res.json();
   }
 
-  async report(data: {
-    scam_type: string;
-    phone?: string;
-    keywords: string[];
-    prefecture?: string;
-    consent: boolean;
-  }): Promise<{ok: boolean}> {
+  async report(data: ReportPayload): Promise<{ok: boolean}> {
     const res = await fetch(`${this.baseUrl}/report`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
@@ -694,13 +683,7 @@ class MockApi implements SagiApi {
     };
   }
 
-  async report(data: {
-    scam_type: string;
-    phone?: string;
-    keywords: string[];
-    prefecture?: string;
-    consent: boolean;
-  }): Promise<{ok: boolean}> {
+  async report(data: ReportPayload): Promise<{ok: boolean}> {
     await new Promise((r) => setTimeout(r, 600));
     return {ok: true};
   }

@@ -31,6 +31,17 @@ export interface CheckResult {
   images?: ImageVerdictItem[];
 }
 
+// Opt-in community report. `phone` is hashed by the server on arrival (only the HMAC is stored);
+// `lang` picks the market for that hash.
+export interface ReportPayload {
+  scam_type: string;
+  phone?: string;
+  keywords: string[];
+  prefecture?: string;
+  consent: boolean;
+  lang: string;
+}
+
 // Opt-in deep check: public reports about the domains / organisation of a check (Google Search grounding)
 export interface DeepCheckPayload {
   lang: string;
@@ -115,6 +126,7 @@ export interface FamilyAlertItem {
   scam_type: ScamType;
   stage: KillChainStage;
   summary: string;
+  /** Demo (MockApi) only: the API never stores or returns the protected person's number. */
   phone_tel?: string;
 }
 

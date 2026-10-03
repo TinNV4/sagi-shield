@@ -20,11 +20,12 @@ import {KillChainBar} from '../components/KillChainBar';
 import {RiskMeter} from '../components/RiskMeter';
 import {DeepfakeNotice} from '../components/DeepfakeNotice';
 import {useI18n} from '../i18n';
+import type {CheckInput} from './QuickCheckScreen';
 import * as speech from '../lib/speak';
 
 interface ResultScreenProps {
   result: CheckResult;
-  checkInput?: {url?: string; text?: string};
+  checkInput?: CheckInput;
   onBack: () => void;
   onGoRecovery: () => void;
   onNotifyFamily: () => void;
@@ -46,6 +47,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   const [hasReported, setHasReported] = useState(false);
   const [consentChecked, setConsentChecked] = useState(true);
   const [isReporting, setIsReporting] = useState(false);
+  const [reportError, setReportError] = useState(false);
   const [copiedNote, setCopiedNote] = useState(false);
 
   // Opt-in deep check: search public reports about the link's domain / the organisation named. Never the number.
@@ -76,17 +78,20 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
     speech.warmUp();
     if (!consentChecked) return;
     setIsReporting(true);
+    setReportError(false);
     try {
       await api.report({
         scam_type: result.scam_type,
+        phone: checkInput.phone || undefined,
         keywords: result.evidence_flags,
         consent: true,
+        lang,
       });
-      setIsReporting(false);
       setHasReported(true);
     } catch {
+      setReportError(true); // never claim it was shared when it was not
+    } finally {
       setIsReporting(false);
-      setHasReported(true);
     }
   };
 
@@ -427,6 +432,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
               <Send className="w-4 h-4" />
               <span>{isReporting ? t('result.reporting') : t('result.report_community')}</span>
             </button>
+            {reportError && <p className="text-xs font-semibold text-red-700 dark:text-red-400">{t('result.report_failed')}</p>}
           </div>
         ) : (
           <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 text-sm font-bold flex items-center justify-center gap-2">

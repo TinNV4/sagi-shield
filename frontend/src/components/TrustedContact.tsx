@@ -29,7 +29,7 @@ const saveTrustedContact = (c: TrustedContactData | null) => {
   } catch {}
 };
 
-const telHref = (tel: string) => `tel:${tel.replace(/[^\d+#*]/g, '')}`;
+export const telHref = (tel: string) => `tel:${tel.replace(/[^\d+#*]/g, '')}`;
 
 /** Big call-back button; renders nothing until a contact is saved. */
 export const CallTrustedButton: React.FC<{tone?: 'light' | 'alarm'}> = ({tone = 'light'}) => {

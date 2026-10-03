@@ -21,6 +21,8 @@ export type QuickCheckTab = 'text' | 'screenshot' | 'recording' | 'phone' | 'lin
 export interface CheckInput {
   url?: string;
   text?: string;
+  /** Only for the community report (the server hashes it); the deep check never searches a number. */
+  phone?: string;
 }
 
 interface QuickCheckScreenProps {
@@ -151,7 +153,10 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
       const result = await api.check(formData);
       setIsLoading(false);
       // what the deep check may search later: a link or the pasted text (domains only; never the number)
-      onCheckCompleted(result, activeTab === 'link' ? {url: linkUrl} : activeTab === 'text' ? {text: inputText} : {});
+      onCheckCompleted(
+        result,
+        activeTab === 'link' ? {url: linkUrl} : activeTab === 'text' ? {text: inputText} : activeTab === 'phone' ? {phone: phoneNumber.trim()} : {}
+      );
     } catch (err: any) {
       setIsLoading(false);
       setErrorMsg(err.message || t('quick.error_general'));
