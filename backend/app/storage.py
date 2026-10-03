@@ -52,6 +52,10 @@ def _today() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 
+# tools/seed_dashboard.py tags its simulated reports with this keyword; /stats counts them so the UI can say so.
+SEED_KEYWORD = "demo-seed"
+
+
 def _stats(checks: dict, reports: list[dict]) -> dict:
     trend = Counter(r["date"] for r in reports)
     return {
@@ -60,6 +64,7 @@ def _stats(checks: dict, reports: list[dict]) -> dict:
         "by_type": dict(Counter(r["scam_type"] for r in reports)),
         "by_region": dict(Counter(r["prefecture"] for r in reports if r.get("prefecture"))),
         "trend": [{"date": d, "count": c} for d, c in sorted(trend.items())],
+        "simulated_reports": sum(SEED_KEYWORD in (r.get("keywords") or []) for r in reports),
     }
 
 

@@ -422,7 +422,7 @@ class MockApi implements SagiApi {
         stage: 4,
         scam_type: 'refund',
         reasons: [
-          '「医療費や保険料の還付がある」と言ってATMへ誘導するのは100%還付金詐欺です。',
+          '「医療費や保険料の還付がある」と言ってATMへ誘導するのは、還付金詐欺の典型的な手口です。',
           'ATMの操作で金銭を受け取ることは絶対にできません（すべて振込送金させられます）。',
         ],
         advice: 'ATMには絶対に行かず、相手の指定した番号ではなく自治体公式サイトの代表電話へ確認してください。',
@@ -524,8 +524,8 @@ class MockApi implements SagiApi {
         ],
         advice:
           lang === 'vi'
-            ? 'DỪNG LẠI! Tuyệt đối không thực hiện giao dịch này. Hãy cúp máy và báo công an ngay.'
-            : 'STOP！絶対に振り込んではいけません。窓口の行員に相談するか、今すぐ110番してください。',
+            ? 'Đừng thực hiện giao dịch này. Hãy cúp máy và gọi 113 hoặc công an địa phương để xác minh.'
+            : '振り込まないでください。窓口の行員に相談するか、110番に連絡してください。',
         hotlines: ['#9110', '110', '188'],
         evidence_flags: ['ニセ警察手口', '個人口座への公的名目送金', '心理的強制'],
         rule_hits: {
@@ -748,6 +748,7 @@ class MockApi implements SagiApi {
         {date: '09/19', count: 365},
         {date: '09/20', count: 390},
       ],
+      simulated_reports: 3290, // everything in MockApi is made up
     };
   }
 
@@ -792,7 +793,7 @@ class MockApi implements SagiApi {
         level: 'MEDIUM' as const,
         trigger: '守秘義務・他言無用',
         text: '捜査の秘密保持義務がありますので、ご家族や銀行の職員にも絶対に話してはいけません。',
-        advice: '周囲に相談させないよう孤立を狙っています。すぐに誰かに相談してください！',
+        advice: '周囲に相談させないようにする手口です。電話を切って、家族に相談してください。',
       },
       {
         delay: 16000,
@@ -801,7 +802,7 @@ class MockApi implements SagiApi {
         level: 'HIGH' as const,
         trigger: 'LINE・偽警察手帳',
         text: '私の警察手帳をお見せしますので、LINEで友だち追加してビデオ通話をつないでください。',
-        advice: 'LINEなどのSNSへ誘導し偽物の警察手帳を見せる手口です。絶対に追加しないでください！',
+        advice: 'LINEなどへ誘導し、偽の警察手帳を見せる手口です。友だち追加はしないでください。',
         speak: '警察がLINEで連絡することはありません。電話を今すぐ切ってください。',
       },
       {
@@ -811,8 +812,8 @@ class MockApi implements SagiApi {
         level: 'HIGH' as const,
         trigger: '安全口座・資金移動',
         text: 'あなたの潔白を証明するため、すべての預金を一時的に安全調査用口座へ振り込んでください。',
-        advice: '金銭の要求がありました。これは100%詐欺です！今すぐ電話を切ってください！',
-        speak: 'この通話はニセ警察詐欺です。電話を今すぐ切ってください！',
+        advice: '金銭の要求がありました。詐欺の可能性が高いです。電話を切って、#9110 に相談してください。',
+        speak: 'この通話は詐欺の可能性があります。電話を切ってください。',
       },
     ];
 
@@ -842,7 +843,7 @@ class MockApi implements SagiApi {
         level: 'MEDIUM' as const,
         trigger: 'Bí mật án / Không được báo người thân',
         text: 'Đây là vụ án cấp quốc gia, tuyệt đối không được tiết lộ cho gia đình hay ngân hàng biết.',
-        advice: 'Họ đang ép bạn giữ bí mật để cô lập bạn khỏi sự giúp đỡ của con cháu!',
+        advice: 'Đây là thủ đoạn bắt giữ bí mật để bạn không hỏi ý kiến con cháu. Hãy cúp máy và gọi cho người thân.',
       },
       {
         delay: 16000,
@@ -851,8 +852,8 @@ class MockApi implements SagiApi {
         level: 'HIGH' as const,
         trigger: 'Kết bạn Zalo / Tải app định danh giả',
         text: 'Anh/chị kết bạn Zalo ngay để nhận lệnh bắt và cài đặt phần mềm bảo mật VNeID theo link tôi gửi.',
-        advice: 'Tuyệt đối không kết bạn Zalo hoặc cài đặt bất kỳ phần mềm nào qua link!',
-        speak: 'Công an không gọi Zalo gửi lệnh bắt. Cúp máy ngay lập tức!',
+        advice: 'Đừng kết bạn Zalo hay cài phần mềm theo đường link người gọi gửi.',
+        speak: 'Công an không gửi lệnh bắt qua Zalo. Hãy cúp máy.',
       },
       {
         delay: 20000,
@@ -861,8 +862,8 @@ class MockApi implements SagiApi {
         level: 'HIGH' as const,
         trigger: 'Chuyển tiền vào tài khoản an toàn',
         text: 'Để chứng minh trong sạch, hãy chuyển toàn bộ số dư vào tài khoản thanh tra của cơ quan điều tra.',
-        advice: 'ĐÂY LÀ LỪA ĐẢO 100%! Cơ quan nhà nước không có tài khoản thanh tra. CÚP MÁY NGAY!',
-        speak: 'Đây là lừa đảo công an giả danh. Hãy cúp máy ngay lập tức!',
+        advice: 'Nhiều khả năng là lừa đảo. Cơ quan nhà nước không yêu cầu chuyển tiền vào "tài khoản thanh tra". Hãy cúp máy và gọi 113.',
+        speak: 'Cuộc gọi này có dấu hiệu lừa đảo. Hãy cúp máy ngay.',
       },
     ];
 

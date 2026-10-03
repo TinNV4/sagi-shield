@@ -131,6 +131,9 @@ def test_report_needs_consent_and_feeds_community_hits_and_stats(client):
     s = client.get("/stats").json()
     assert s["total_checks"] == 2 and s["high_risk"] == 1
     assert s["by_type"] == {"fake_police": 2} and s["by_region"] == {"長野県": 2} and s["trend"][0]["count"] == 2
+    assert s["simulated_reports"] == 0
+    client.post("/report", json={"scam_type": "refund", "keywords": ["demo-seed"], "consent": True, "reporter_id": "seed-1"})
+    assert client.get("/stats").json()["simulated_reports"] == 1  # the UI labels seeded data as simulated
 
 
 def test_rule_verdict_never_keeps_a_safe_label(client, monkeypatch):

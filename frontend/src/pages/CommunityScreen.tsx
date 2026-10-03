@@ -63,7 +63,12 @@ export const CommunityScreen: React.FC = () => {
     {name: t('community.scam_investment'), count: stats.by_type.investment, fill: '#3B82F6'},
   ];
 
-  const highRiskPct = ((stats.high_risk / stats.total_checks) * 100).toFixed(1);
+  const highRiskPct = stats.total_checks ? ((stats.high_risk / stats.total_checks) * 100).toFixed(1) : '0.0';
+  // Computed from the data shown, never a fixed claim
+  const totalReports = Object.values(stats.by_type).reduce((a, b) => a + b, 0);
+  const topType = scamTypeData.reduce((a, b) => ((b.count || 0) > (a.count || 0) ? b : a), scamTypeData[0]);
+  const topTypePct = totalReports && topType.count ? Math.round((topType.count / totalReports) * 100) : 0;
+  const regions = Object.entries(stats.by_region).sort((a, b) => b[1] - a[1]).slice(0, 8);
 
   return (
     <div id="community-dashboard" className="max-w-3xl mx-auto px-4 py-6 space-y-6 animate-fade-in">
@@ -81,6 +86,16 @@ export const CommunityScreen: React.FC = () => {
         </p>
       </div>
 
+      {!!stats.simulated_reports && (
+        <div
+          id="community-simulated-note"
+          className="p-3 rounded-2xl bg-amber-50 dark:bg-amber-950/30 border border-amber-300 dark:border-amber-800 flex items-start gap-2 text-xs font-semibold text-amber-900 dark:text-amber-200"
+        >
+          <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+          <span>{t('community.simulated_note', {n: stats.simulated_reports.toLocaleString()})}</span>
+        </div>
+      )}
+
       {/* KPI CARDS */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
         {/* Total Checks */}
@@ -95,7 +110,7 @@ export const CommunityScreen: React.FC = () => {
             {stats.total_checks.toLocaleString()}
           </div>
           <div className="text-xs text-emerald-600 dark:text-emerald-400 font-bold mt-1">
-            {t('community.kpi_month_change')}
+            {t('community.kpi_total_desc')}
           </div>
         </div>
 
@@ -183,7 +198,7 @@ export const CommunityScreen: React.FC = () => {
             <span>{t('community.by_type_title')}</span>
           </h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {t('community.by_type_desc')}
+            {topTypePct ? t('community.by_type_desc', {type: topType.name, pct: topTypePct}) : t('community.by_type_empty')}
           </p>
         </div>
 
@@ -222,7 +237,7 @@ export const CommunityScreen: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-          {Object.entries(stats.by_region).map(([region, count]) => (
+          {regions.map(([region, count]) => (
             <div
               key={region}
               className="p-3 rounded-2xl bg-gray-50 dark:bg-slate-800/60 border border-gray-200 dark:border-gray-700 flex flex-col justify-between"

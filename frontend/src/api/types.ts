@@ -136,6 +136,8 @@ export interface StatsResult {
   by_type: Record<string, number>;
   by_region: Record<string, number>;
   trend: { date: string; count: number }[];
+  /** Reports written by tools/seed_dashboard.py for the demo; the dashboard labels them. */
+  simulated_reports?: number;
 }
 
 export interface LiveSocketCallbacks {
