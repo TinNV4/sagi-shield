@@ -166,14 +166,15 @@ flowchart TD
 
 | File | Status | Purpose |
 |---|---|---|
-| `backend/core/risk_engine.py` | ✅ rules, v3 fusion, 2-window latch, regression tests; **LLM path never run yet (no credentials)** | Kill-chain hybrid scoring, JP/VN packs, `LiveTracker` (per-call accumulation, `reset()`) |
+| `backend/core/risk_engine.py` | ✅ rules, v3 fusion, 2-window latch, regression tests; LLM path (judge v2, second opinion, `fci` comparison backend) measured in `docs/EVAL.md` | Kill-chain hybrid scoring, JP/VN packs, `LiveTracker` (per-call accumulation, `reset()`) |
 | `backend/core/input_layer.py` | ✅ smoke-tested; HMAC phone hashes; `ffmpeg` is in the Docker image | `build_evidence()` for text/image/audio/phone/URL |
-| `backend/core/gen_dataset.py` | ✅ seed + eval — **needs ablation modes (rules / LLM / hybrid) and per-set reporting** | Gemini synthetic data gen + precision/recall eval |
+| `backend/core/gen_dataset.py` | ✅ seed + gen (Gemini or `fci` generator) + eval with the rules / rules + LLM ablation in `docs/EVAL.md`; hard-negative mode | Synthetic data gen + precision/recall eval |
 | ~~`frontend/lib/audioCapture.js`~~ | Removed 2026-10-03: never imported, `/ws/live` refuses audio, and an unused raw-audio upload path contradicted section 6.9 (audio never leaves the device). Server-side STT, if ever built, starts from scratch as an explicit opt-in | (was: mic → PCM16 16 kHz → WebSocket) |
-| `backend/app/` (`main.py`, `services.py`, `storage.py`) | ✅ offline (42 tests, rules only, Google services stubbed); never run with credentials, never deployed | HTTP API of section 9 (no `/ws/live`, `/family/*`, `/agent/*` yet) |
-| `backend/app/live.py` + `frontend/spike/live_text.html` | ✅ offline (WebSocket tests); the spike page has **not been opened in a browser yet** | Live Guard text mode + on-device STT test page |
-| `frontend/` (AI Studio Build export, fixed) | ✅ typechecks and builds; Quick Check verified end-to-end in a browser; static SPA, no server, no secrets | PWA |
-| `docs/AI_STUDIO_UI_PROMPT.md` | ready (v3 screens, frontend-only) | Prompt to generate the UI in AI Studio Build |
+| `backend/app/` (`main.py`, `services.py`, `storage.py`, `guard.py`, `analytics.py`, `verdict_log.py`) | ✅ 115 offline tests (rules only, Google services stubbed); deployed and verified on Cloud Run since 2026-09-21 (Agent Platform, Firestore, Web Risk, Secret Manager, BigQuery); CI + auto-deploy (`.github/workflows/`) | HTTP API of section 9 incl. `/family/*`, `/deepcheck`, rate limit, verdict log |
+| `backend/app/live.py` + `frontend/spike/live_text.html` | ✅ `WS /ws/live` verified from a script and by replaying real recordings (`tools/replay_live.py`); the spike page and the Live Guard screen have **not been driven by a microphone in a real Chrome yet** | Live Guard text mode (periodic / rules gate, pinned opening, `<call_state>`) + on-device STT test page |
+| `backend/app/agent.py` | ✅ six tools, verified on Cloud Run; `tools/eval_agent.py` | F6 recovery agent (ADK 2.x) |
+| `frontend/` (AI Studio Build export, fixed) | ✅ typechecks and builds; Quick Check, result, Home, Recovery, Family pairing verified in a browser against Cloud Run; served by the API from `backend/static/`; static SPA, no secrets. Error states (offline / 429 / 503) translated since 2026-10-10 | PWA |
+| `docs/AI_STUDIO_UI_PROMPT.md` | historical (v3 screens); the UI is maintained in this repo, never round-tripped through AI Studio | Prompt that generated the first UI |
 
 ## 8. Reuse: libraries & data
 
@@ -307,7 +308,7 @@ gantt
 - [x] Client WS auto-reconnect (`src/api/client.ts`, exponential back-off 1 s → 15 s)
 - [ ] (fallback only) `input=audio` with STT session rotation - not planned: audio stays on the device
 - [x] Rules every chunk, Gemini (`thinking_level="low"`) every 5 s or on rule hit; feed `LiveTracker.update(window_hits, llm_score, llm_stage, reporting)`; call `reset()` on the silence timeout; add the 2-window latch Done as `gate=periodic` (every 20 s / 6 unseen lines) + rules on every line, latch after 2 HIGH, `reset()` on silence
-- [ ] Frontend: Screen Wake Lock, kiosk mode (auto-start on load, auto-restart on error) (wake lock done; auto-restart still open). The VAD gate item is dropped with `audioCapture.js`: the on-device recognizer does its own endpointing and only final lines are sent
+- [x] Frontend: Screen Wake Lock, kiosk mode (auto-start on load, auto-restart on error). Auto-restart since 2026-10-10 with back-off (0.5 s → 10 s when the recognizer ends right after starting) and a stop on fatal errors (`not-allowed`, `service-not-allowed`, `language-not-supported`: restarting those spun in a tight loop). The VAD gate item is dropped with `audioCapture.js`: the on-device recognizer does its own endpointing and only final lines are sent
 - [x] F1b spoken alert via `speechSynthesis` (pre-warm voice on first user gesture — browsers block TTS before one) (`src/lib/speak.ts`, used by the HIGH takeover)
 - [ ] **TV test**: play a police drama / news segment about scams for 10 min → must not latch HIGH
 - [ ] Record the re-enacted demo call on a real speaker + tablet; keep the footage as demo fallback
@@ -328,7 +329,7 @@ gantt
 - [x] Audio upload verified on Cloud Run with six synthetic ja/vi calls (`tools/`): 6/6 as expected. Gemini blocks fake-police audio for SAFETY (not configurable) → Chirp 3 fallback; unanalyzed files return 503 instead of a false LOW
 - [x] Model comparison harness (`tools/compare_llm.py`, `LLM_BACKEND=fci`, comparison only): 15 hard cases, DeepSeek-V4-Flash 15/15 vs Gemini 14/15 (the miss = Agent Platform 429 → silent rules-only LOW; now retried and flagged `llm_unavailable`). Open: request a quota increase / provisioned throughput before demo week. The flag is shown on the result screen (`ResultScreen.tsx`)
 - [x] Quick Check: all five inputs verified on Cloud Run; phone and link no longer depend on the model (overseas / reported numbers, URL-shape floors). Open: de-duplicate community reports per reporter
-- [~] `app/guard.py`: per-client rate limit on HTTP + WS handshakes, access log without bodies / query strings / IPs (uvicorn's log off). Open: UI error states (429, offline), **budget alert on the billing account**
+- [~] `app/guard.py`: per-client rate limit on HTTP + WS handshakes, access log without bodies / query strings / IPs (uvicorn's log off). UI error states done 2026-10-10 (`ApiError` in `client.ts`: offline / 429 / 503 translated, every screen shows the sentence and a retry; Before You Pay no longer invents a HIGH verdict when the API is down). Open: **budget alert on the billing account**
 - [ ] **FEATURE FREEZE A at end of day.** Only bug fixes until 10-04.
 
 ### P6 · Ship Milestone A (10/1–10/2, buffer 10/3–10/4)

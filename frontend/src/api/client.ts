@@ -81,6 +81,41 @@ function setFamilyId(id: string) {
 }
 
 // ==========================================
+// ERRORS
+// ==========================================
+
+/** Why a request failed, in terms a screen can translate: the raw fetch error ("Failed to fetch") never reaches the user. */
+export type ApiErrorKind = 'offline' | 'rate_limited' | 'unavailable' | 'failed';
+
+export class ApiError extends Error {
+  constructor(
+    readonly kind: ApiErrorKind,
+    /** A sentence written for the user by the server (429 / 503 carry one), if any. */
+    readonly detail: string | null,
+    readonly status: number
+  ) {
+    super(detail || `${kind} (${status || 'network'})`);
+    this.name = 'ApiError';
+  }
+}
+
+/** The i18n key for an error from this client; anything else is a generic failure. */
+export const apiErrorKey = (err: unknown): string => {
+  const kind: ApiErrorKind = err instanceof ApiError ? err.kind : 'failed';
+  return `api.${kind}`;
+};
+
+/** The sentence to show: the server's own wording when it wrote one (429 / 503), otherwise the translated kind. */
+export const describeApiError = (err: unknown, t: (key: string) => string): string =>
+  err instanceof ApiError && err.detail ? err.detail : t(apiErrorKey(err));
+
+/** True while the browser reports no network: the screens use it to say "offline" before the first click. */
+export const isOffline = (): boolean => typeof navigator !== 'undefined' && navigator.onLine === false;
+
+const kindOf = (status: number): ApiErrorKind =>
+  status === 429 ? 'rate_limited' : status === 503 || status === 502 || status === 504 ? 'unavailable' : 'failed';
+
+// ==========================================
 // REAL API IMPLEMENTATION
 // ==========================================
 class RealApi implements SagiApi {
@@ -91,76 +126,58 @@ class RealApi implements SagiApi {
     this.baseUrl = base.replace(/\/+$/, '');
   }
 
-  async check(formData: FormData): Promise<CheckResult> {
+  /** One fetch for every route: a dropped connection becomes ApiError('offline'), a non-2xx keeps the server's
+   *  `detail` sentence when there is one. JSON bodies get their header; FormData sets its own boundary. */
+  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseUrl}${path}`, init);
+    } catch {
+      throw new ApiError('offline', null, 0);
+    }
+    if (!res.ok) {
+      const detail = await res.json().then((b) => (typeof b?.detail === 'string' ? b.detail : null)).catch(() => null);
+      throw new ApiError(kindOf(res.status), detail, res.status);
+    }
+    return res.json();
+  }
+
+  private postJson<T>(path: string, body: unknown): Promise<T> {
+    return this.request<T>(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  }
+
+  check(formData: FormData): Promise<CheckResult> {
     formData.set('lang', apiLang(String(formData.get('lang') || 'ja')));
-    const res = await fetch(`${this.baseUrl}/check`, {
-      method: 'POST',
-      body: formData,
-    });
-    if (!res.ok) {
-      // 429 (rate limit) and 503 (file could not be analyzed) carry a sentence meant for the user
-      const detail = await res.json().then((b) => b?.detail).catch(() => null);
-      throw new Error(typeof detail === 'string' ? detail : `Check failed with status: ${res.status}`);
-    }
-    return res.json();
+    return this.request<CheckResult>('/check', {method: 'POST', body: formData});
   }
 
-  async precheck(payload: PrecheckPayload): Promise<CheckResult> {
-    const res = await fetch(`${this.baseUrl}/precheck`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({...payload, lang: apiLang(payload.lang)}),
-    });
-    if (!res.ok) {
-      throw new Error(`Precheck failed with status: ${res.status}`);
-    }
-    return res.json();
+  precheck(payload: PrecheckPayload): Promise<CheckResult> {
+    return this.postJson('/precheck', {...payload, lang: apiLang(payload.lang)});
   }
 
-  async deepcheck(payload: DeepCheckPayload): Promise<DeepCheckResult> {
-    const res = await fetch(`${this.baseUrl}/deepcheck`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({...payload, lang: apiLang(payload.lang)}),
-    });
-    if (!res.ok) {
-      const detail = await res.json().then((b) => b?.detail).catch(() => null);
-      throw new Error(typeof detail === 'string' ? detail : `Deep check failed with status: ${res.status}`);
-    }
-    return res.json();
+  deepcheck(payload: DeepCheckPayload): Promise<DeepCheckResult> {
+    return this.postJson('/deepcheck', {...payload, lang: apiLang(payload.lang)});
   }
 
-  async recovery(sessionId: string, message: string, lang: string): Promise<RecoveryResponse> {
-    const res = await fetch(`${this.baseUrl}/agent/recovery`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({session_id: sessionId, message, lang: apiLang(lang), ui_lang: lang, family_id: getFamilyId()}),
+  recovery(sessionId: string, message: string, lang: string): Promise<RecoveryResponse> {
+    return this.postJson('/agent/recovery', {
+      session_id: sessionId,
+      message,
+      lang: apiLang(lang),
+      ui_lang: lang,
+      family_id: getFamilyId(),
     });
-    if (!res.ok) {
-      throw new Error(`Recovery agent failed: ${res.status}`);
-    }
-    return res.json();
   }
 
-  async report(data: ReportPayload): Promise<{ok: boolean}> {
-    const res = await fetch(`${this.baseUrl}/report`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      // random per-install id: lets the server count distinct reporters without any account or address
-      body: JSON.stringify({...data, reporter_id: getReporterId()}),
-    });
-    if (!res.ok) throw new Error(`Report failed: ${res.status}`);
-    return res.json();
+  report(data: ReportPayload): Promise<{ok: boolean}> {
+    // random per-install id: lets the server count distinct reporters without any account or address
+    return this.postJson('/report', {...data, reporter_id: getReporterId()});
   }
 
   async createFamilyCode(): Promise<{pair_code: string; guardians: string[]}> {
-    const res = await fetch(`${this.baseUrl}/family/code`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({family_id: getFamilyId()}),
+    const data = await this.postJson<{pair_code: string; guardians: string[]; family_id: string}>('/family/code', {
+      family_id: getFamilyId(),
     });
-    if (!res.ok) throw new Error('Could not create a pair code');
-    const data = await res.json();
     setFamilyId(data.family_id);
     return data;
   }
@@ -168,45 +185,38 @@ class RealApi implements SagiApi {
   async notifyFamily(result: CheckResult, lang: string): Promise<boolean> {
     const family_id = getFamilyId();
     if (!family_id) return false;
-    const res = await fetch(`${this.baseUrl}/family/notify`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
+    try {
+      await this.postJson('/family/notify', {
         family_id,
         risk_level: result.risk_level,
         scam_type: result.scam_type,
         stage: result.stage,
         reasons: result.reasons.slice(0, 2),
         lang: apiLang(lang),
-      }),
-    });
-    return res.ok;
+      });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async linkFamily(pairCode: string, fcmToken?: string): Promise<{ok: boolean; guardian_name: string}> {
-    const res = await fetch(`${this.baseUrl}/family/link`, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({pair_code: pairCode, fcm_token: fcmToken}),
+    const data = await this.postJson<{ok: boolean; guardian_name: string; family_id: string}>('/family/link', {
+      pair_code: pairCode,
+      fcm_token: fcmToken,
     });
-    if (!res.ok) throw new Error('Pairing failed');
-    const data = await res.json();
     setFamilyId(data.family_id);
     return data;
   }
 
-  async getFamilyAlerts(): Promise<FamilyAlertItem[]> {
+  getFamilyAlerts(): Promise<FamilyAlertItem[]> {
     const familyId = getFamilyId();
-    if (!familyId) return [];
-    const res = await fetch(`${this.baseUrl}/family/alerts?family_id=${encodeURIComponent(familyId)}`);
-    if (!res.ok) throw new Error('Alert fetch failed');
-    return res.json();
+    if (!familyId) return Promise.resolve([]);
+    return this.request<FamilyAlertItem[]>(`/family/alerts?family_id=${encodeURIComponent(familyId)}`);
   }
 
-  async getStats(): Promise<StatsResult> {
-    const res = await fetch(`${this.baseUrl}/stats`);
-    if (!res.ok) throw new Error('Stats fetch failed');
-    return res.json();
+  getStats(): Promise<StatsResult> {
+    return this.request<StatsResult>('/stats');
   }
 
   connectLiveSocket(

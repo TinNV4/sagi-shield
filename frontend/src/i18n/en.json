@@ -6,6 +6,12 @@
     "offline": "Offline Mode (Local Security Shield Active)",
     "privacy_badge": "Audio stays on-device (Only text patterns analyzed)"
   },
+  "api": {
+    "offline": "No connection. Check the network and try again.",
+    "rate_limited": "Too many requests. Please wait a minute and try again.",
+    "unavailable": "The check could not be completed right now. Please try again shortly.",
+    "failed": "Something went wrong. Please try again."
+  },
   "nav": {
     "more": "More",
     "home": "Home",
@@ -28,7 +34,8 @@
     "done": "Done",
     "loading": "Loading...",
     "copy": "Copy",
-    "open": "Open"
+    "open": "Open",
+    "retry": "Try again"
   },
   "home": {
     "badge_safety": "24/7 Scam Safety Shield",
@@ -249,9 +256,8 @@
       "government": "Public agency (Note: Police NEVER use personal accounts)"
     },
     "fallback_reason": "Instruction to transfer to safe verification account",
-    "fallback_reason_detected": "Suspicious money transfer demand detected.",
-    "fallback_advice": "Stop the transfer immediately and consult bank staff or police.",
-    "fallback_flag": "Transfer Prevention Alert"
+    "error_title": "The check could not be completed",
+    "error_hint": "Nothing was judged. Before paying anything, call the organisation on its official number, never a number the caller gave you."
   },
   "result": {
     "partial_analysis": "Only a basic check could be done just now (the AI analysis did not respond). Please check again in a moment, and do not treat this result as safe.",
@@ -335,7 +341,8 @@
     "checklist_step_police": "Call police hotline #9110 or 110 to file an official crime and fraud report",
     "checklist_step_evidence": "Save screenshots of transfer receipts, chat/SMS messages, and call history logs",
     "checklist_step_family": "Tell trusted family members immediately and do not try to handle the situation alone",
-    "statement_memo_title": "Official Statement Memo for Police & Bank"
+    "statement_memo_title": "Official Statement Memo for Police & Bank",
+    "init_failed": "Could not reach the recovery assistant. The checklist above still applies."
   },
   "family": {
     "title": "Family Link",
@@ -421,7 +428,8 @@
     "time_just_now": "Just now",
     "time_min_ago": "m ago",
     "time_hour_ago": "h ago",
-    "time_day_ago": "d ago"
+    "time_day_ago": "d ago",
+    "load_failed": "Could not load the community data."
   },
   "how": {
     "back_btn": "Back to Home",

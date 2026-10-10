@@ -153,9 +153,35 @@ export function startLiveGuard(
   const SpeechRec = speechRec();
 
   let canProcessLocally = false;
+  // Errors after which another start() would fail the same way: the microphone was refused, the browser blocks
+  // the recognizer, or it has no model for this language. Restarting on these spun in a tight loop
+  // (error -> end -> start -> error ...), so they end the session instead and the UI is told why.
+  const FATAL_ERRORS = new Set(['not-allowed', 'service-not-allowed', 'language-not-supported', 'bad-grammar']);
+  let fatal = false;
+  let lastStartAt = 0;
+  let restartDelay = 0;
+  let restartTimer: ReturnType<typeof setTimeout> | null = null;
   // With a test track: recognize the file. If this browser's start() ignores the argument it would silently
   // listen to the microphone instead, so the UI labels the mode and shows recognizer errors.
-  const startRec = () => (options.audioTrack ? recognition.start(options.audioTrack) : recognition.start());
+  const startRec = () => {
+    lastStartAt = Date.now();
+    return options.audioTrack ? recognition.start(options.audioTrack) : recognition.start();
+  };
+  // Kiosk auto-restart with back-off: a recognizer that ends right after starting (no microphone, a transient
+  // network error in cloud mode) is retried at 0.5 s, 1 s, ... 10 s; one that ran for a while restarts at once.
+  const scheduleRestart = () => {
+    if (restartTimer) clearTimeout(restartTimer);
+    restartDelay = Date.now() - lastStartAt < 2000 ? Math.min(Math.max(restartDelay * 2, 500), 10000) : 0;
+    restartTimer = setTimeout(() => {
+      restartTimer = null;
+      if (!isRunning || isPausedState || fatal || !mayListen()) return;
+      try {
+        startRec();
+      } catch {
+        scheduleRestart();
+      }
+    }, restartDelay);
+  };
 
   if (!SpeechRec && options.onSpeechMode) options.onSpeechMode('blocked');
   if (SpeechRec) {
@@ -184,30 +210,25 @@ export function startLiveGuard(
       };
 
       recognition.onerror = (event: any) => {
-        // Silently recover from common non-fatal speech recognition pauses (e.g. no-speech)
-        if (event.error === 'no-speech' || event.error === 'audio-capture') {
+        const error = String(event.error);
+        // Silently recover from common non-fatal speech recognition pauses (e.g. no-speech); 'aborted' is our own stop()
+        if (error === 'no-speech' || error === 'audio-capture' || error === 'aborted') {
           return;
         }
-        console.warn('SpeechRecognition warning:', event.error);
-        if (options.onSpeechError) options.onSpeechError(String(event.error));
+        console.warn('SpeechRecognition warning:', error);
+        if (FATAL_ERRORS.has(error)) {
+          fatal = true;
+          speechMode = 'blocked';
+          if (options.onSpeechMode) options.onSpeechMode('blocked');
+          if (options.onError) options.onError(new Error(`speech recognition stopped: ${error}`));
+        }
+        if (options.onSpeechError) options.onSpeechError(error);
       };
 
       recognition.onend = () => {
         // Auto-restart while running to maintain continuous guard
         if (options.audioTrack && options.audioTrack.readyState === 'ended') return; // the file is over
-        if (isRunning && !isPausedState && mayListen()) {
-          try {
-            startRec();
-          } catch (e) {
-            setTimeout(() => {
-              if (isRunning && !isPausedState && mayListen()) {
-                try {
-                  startRec();
-                } catch {}
-              }
-            }, 1000);
-          }
-        }
+        if (isRunning && !isPausedState && !fatal && mayListen()) scheduleRestart();
       };
 
       // Start only after the browser CONFIRMS on-device recognition, or after an explicit opt-in.
@@ -235,6 +256,7 @@ export function startLiveGuard(
     stop: () => {
       isRunning = false;
       if (pauseTimeout) clearTimeout(pauseTimeout);
+      if (restartTimer) clearTimeout(restartTimer);
       if (recognition) {
         try {
           recognition.stop();
@@ -245,6 +267,7 @@ export function startLiveGuard(
 
     pause: (ms: number) => {
       isPausedState = true;
+      if (restartTimer) clearTimeout(restartTimer);
       if (recognition) {
         try {
           recognition.stop();
@@ -261,7 +284,7 @@ export function startLiveGuard(
     resume: () => {
       isPausedState = false;
       if (pauseTimeout) clearTimeout(pauseTimeout);
-      if (isRunning && recognition && mayListen()) {
+      if (isRunning && recognition && !fatal && mayListen()) {
         try {
           startRec();
         } catch {}

@@ -1,4 +1,4 @@
-import React, {useEffect, useState} from 'react';
+import React, {Suspense, lazy, useEffect, useState} from 'react';
 import {api, mockApiInstance, PAIR_FROM_LINK} from './api/client';
 import {CheckResult} from './api/types';
 import {BottomNav, TabType} from './components/BottomNav';
@@ -7,20 +7,30 @@ import {Header} from './components/Header';
 import {OnboardingModal} from './components/OnboardingModal';
 import {I18nProvider, useI18n} from './i18n';
 import * as speech from './lib/speak';
-import {BeforeYouPayScreen} from './pages/BeforeYouPayScreen';
-import {CommunityScreen} from './pages/CommunityScreen';
-import {FamilyScreen} from './pages/FamilyScreen';
-import {GuardianViewScreen} from './pages/GuardianViewScreen';
 import {HomeScreen} from './pages/HomeScreen';
-import {HowItWorksScreen} from './pages/HowItWorksScreen';
 import {LiveGuardScreen} from './pages/LiveGuardScreen';
-import {QuickCheckScreen} from './pages/QuickCheckScreen';
-import {RecoveryScreen} from './pages/RecoveryScreen';
-import {ResultScreen} from './pages/ResultScreen';
 import type {CheckInput} from './pages/QuickCheckScreen';
-import {SettingsScreen} from './pages/SettingsScreen';
+
+// Home and Live Guard load with the shell (a kiosk tablet opens straight into the guard); every other screen is its
+// own chunk, fetched on first visit and precached by the service worker, so the first paint on an old tablet is
+// not paying for the charts of the Community screen. Each page module exports one named component.
+const BeforeYouPayScreen = lazy(() => import('./pages/BeforeYouPayScreen').then((m) => ({default: m.BeforeYouPayScreen})));
+const CommunityScreen = lazy(() => import('./pages/CommunityScreen').then((m) => ({default: m.CommunityScreen})));
+const FamilyScreen = lazy(() => import('./pages/FamilyScreen').then((m) => ({default: m.FamilyScreen})));
+const GuardianViewScreen = lazy(() => import('./pages/GuardianViewScreen').then((m) => ({default: m.GuardianViewScreen})));
+const HowItWorksScreen = lazy(() => import('./pages/HowItWorksScreen').then((m) => ({default: m.HowItWorksScreen})));
+const QuickCheckScreen = lazy(() => import('./pages/QuickCheckScreen').then((m) => ({default: m.QuickCheckScreen})));
+const RecoveryScreen = lazy(() => import('./pages/RecoveryScreen').then((m) => ({default: m.RecoveryScreen})));
+const ResultScreen = lazy(() => import('./pages/ResultScreen').then((m) => ({default: m.ResultScreen})));
+const SettingsScreen = lazy(() => import('./pages/SettingsScreen').then((m) => ({default: m.SettingsScreen})));
 
 type FullTabType = TabType | 'result';
+
+const ScreenLoading: React.FC<{label: string}> = ({label}) => (
+  <div className="max-w-3xl mx-auto px-4 py-12 text-center text-gray-500 animate-fade-in" aria-busy="true">
+    <p className="font-bold text-base">{label}</p>
+  </div>
+);
 
 function AppContent() {
   const {lang, t} = useI18n();
@@ -221,6 +231,7 @@ function AppContent() {
 
       {/* Main Content Area */}
       <main className={`flex-1 ${!isKioskMode ? 'pb-24' : 'pb-6'} pt-2`}>
+       <Suspense fallback={<ScreenLoading label={t('common.loading')} />}>
         {currentTab === 'home' && (
           <HomeScreen onNavigate={(tab) => navigateTo(tab)} />
         )}
@@ -305,6 +316,7 @@ function AppContent() {
             onReplayOnboarding={() => setIsOnboardingOpen(true)}
           />
         )}
+       </Suspense>
       </main>
 
       {/* Bottom Navigation Bar (Hidden in Kiosk Mode for clean elderly tablet station) */}

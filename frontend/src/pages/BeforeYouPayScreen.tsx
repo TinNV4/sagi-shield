@@ -19,7 +19,7 @@ import {
   User,
   Users,
 } from 'lucide-react';
-import {api} from '../api/client';
+import {api, describeApiError} from '../api/client';
 import {CheckResult, PrecheckPayload} from '../api/types';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
@@ -50,6 +50,7 @@ export const BeforeYouPayScreen: React.FC<BeforeYouPayScreenProps> = ({
   const [recipientType, setRecipientType] = useState<'person' | 'company' | 'government' | ''>('');
 
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Quick preset shortcuts
   const handleApplyPreset = (presetType: 'police' | 'tuition') => {
@@ -83,25 +84,16 @@ export const BeforeYouPayScreen: React.FC<BeforeYouPayScreenProps> = ({
       lang,
     };
 
+    setErrorMsg(null);
     try {
       const res = await api.precheck(payload);
       setIsLoading(false);
       onPrecheckCompleted(res);
     } catch (e) {
+      // No verdict was reached, so none is shown: an invented "HIGH" with invented community reports would teach
+      // the user that the app cries wolf. The error card says what to do instead (official number, never the caller's).
       setIsLoading(false);
-      // Fallback safe handling
-      onPrecheckCompleted({
-        risk_score: 95,
-        risk_level: 'HIGH',
-        stage: 5,
-        scam_type: 'fake_police',
-        reasons: [t('pay.fallback_reason_detected')],
-        advice: t('pay.fallback_advice'),
-        hotlines: ['#9110', '110'],
-        evidence_flags: [t('pay.fallback_flag')],
-        rule_hits: {},
-        community_hits: 200,
-      });
+      setErrorMsg(describeApiError(e, t));
     }
   };
 
@@ -397,6 +389,21 @@ export const BeforeYouPayScreen: React.FC<BeforeYouPayScreenProps> = ({
             })}
           </div>
 
+          {errorMsg && (
+            <div
+              id="precheck-error"
+              role="alert"
+              className="rounded-2xl border-2 border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-4 space-y-1"
+            >
+              <p className="font-black text-base text-amber-900 dark:text-amber-200 flex items-center gap-2">
+                <AlertOctagon className="w-5 h-5 shrink-0" />
+                {t('pay.error_title')}
+              </p>
+              <p className="text-sm text-amber-900 dark:text-amber-100">{errorMsg}</p>
+              <p className="text-sm text-amber-900 dark:text-amber-100">{t('pay.error_hint')}</p>
+            </div>
+          )}
+
           <div className="pt-3">
             {isLoading ? (
               <div className="w-full min-h-[72px] rounded-2xl bg-amber-600 text-white flex items-center justify-center font-bold text-xl gap-3">
@@ -411,7 +418,7 @@ export const BeforeYouPayScreen: React.FC<BeforeYouPayScreenProps> = ({
                 className="w-full min-h-[72px] rounded-2xl bg-amber-600 hover:bg-amber-700 disabled:bg-gray-300 dark:disabled:bg-gray-800 text-white font-black text-xl sm:text-2xl shadow-xl flex items-center justify-center gap-3 transition"
               >
                 <Shield className="w-7 h-7 text-yellow-200" />
-                <span>{t('pay.btn_submit')}</span>
+                <span>{errorMsg ? t('common.retry') : t('pay.btn_submit')}</span>
               </button>
             )}
           </div>

@@ -11,7 +11,7 @@ import {
   Share2,
   Sparkles,
 } from 'lucide-react';
-import {api} from '../api/client';
+import {api, describeApiError} from '../api/client';
 import {RecoveryChecklistItem} from '../api/types';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
@@ -65,12 +65,19 @@ export const RecoveryScreen: React.FC<RecoveryScreenProps> = ({onBack}) => {
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Initial welcome on mount
+  // Why the last request failed (offline, rate limit, server down). The checklist is local content and stays usable.
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [initAttempt, setInitAttempt] = useState(0);
+
+  // Initial welcome on mount (and on every "try again")
   useEffect(() => {
+    let cancelled = false;
     const initRecovery = async () => {
       setIsSending(true);
+      setErrorMsg(null);
       try {
         const res = await api.recovery(sessionId, 'INIT_RECOVERY', lang);
+        if (cancelled) return;
         setIsSending(false);
         setMessages([
           {
@@ -83,11 +90,16 @@ export const RecoveryScreen: React.FC<RecoveryScreenProps> = ({onBack}) => {
         if (res.checklist) setChecklist((prev) => mergeTicks(prev, res.checklist));
         if (res.draft_statement) setDraftStatement(res.draft_statement);
       } catch (e) {
+        if (cancelled) return;
         setIsSending(false);
+        setErrorMsg(`${t('recovery.init_failed')} ${describeApiError(e, t)}`);
       }
     };
     initRecovery();
-  }, [sessionId, lang]);
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, lang, initAttempt]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({behavior: 'smooth'});
@@ -109,6 +121,7 @@ export const RecoveryScreen: React.FC<RecoveryScreenProps> = ({onBack}) => {
 
     setMessages((prev) => [...prev, newMsg]);
     setIsSending(true);
+    setErrorMsg(null);
 
     try {
       const res = await api.recovery(sessionId, text, lang);
@@ -124,8 +137,10 @@ export const RecoveryScreen: React.FC<RecoveryScreenProps> = ({onBack}) => {
       ]);
       if (res.checklist) setChecklist((prev) => mergeTicks(prev, res.checklist));
       if (res.draft_statement) setDraftStatement(res.draft_statement);
-    } catch {
+    } catch (e) {
       setIsSending(false);
+      setErrorMsg(describeApiError(e, t));
+      setInputMsg(text); // the message was not answered: keep it so one tap sends it again
     }
   };
 
@@ -302,6 +317,25 @@ export const RecoveryScreen: React.FC<RecoveryScreenProps> = ({onBack}) => {
             <div className="flex items-center gap-2 text-xs text-gray-500 italic p-2">
               <span className="animate-spin">⏳</span>
               <span>{t('quick.checking')}</span>
+            </div>
+          )}
+          {errorMsg && !isSending && (
+            <div
+              id="recovery-error"
+              role="alert"
+              className="flex flex-wrap items-center gap-2 rounded-xl border border-amber-300 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-900 dark:text-amber-100"
+            >
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              <span className="flex-1 min-w-[12rem]">{errorMsg}</span>
+              {messages.length === 0 && (
+                <button
+                  id="recovery-retry-btn"
+                  onClick={() => setInitAttempt((n) => n + 1)}
+                  className="min-h-[44px] px-4 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-bold"
+                >
+                  {t('common.retry')}
+                </button>
+              )}
             </div>
           )}
           <div ref={chatEndRef} />

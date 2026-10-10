@@ -22,7 +22,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import {api} from '../api/client';
+import {api, describeApiError} from '../api/client';
 import {StatsResult} from '../api/types';
 import {useI18n} from '../i18n';
 
@@ -30,26 +30,56 @@ export const CommunityScreen: React.FC = () => {
   const {t} = useI18n();
   const [stats, setStats] = useState<StatsResult | null>(null);
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    let cancelled = false;
     const loadStats = async () => {
+      setLoading(true);
+      setErrorMsg(null);
       try {
         const data = await api.getStats();
-        setStats(data);
+        if (!cancelled) setStats(data);
       } catch (err) {
-        console.warn('Failed to load stats:', err);
+        if (!cancelled) setErrorMsg(describeApiError(err, t));
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     };
     loadStats();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [attempt]);
 
-  if (loading || !stats) {
+  if (loading) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-12 text-center text-gray-500 animate-fade-in">
         <div className="animate-spin text-3xl mb-3">📊</div>
         <p className="font-bold text-base">{t('community.loading')}</p>
+      </div>
+    );
+  }
+
+  if (!stats) {
+    // a failed load used to look like loading forever; say what happened and offer another try
+    return (
+      <div
+        id="community-error"
+        role="alert"
+        className="max-w-3xl mx-auto px-4 py-12 text-center text-gray-700 dark:text-gray-200 animate-fade-in space-y-3"
+      >
+        <AlertTriangle className="w-8 h-8 mx-auto text-amber-600" />
+        <p className="font-bold text-base">{t('community.load_failed')}</p>
+        {errorMsg && <p className="text-sm text-gray-500 dark:text-gray-400">{errorMsg}</p>}
+        <button
+          id="community-retry-btn"
+          onClick={() => setAttempt((n) => n + 1)}
+          className="min-h-[48px] px-6 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold"
+        >
+          {t('common.retry')}
+        </button>
       </div>
     );
   }

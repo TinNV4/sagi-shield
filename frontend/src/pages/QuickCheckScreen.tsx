@@ -11,7 +11,7 @@ import {
   AlertCircle,
   CheckCircle2,
 } from 'lucide-react';
-import {api} from '../api/client';
+import {api, describeApiError} from '../api/client';
 import {CheckResult} from '../api/types';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
@@ -157,9 +157,9 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
         result,
         activeTab === 'link' ? {url: linkUrl} : activeTab === 'text' ? {text: inputText} : activeTab === 'phone' ? {phone: phoneNumber.trim()} : {}
       );
-    } catch (err: any) {
+    } catch (err) {
       setIsLoading(false);
-      setErrorMsg(err.message || t('quick.error_general'));
+      setErrorMsg(describeApiError(err, t));
     }
   };
 

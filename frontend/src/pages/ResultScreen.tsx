@@ -14,7 +14,7 @@ import {
   Eye,
   Send,
 } from 'lucide-react';
-import {api} from '../api/client';
+import {api, describeApiError} from '../api/client';
 import {CheckResult, DeepCheckResult} from '../api/types';
 import {KillChainBar} from '../components/KillChainBar';
 import {RiskMeter} from '../components/RiskMeter';
@@ -64,8 +64,8 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
     setDeepError('');
     try {
       setDeep(await api.deepcheck({lang, url: checkInput.url, text: checkInput.text, org: deepOrg.trim() || undefined}));
-    } catch (err: any) {
-      setDeepError(err.message || t('result.deep_error'));
+    } catch (err) {
+      setDeepError(describeApiError(err, t));
     } finally {
       setDeepBusy(false);
     }

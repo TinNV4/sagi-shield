@@ -6,6 +6,12 @@
     "offline": "Ngoại tuyến (Lá chắn bảo vệ cục bộ đang bật)",
     "privacy_badge": "Âm thanh không gửi ra ngoài (Chỉ xử lý văn bản trên máy)"
   },
+  "api": {
+    "offline": "Không có kết nối mạng. Hãy kiểm tra mạng và thử lại.",
+    "rate_limited": "Quá nhiều yêu cầu. Vui lòng đợi một phút rồi thử lại.",
+    "unavailable": "Hiện chưa thể kiểm tra. Vui lòng thử lại sau ít phút.",
+    "failed": "Đã xảy ra lỗi. Vui lòng thử lại."
+  },
   "nav": {
     "more": "Thêm",
     "home": "Trang chủ",
@@ -28,7 +34,8 @@
     "done": "Hoàn tất",
     "loading": "Đang tải...",
     "copy": "Sao chép",
-    "open": "Mở"
+    "open": "Mở",
+    "retry": "Thử lại"
   },
   "home": {
     "badge_safety": "Lá chắn an toàn phòng chống lừa đảo 24/7",
@@ -249,9 +256,8 @@
       "government": "Cơ quan nhà nước (Lưu ý: Công an không bao giờ dùng tài khoản cá nhân)"
     },
     "fallback_reason": "Yêu cầu chuyển tiền vào tài khoản an toàn để kiểm tra",
-    "fallback_reason_detected": "Phát hiện yêu cầu chuyển tiền đáng ngờ bất thường.",
-    "fallback_advice": "Dừng ngay việc chuyển khoản và liên hệ ngân hàng hoặc công an để được hỗ trợ.",
-    "fallback_flag": "Cảnh báo dừng chuyển tiền"
+    "error_title": "Chưa kiểm tra được",
+    "error_hint": "Chưa có kết luận nào. Trước khi trả tiền, hãy gọi cho cơ quan theo số điện thoại chính thức, không gọi số do người kia đưa."
   },
   "result": {
     "partial_analysis": "Hiện chỉ kiểm tra được ở mức cơ bản (phần phân tích AI chưa phản hồi). Hãy thử lại sau ít phút và đừng coi kết quả này là an toàn.",
@@ -335,7 +341,8 @@
     "checklist_step_police": "Gọi số công an khẩn cấp 113 hoặc đường dây nóng phòng chống tội phạm công nghệ cao để nộp đơn trình báo",
     "checklist_step_evidence": "Chụp ảnh lưu lại biên lai chuyển khoản, ảnh chụp đoạn chat, tin nhắn SMS và nhật ký cuộc gọi",
     "checklist_step_family": "Báo ngay cho người thân trong gia đình, không tự giải quyết một mình và nhờ người thân hỗ trợ",
-    "statement_memo_title": "Bản ghi nhớ khai báo với Công an & Ngân hàng"
+    "statement_memo_title": "Bản ghi nhớ khai báo với Công an & Ngân hàng",
+    "init_failed": "Không kết nối được với trợ lý khắc phục. Danh sách việc cần làm ở trên vẫn áp dụng."
   },
   "family": {
     "title": "Kết nối người thân",
@@ -421,7 +428,8 @@
     "time_just_now": "Vừa xong",
     "time_min_ago": " phút trước",
     "time_hour_ago": " giờ trước",
-    "time_day_ago": " ngày trước"
+    "time_day_ago": " ngày trước",
+    "load_failed": "Không tải được dữ liệu cộng đồng."
   },
   "how": {
     "back_btn": "Về trang chủ",
