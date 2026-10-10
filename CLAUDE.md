@@ -91,6 +91,7 @@ Fusion (`fuse()`): a hard combo is final; otherwise `score = c·LLM + (1−c)·r
 - `app/guard.py`: per-client rate limit (`RATE_LIMIT_PER_MIN`, default 30, 0 = off; tests run with 0 via `tests/conftest.py`) and the only access log - uvicorn's is disabled because it prints IPs and query strings (`family_id` is a secret).
 - On this machine `grep -r` in Git Bash hangs; use the Grep tool. `gcloud` lives in `%LOCALAPPDATA%\Google\Cloud SDK\google-cloud-sdk\bin` and may be missing from PATH.
 - API `lang` accepts only `ja` / `vi` (the language packs); the UI's English mode must still send one of those.
+- **Prompts name the output language with `risk_engine.language_name()`, never a bare code (2026-10-10):** "in language: vi" let Gemini answer in ASCII-folded Vietnamese ("Yeu cau chuyen tien vao tai khoan an toan") whenever the input carried few accents (STT, a form field). The judge, the recovery agent and the deep check all go through it; the vi name says "with full diacritics". Before You Pay sends the chosen reason's ja / vi label, not its option id.
 
 ## Constraints
 

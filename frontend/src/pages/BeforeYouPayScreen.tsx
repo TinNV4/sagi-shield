@@ -22,6 +22,8 @@ import {
 import {api, describeApiError} from '../api/client';
 import {CheckResult, PrecheckPayload} from '../api/types';
 import {useI18n} from '../i18n';
+import ja from '../i18n/ja.json';
+import vi from '../i18n/vi.json';
 import * as speech from '../lib/speak';
 
 interface BeforeYouPayScreenProps {
@@ -72,10 +74,13 @@ export const BeforeYouPayScreen: React.FC<BeforeYouPayScreenProps> = ({
     speech.warmUp();
     setIsLoading(true);
 
+    // The engine reads this text with the ja / vi language pack, so send the chosen reason in that language, never its
+    // option id ("safe_account" matched no rule and gave the model an English token to reason about).
+    const market = lang === 'vi' ? vi : ja;
     const effectiveReason =
       customReason.trim() ||
-      whyReason ||
-      t('pay.fallback_reason');
+      (whyReason && market.pay.why[whyReason as keyof typeof market.pay.why]) ||
+      market.pay.fallback_reason;
 
     const payload: PrecheckPayload = {
       who_asked: whoAsked || 'stranger',

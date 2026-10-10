@@ -7,10 +7,18 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "core"))
 from gen_dataset import SEED  # noqa: E402
-from risk_engine import (HARD_COMBOS, LiveTracker, LlmVerdict, Stage, analyze, fuse, is_reporting,  # noqa: E402
-                         level, rule_score, rule_stage, rule_stages)
+from risk_engine import (HARD_COMBOS, SYSTEM_PROMPT, LiveTracker, LlmVerdict, Stage, analyze, fuse,  # noqa: E402
+                         is_reporting, language_name, level, rule_score, rule_stage, rule_stages)
 
 LINKS = [s for s in Stage if s != Stage.NONE]
+
+
+def test_prompts_spell_out_the_language_with_diacritics():
+    # Seen in the UI: "Yeu cau chuyen tien vao tai khoan an toan" - a bare code in the prompt let the model drop accents
+    assert "diacritics" in language_name("vi") and "có dấu" in language_name("vi")
+    assert language_name("ja") == "Japanese" and language_name(None) == "Japanese"
+    assert "language: {lang}" not in SYSTEM_PROMPT
+    assert "có dấu" in SYSTEM_PROMPT.format(lang=language_name("vi"))
 
 
 def rules(text, lang="ja"):

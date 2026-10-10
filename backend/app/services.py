@@ -120,7 +120,7 @@ DEEP_PROMPT = """You are helping a scam-detection tool. Search the web for publi
 Subjects: {subjects}
 Rules: rely only on what the search returns; do not open or describe the sites themselves; a scammer may reuse a
 legitimate brand name, so a well-known brand being mentioned is not evidence by itself.
-Answer in the language with code "{lang}". First line exactly "VERDICT: reported" if at least one credible public
+Answer in {lang}. First line exactly "VERDICT: reported" if at least one credible public
 report names a subject as scam or phishing, else "VERDICT: not_found". Then 2-3 short sentences for an elderly reader:
 what was found, and that finding nothing is not proof of safety. No URLs in the text."""
 
@@ -130,10 +130,10 @@ def deep_check(subjects: list[str], lang: str) -> DeepCheck | None:
     Never called with phone numbers (PII) and never fetches the suspicious site itself. None = unavailable."""
     try:
         from google.genai import types
-        from risk_engine import safety_settings
+        from risk_engine import language_name, safety_settings
         resp = _generate(
             model=_model("GEMINI_DEEP_MODEL"),
-            contents=DEEP_PROMPT.format(subjects=", ".join(subjects), lang=lang),
+            contents=DEEP_PROMPT.format(subjects=", ".join(subjects), lang=language_name(lang)),
             config=types.GenerateContentConfig(tools=[types.Tool(google_search=types.GoogleSearch())],
                                                temperature=0.0,
                                                thinking_config=types.ThinkingConfig(thinking_level="low"),
