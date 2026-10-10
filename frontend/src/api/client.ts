@@ -118,7 +118,7 @@ const kindOf = (status: number): ApiErrorKind =>
 // ==========================================
 // REAL API IMPLEMENTATION
 // ==========================================
-class RealApi implements SagiApi {
+export class RealApi implements SagiApi {
   readonly isMock = false;
   private baseUrl: string;
 
