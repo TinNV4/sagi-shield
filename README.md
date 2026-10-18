@@ -156,3 +156,9 @@ on a Windows machine (offline). Then either:
 - Live Guard → **Test tools** - plays a file through the same on-device recognizer as the microphone
   (Chrome 139+), or lets you type what the caller says line by line;
 - or simply play a file on another device next to the microphone - that is the real product setup.
+
+## License
+
+Copyright 2026 Tin Nguyen and Team YM. Licensed under the [Apache License, Version 2.0](LICENSE); see also
+[NOTICE](NOTICE). The police-published recordings used for private evaluation are not in this repository and are not
+covered by this license.
