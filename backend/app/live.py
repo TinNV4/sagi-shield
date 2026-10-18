@@ -72,15 +72,26 @@ async def live(ws: WebSocket):
     tracker.prior_precursor = ws.query_params.get("prior") == "precursor"
     family_id = ws.query_params.get("family_id")
     state = {"session": uuid.uuid4().hex[:12], "spoken": False, "last_llm": float("-inf"), "task": None,  # -inf = never: monotonic() is small on a freshly booted machine
-             "scam_type": "unknown", "reasons": [], "unseen": 0, "started": time.monotonic(), "opening": [], "lines": 0, "looks": 0}
+             "scam_type": "unknown", "reasons": [], "unseen": 0, "started": time.monotonic(), "opening": [], "lines": 0, "looks": 0,
+             "max_score": 0, "max_level": "LOW", "alarm_line": None}
+
+    def end_call():
+        # one record per call, levels and counts only: field tests need a denominator for false alarms, and a short
+        # ordinary call may end before the judge was ever asked
+        if state["lines"]:
+            log_verdict("live_call", session=state["session"], lang=lang, gate="periodic" if periodic else "rules",
+                        lines=state["lines"], looks=state["looks"], max_level=state["max_level"], max_score=state["max_score"],
+                        alarm_line=state["alarm_line"], precursor=tracker.precursor, prior=tracker.prior_precursor,
+                        duration_s=round(time.monotonic() - state["started"], 1))
 
     def reset():
+        end_call()
         tracker.reset()
         window.clear()
         if state["task"]:
             state["task"].cancel()
         state.update(session=uuid.uuid4().hex[:12], spoken=False, last_llm=float("-inf"), task=None, scam_type="unknown", reasons=[],
-                     unseen=0, started=time.monotonic(), opening=[], lines=0, looks=0)
+                     unseen=0, started=time.monotonic(), opening=[], lines=0, looks=0, max_score=0, max_level="LOW", alarm_line=None)
 
     def judge_text() -> str:
         # once the first lines have rolled out of the window they come back on top: the kill chain starts with the
@@ -108,9 +119,15 @@ async def live(ws: WebSocket):
         first_high = lv == "HIGH" and not state["spoken"]
         if first_high:
             state["spoken"], msg["speak"] = True, pack["speak"]
+        if score >= state["max_score"]:
+            state["max_score"], state["max_level"] = score, lv
         await ws.send_json(msg)  # the person on the phone is warned first; the family push must never delay it
         if first_high:
+            state["alarm_line"] = state["lines"]
             log_event("live_alarm", lang=lang, source="live", risk_level=lv, risk_score=score, scam_type=state["scam_type"], stage=tracker.max_stage)
+            log_verdict("live_alarm", session=state["session"], lang=lang, line=state["lines"], level=lv, score=score,
+                        stage=tracker.max_stage, scam_type=state["scam_type"], trigger=trigger or None,
+                        seconds=round(time.monotonic() - state["started"], 1))
         if first_high and family_id:
             reasons = state["reasons"] or engine.rule_reasons(tracker.hits, lang)
             await asyncio.to_thread(alert_family, family_id, {**msg, "scam_type": state["scam_type"], "reasons": reasons}, lang)
@@ -122,7 +139,8 @@ async def live(ws: WebSocket):
         model = model_id("GEMINI_LIVE_MODEL")
         t0 = time.monotonic()
         v = await asyncio.to_thread(engine.llm_verdict, text, lang, None, model, ctx)
-        look = {"session": session, "lang": lang, "look": state["looks"], "trigger": trigger, "gate": "periodic" if periodic else "rules",
+        look = {"session": session, "lang": lang, "look": state["looks"], "line": state["lines"], "trigger": trigger,
+                "gate": "periodic" if periodic else "rules",
                 "window_lines": len(window), "pinned": with_context and state["lines"] > WINDOW_LINES, "call_state": ctx,
                 "rules": {"score": engine.rule_score(tracker.hits, tracker.reporting, combos=False),
                           "hits": {engine.Stage(s).name: m for s, m in tracker.hits.items() if m},
@@ -201,5 +219,6 @@ async def live(ws: WebSocket):
     except WebSocketDisconnect:
         pass
     finally:
+        end_call()
         if state["task"]:
             state["task"].cancel()

@@ -79,6 +79,9 @@ alert · recovery agent with a ticked checklist · Looker Studio dashboard (labe
 ## 5. Honest limits (appendix slide - judges ask)
 
 - Never run with a real microphone yet: on-device STT packs for ja-JP / vi-VN in Chrome, and FCM push.
+  Field-test protocol, scripts, observer sheet and report tool: `docs/REAL_CALL_TEST.md` (written 2026-10-18,
+  not run yet). The Claude desktop browser pane reports on-device recognition `unavailable` for every language,
+  so the run needs a real Chrome (Android or desktop).
 - No corpus of real *benign phone calls*; false-alarm numbers come from audiobooks and synthetic hard negatives.
 - One real refund-scam recording stays below the alarm in the live path; late alarms on some long calls.
 - Evaluation data is synthetic except the police recordings; Vietnamese has no real recordings at all.
@@ -89,5 +92,5 @@ alert · recovery agent with a ticked checklist · Looker Studio dashboard (labe
 - [ ] Team of 2-4 registered (solo entries are not accepted) - deadline to re-check on aibuildercup.com (10-04 vs 10-11)
 - [ ] Public GitHub repository (no remote configured yet)
 - [ ] Demo video ≤ 3 min (`VIDEO_SCRIPT.md`) · deck PDF (`DECK_OUTLINE.md` + this file)
-- [ ] Live Guard tried with a real microphone in Chrome
+- [ ] Live Guard tried with a real microphone in Chrome - run `docs/REAL_CALL_TEST.md`, then quote its counts
 - [ ] `min-instances=1` and budget alert on demo day

@@ -54,3 +54,28 @@ def test_live_look_records_rules_verdict_and_fusion(tmp_path, monkeypatch):
     assert rec["llm"]["scam_type"] == "fake_police" and rec["llm"]["reasons"] and rec["llm"]["model"]
     assert rec["rules"]["hits"] and rec["score"] >= 70 and rec["level"] == "HIGH" and "latency_ms" in rec
     assert "text" not in rec and "call_state" in rec        # state travels, transcript does not
+    assert rec["line"] >= 4                                 # how far into the call the judge was asked
+
+
+def test_every_call_leaves_one_record_and_the_alarm_names_its_sentence(tmp_path, monkeypatch):
+    # field tests count false alarms per call: a call that never reached the judge must still be counted
+    monkeypatch.setenv("VERDICT_LOG", str(tmp_path / "v.jsonl"))
+    scam = ["警視庁の者です", "あなたの口座が犯罪に使われています", "これからLINEで逮捕状を送ります", "すぐに確認してください"]
+    with TestClient(main.app).websocket_connect("/ws/live?lang=ja") as ws:
+        for line in scam:
+            ws.send_json({"type": "transcript", "text": line, "final": True})
+            first = ws.receive_json()
+        ws.send_json({"type": "reset"})
+        assert ws.receive_json() == {"event": "session_reset"}
+        for line in ["もしもし母さん？", "日曜日に行くね"]:
+            ws.send_json({"type": "transcript", "text": line, "final": True})
+            second = ws.receive_json()
+    time.sleep(0.3)                                                     # the last call is closed by the disconnect
+    recs = read(tmp_path / "v.jsonl")
+    alarms = [r for r in recs if r["kind"] == "live_alarm"]
+    calls = [r for r in recs if r["kind"] == "live_call"]
+    assert [(a["session"], a["line"], a["level"]) for a in alarms] == [(first["session_id"], 4, "HIGH")]
+    assert [(c["session"], c["lines"], c["max_level"]) for c in calls] == [
+        (first["session_id"], 4, "HIGH"), (second["session_id"], 2, "LOW")]
+    assert calls[0]["alarm_line"] == 4 and "alarm_line" not in calls[1] and calls[1]["duration_s"] >= 0
+    assert "警視庁" not in json.dumps(recs, ensure_ascii=False)          # counts and levels only, never the words
