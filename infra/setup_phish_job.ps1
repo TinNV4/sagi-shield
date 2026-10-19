@@ -1,5 +1,6 @@
 # Monthly reload of the JPCERT/CC phishing URL list (replaces running tools/load_phish_list.py by hand).
-# A Cloud Run Job runs `python -m app.phish_list --months 2` in the API image as sagi-api (Firestore access);
+# A Cloud Run Job runs `python -m app.phish_list --months 2` in the API image as sagi-api (Firestore access; HASH_KEY
+# is mounted only because app/storage.py refuses STORE=firestore without it - phishing keys are plain sha256);
 # Cloud Scheduler starts it on the 15th of every month (JPCERT/CC publishes the previous month's CSV in its first
 # days). Reloads are idempotent: URLs already stored are skipped. Idempotent script: re-running updates both jobs.
 #
@@ -31,6 +32,7 @@ $runtime = "sagi-api@$Project.iam.gserviceaccount.com"
 gcloud run jobs deploy $Job --project $Project --region $Region --image $Image --service-account $runtime `
     --command python --args="-m,app.phish_list,--months,2" `
     --set-env-vars "STORE=firestore,GOOGLE_CLOUD_PROJECT=$Project" `
+    --set-secrets "HASH_KEY=sagi-hash-key:latest" `
     --tasks 1 --max-retries 1 --task-timeout 15m --cpu 1 --memory 512Mi --quiet
 Check "deploy the Cloud Run job"
 

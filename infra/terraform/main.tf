@@ -261,11 +261,20 @@ resource "google_cloud_run_v2_job" "phish_loader" {
           name  = "GOOGLE_CLOUD_PROJECT"
           value = var.project
         }
+        env { # app/storage.py refuses STORE=firestore without it (phishing keys themselves are plain sha256)
+          name = "HASH_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.hash_key.secret_id
+              version = "latest"
+            }
+          }
+        }
       }
     }
   }
 
-  depends_on = [google_project_iam_member.api_roles]
+  depends_on = [google_project_iam_member.api_roles, google_secret_manager_secret_iam_member.hash_key_reader]
 }
 
 # the scheduler's identity can start this one job and nothing else
