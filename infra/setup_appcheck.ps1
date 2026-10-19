@@ -60,8 +60,13 @@ $config = Api GET "$fb/projects/$Project/webApps/$($app.appId)/config"
 Write-Host "Web app: $($config.appId)"
 
 # 3. score-based reCAPTCHA Enterprise key (App Check refuses checkbox keys); never localhost on a production key
-$url = gcloud run services describe $Service --project $Project --region $Region --format "value(status.url)"; Check "read the service URL"
-$hosts = @(([Uri]$url).Host) + $Domains | Select-Object -Unique
+# every URL the service answers on: the project-number one (run.googleapis.com/urls) is the one people are given,
+# status.url only holds the older hash-style host - a key without the visited host yields no token there
+$svc = gcloud run services describe $Service --project $Project --region $Region --format json | ConvertFrom-Json
+Check "read the service URLs"
+$urls = $svc.metadata.annotations.'run.googleapis.com/urls'
+$urls = if ($urls) { @($urls | ConvertFrom-Json) } else { @($svc.status.url) }
+$hosts = @($urls | ForEach-Object { ([Uri]$_).Host }) + $Domains | Select-Object -Unique
 $key = gcloud recaptcha keys list --project $Project --format json | ConvertFrom-Json |
     Where-Object { $_.displayName -eq $KeyName } | Select-Object -First 1
 if ($key) {

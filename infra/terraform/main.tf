@@ -350,7 +350,7 @@ resource "google_recaptcha_enterprise_key" "app_check" {
   display_name = "sagi-shield-appcheck"
   web_settings {
     integration_type = "SCORE"
-    allowed_domains  = concat([trimprefix(google_cloud_run_v2_service.api.uri, "https://")], var.app_check_domains)
+    allowed_domains  = concat([for u in google_cloud_run_v2_service.api.urls : trimprefix(u, "https://")], var.app_check_domains)
   }
   depends_on = [google_project_service.apis]
 }

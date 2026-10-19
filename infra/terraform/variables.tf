@@ -67,7 +67,7 @@ variable "app_check_mode" {
 }
 
 variable "app_check_domains" {
-  description = "Extra hosts for the reCAPTCHA key (a custom domain); the Cloud Run host is always included"
+  description = "Extra hosts for the reCAPTCHA key (a custom domain); every Cloud Run URL of the service is always included"
   type        = list(string)
   default     = []
 }
