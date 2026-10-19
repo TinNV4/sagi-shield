@@ -12,6 +12,7 @@ import {
   RecoveryResponse,
   StatsResult,
 } from './types';
+import {APP_CHECK_HEADER, appCheckToken} from '../lib/appCheck';
 
 export interface SagiApi {
   isMock: boolean;
@@ -85,7 +86,7 @@ function setFamilyId(id: string) {
 // ==========================================
 
 /** Why a request failed, in terms a screen can translate: the raw fetch error ("Failed to fetch") never reaches the user. */
-export type ApiErrorKind = 'offline' | 'rate_limited' | 'unavailable' | 'failed';
+export type ApiErrorKind = 'offline' | 'rate_limited' | 'unavailable' | 'unverified' | 'failed';
 
 export class ApiError extends Error {
   constructor(
@@ -105,15 +106,25 @@ export const apiErrorKey = (err: unknown): string => {
   return `api.${kind}`;
 };
 
-/** The sentence to show: the server's own wording when it wrote one (429 / 503), otherwise the translated kind. */
+/** The sentence to show: the server's own wording when it wrote one (429 / 503), otherwise the translated kind.
+ *  A refused report (403, App Check) always gets the translated sentence: it is the one users may actually see. */
 export const describeApiError = (err: unknown, t: (key: string) => string): string =>
-  err instanceof ApiError && err.detail ? err.detail : t(apiErrorKey(err));
+  err instanceof ApiError && err.detail && err.kind !== 'unverified' ? err.detail : t(apiErrorKey(err));
 
 /** True while the browser reports no network: the screens use it to say "offline" before the first click. */
 export const isOffline = (): boolean => typeof navigator !== 'undefined' && navigator.onLine === false;
 
 const kindOf = (status: number): ApiErrorKind =>
-  status === 429 ? 'rate_limited' : status === 503 || status === 502 || status === 504 ? 'unavailable' : 'failed';
+  status === 429
+    ? 'rate_limited'
+    : status === 403
+      ? 'unverified'
+      : status === 503 || status === 502 || status === 504
+        ? 'unavailable'
+        : 'failed';
+
+/** Which App Check token a request carries: POSTs a session token, a report a one-time token, reads none. */
+type AppCheckUse = 'session' | 'limited' | 'none';
 
 // ==========================================
 // REAL API IMPLEMENTATION
@@ -128,7 +139,14 @@ export class RealApi implements SagiApi {
 
   /** One fetch for every route: a dropped connection becomes ApiError('offline'), a non-2xx keeps the server's
    *  `detail` sentence when there is one. JSON bodies get their header; FormData sets its own boundary. */
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  private async request<T>(path: string, init: RequestInit = {}, appCheck?: AppCheckUse): Promise<T> {
+    const use = appCheck ?? (init.method === 'POST' ? 'session' : 'none');
+    const token = use === 'none' ? null : await appCheckToken(use === 'limited');
+    if (token) {
+      const headers = new Headers(init.headers);
+      headers.set(APP_CHECK_HEADER, token);
+      init = {...init, headers};
+    }
     let res: Response;
     try {
       res = await fetch(`${this.baseUrl}${path}`, init);
@@ -142,8 +160,9 @@ export class RealApi implements SagiApi {
     return res.json();
   }
 
-  private postJson<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>(path, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)});
+  private postJson<T>(path: string, body: unknown, appCheck?: AppCheckUse): Promise<T> {
+    const init = {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)};
+    return this.request<T>(path, init, appCheck);
   }
 
   check(formData: FormData): Promise<CheckResult> {
@@ -171,7 +190,8 @@ export class RealApi implements SagiApi {
 
   report(data: ReportPayload): Promise<{ok: boolean}> {
     // random per-install id: lets the server count distinct reporters without any account or address
-    return this.postJson('/report', {...data, reporter_id: getReporterId()});
+    // a one-time App Check token: the server consumes it, so a captured request cannot be replayed into many reports
+    return this.postJson('/report', {...data, reporter_id: getReporterId()}, 'limited');
   }
 
   async createFamilyCode(): Promise<{pair_code: string; guardians: string[]}> {
@@ -244,13 +264,16 @@ export class RealApi implements SagiApi {
     let setThisCall = false; // did THIS call set the set-up flag? (only then may it clear it again)
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-    const connect = () => {
+    const connect = async () => {
       if (isClosed) return;
       let gate = '';
       try {
         gate = localStorage.getItem('sagi_llm_gate') === 'rules' ? '&gate=rules' : ''; // Settings > strict privacy
       } catch {}
-      ws = new WebSocket(wsUrl + priorParam() + gate);
+      // a browser WebSocket cannot set headers: the App Check token rides in the query (never logged by the server)
+      const token = await appCheckToken();
+      if (isClosed) return;
+      ws = new WebSocket(wsUrl + priorParam() + gate + (token ? `&appcheck=${encodeURIComponent(token)}` : ''));
       ws.onopen = () => {
         reconnectDelay = 1000;
         callbacks.onStatus('connected');
@@ -280,12 +303,12 @@ export class RealApi implements SagiApi {
       ws.onclose = () => {
         if (isClosed) return;
         callbacks.onStatus('reconnecting');
-        reconnectTimer = setTimeout(connect, reconnectDelay);
+        reconnectTimer = setTimeout(() => void connect(), reconnectDelay);
         reconnectDelay = Math.min(reconnectDelay * 2, 15000);
       };
     };
     callbacks.onStatus('reconnecting');
-    connect();
+    void connect();
 
     return {
       sendTranscript: (text: string) => {

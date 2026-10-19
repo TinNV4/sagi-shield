@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import {startAppCheck} from './lib/appCheck';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
@@ -21,3 +22,6 @@ if ('serviceWorker' in navigator) {
     }
   });
 }
+
+// App Check: load the Firebase SDK and reCAPTCHA after the page, so the first check already has a token ready
+window.addEventListener('load', () => void startAppCheck(), {once: true});

@@ -10,3 +10,12 @@ output "service_account" {
 output "bq_table" {
   value = "${var.project}.${google_bigquery_dataset.sagi.dataset_id}.${google_bigquery_table.events.table_id}"
 }
+
+output "pwa_build_env" {
+  description = "Public values the PWA is built with (repository variables for deploy.yml)"
+  value = {
+    VITE_FIREBASE_API_KEY   = data.google_firebase_web_app_config.pwa.api_key
+    VITE_FIREBASE_APP_ID    = google_firebase_web_app.pwa.app_id
+    VITE_RECAPTCHA_SITE_KEY = google_recaptcha_enterprise_key.app_check.name
+  }
+}

@@ -49,6 +49,11 @@ jobs:
         working-directory: frontend
         env:
           VITE_API_BASE: same-origin
+          # Firebase App Check (infra/setup_appcheck.ps1 sets these public values); unset -> the PWA sends no token
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.GCP_PROJECT }}
+          VITE_RECAPTCHA_SITE_KEY: ${{ vars.VITE_RECAPTCHA_SITE_KEY }}
       - run: rm -rf backend/static && cp -r frontend/dist backend/static
 
       - uses: google-github-actions/auth@v2
@@ -72,12 +77,14 @@ jobs:
           GEMINI_CONFIRM_MODEL: ${{ vars.GEMINI_CONFIRM_MODEL }}
           GEMINI_DEEP_MODEL: ${{ vars.GEMINI_DEEP_MODEL }}
           STT_BATCH_MODEL: ${{ vars.STT_BATCH_MODEL }}
+          APPCHECK: ${{ vars.APPCHECK }}  # off | monitor | enforce (backend/app/appcheck.py); unset -> off
+          RATE_LIMIT_UNVERIFIED_PER_MIN: ${{ vars.RATE_LIMIT_UNVERIFIED_PER_MIN }}
         run: |
           # one --set-env-vars only (gcloud keeps the last); "^@^" makes @ the separator so CORS_ORIGINS may hold commas
           ENV="GOOGLE_GENAI_USE_ENTERPRISE=true@GOOGLE_CLOUD_PROJECT=${{ vars.GCP_PROJECT }}@GOOGLE_CLOUD_LOCATION=global"
           ENV="$ENV@STORE=firestore@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=*"
           # models: backend/core/model_ids.py holds the defaults; a repository variable of the same name overrides one
-          for job in GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL; do
+          for job in GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL                      APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN; do
             if [ -n "${!job:-}" ]; then ENV="$ENV@$job=${!job}"; fi
           done
           # both secrets exist in this project and are read by the runtime account sagi-api, not by the deployer

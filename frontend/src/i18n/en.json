@@ -10,6 +10,7 @@
     "offline": "No connection. Check the network and try again.",
     "rate_limited": "Too many requests. Please wait a minute and try again.",
     "unavailable": "The check could not be completed right now. Please try again shortly.",
+    "unverified": "Could not confirm this was sent from the app. Reload the page and try again.",
     "failed": "Something went wrong. Please try again."
   },
   "nav": {
@@ -446,7 +447,7 @@
     "step3_desc": "Triggers a full-screen alert and loud voice prompt ('Hang up the phone!') before money can be wired.",
     "step3_badge": "Transfer Intercept",
     "privacy_policy_title": "Strict Privacy Policy",
-    "privacy_desc": "Sagi Shield never records or stores calls. Speech is turned into text on your device; only text with numbers hidden reaches our server, where AI checks it and discards it. Cloud speech recognition is used only if you turn it on.",
+    "privacy_desc": "Sagi Shield never records or stores calls. Speech is turned into text on your device; only text with numbers hidden reaches our server, where AI checks it and discards it. Cloud speech recognition is used only if you turn it on. To keep bots out, the app has Google reCAPTCHA check the browser (no call content is involved).",
     "privacy_badge_1": "No audio recordings saved",
     "privacy_badge_2": "Auto-wiped when call ends",
     "privacy_badge_3": "Family alerted only upon high danger",

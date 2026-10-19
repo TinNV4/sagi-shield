@@ -10,6 +10,7 @@
     "offline": "Không có kết nối mạng. Hãy kiểm tra mạng và thử lại.",
     "rate_limited": "Quá nhiều yêu cầu. Vui lòng đợi một phút rồi thử lại.",
     "unavailable": "Hiện chưa thể kiểm tra. Vui lòng thử lại sau ít phút.",
+    "unverified": "Chưa xác nhận được yêu cầu này gửi từ ứng dụng. Hãy tải lại trang rồi thử lại.",
     "failed": "Đã xảy ra lỗi. Vui lòng thử lại."
   },
   "nav": {
@@ -446,7 +447,7 @@
     "step3_desc": "Khi phát hiện rủi ro cao, máy sẽ phát giọng nói 'Hãy cúp máy ngay' và gửi cảnh báo đến người thân.",
     "step3_badge": "Chặn đứng trước khi chuyển",
     "privacy_policy_title": "Chính sách bảo mật nghiêm ngặt",
-    "privacy_desc": "Sagi Shield không ghi âm hay lưu cuộc gọi. Giọng nói được chuyển thành chữ trên thiết bị; chỉ văn bản đã ẩn số được gửi lên máy chủ để AI kiểm tra rồi bỏ đi. Nhận dạng giọng nói qua đám mây chỉ được dùng khi bạn tự bật.",
+    "privacy_desc": "Sagi Shield không ghi âm hay lưu cuộc gọi. Giọng nói được chuyển thành chữ trên thiết bị; chỉ văn bản đã ẩn số được gửi lên máy chủ để AI kiểm tra rồi bỏ đi. Nhận dạng giọng nói qua đám mây chỉ được dùng khi bạn tự bật. Để chặn bot lạm dụng, ứng dụng nhờ reCAPTCHA của Google kiểm tra trình duyệt (không gửi nội dung cuộc gọi).",
     "privacy_badge_1": "Không lưu dữ liệu âm thanh",
     "privacy_badge_2": "Tự động hủy sau khi cúp máy",
     "privacy_badge_3": "Chỉ báo người thân khi nguy cấp",

@@ -8,7 +8,9 @@ REGION="${REGION:-asia-northeast1}"
 SERVICE="${SERVICE:-sagi-shield-api}"
 cd "$(dirname "$0")/../frontend"
 if [ -z "${SKIP_FRONTEND:-}" ]; then               # SKIP_FRONTEND=1: backend-only change, keep backend/static as built
-  VITE_API_BASE=same-origin npm run build          # the PWA is served by the API itself: one URL, same origin
+  # the PWA is served by the API itself (one URL, same origin); App Check values (infra/setup_appcheck.ps1), if
+  # exported as VITE_FIREBASE_API_KEY / VITE_FIREBASE_APP_ID / VITE_RECAPTCHA_SITE_KEY, are baked into the build
+  VITE_API_BASE=same-origin VITE_FIREBASE_PROJECT_ID="${VITE_FIREBASE_PROJECT_ID:-$PROJECT}" npm run build
   rm -rf ../backend/static && cp -r dist ../backend/static
 fi
 cd ../backend
@@ -18,7 +20,8 @@ cd ../backend
 ENV="GOOGLE_GENAI_USE_ENTERPRISE=true@GOOGLE_CLOUD_PROJECT=$PROJECT@GOOGLE_CLOUD_LOCATION=global"
 ENV="$ENV@STORE=firestore@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=${CORS_ORIGINS:-*}"
 # Models: backend/core/model_ids.py holds the defaults Cloud Run runs; a job's env var set in this shell overrides it
-for job in GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL; do
+# APPCHECK (off | monitor | enforce) and RATE_LIMIT_UNVERIFIED_PER_MIN travel the same way
+for job in GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL            APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN; do
   if [ -n "${!job:-}" ]; then ENV="$ENV@$job=${!job}"; fi
 done
 

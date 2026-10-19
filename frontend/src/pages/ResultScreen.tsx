@@ -14,7 +14,7 @@ import {
   Eye,
   Send,
 } from 'lucide-react';
-import {api, describeApiError} from '../api/client';
+import {api, ApiError, describeApiError} from '../api/client';
 import {CheckResult, DeepCheckResult} from '../api/types';
 import {KillChainBar} from '../components/KillChainBar';
 import {RiskMeter} from '../components/RiskMeter';
@@ -47,7 +47,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
   const [hasReported, setHasReported] = useState(false);
   const [consentChecked, setConsentChecked] = useState(true);
   const [isReporting, setIsReporting] = useState(false);
-  const [reportError, setReportError] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
   const [copiedNote, setCopiedNote] = useState(false);
 
   // Opt-in deep check: search public reports about the link's domain / the organisation named. Never the number.
@@ -78,7 +78,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
     speech.warmUp();
     if (!consentChecked) return;
     setIsReporting(true);
-    setReportError(false);
+    setReportError(null);
     try {
       await api.report({
         scam_type: result.scam_type,
@@ -88,8 +88,9 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
         lang,
       });
       setHasReported(true);
-    } catch {
-      setReportError(true); // never claim it was shared when it was not
+    } catch (err) {
+      // never claim it was shared when it was not; a refused App Check token gets its own "reload and retry"
+      setReportError(err instanceof ApiError && err.kind === 'unverified' ? t('api.unverified') : t('result.report_failed'));
     } finally {
       setIsReporting(false);
     }
@@ -432,7 +433,7 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
               <Send className="w-4 h-4" />
               <span>{isReporting ? t('result.reporting') : t('result.report_community')}</span>
             </button>
-            {reportError && <p className="text-xs font-semibold text-red-700 dark:text-red-400">{t('result.report_failed')}</p>}
+            {reportError && <p className="text-xs font-semibold text-red-700 dark:text-red-400">{reportError}</p>}
           </div>
         ) : (
           <div className="p-3 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border border-emerald-300 text-sm font-bold flex items-center justify-center gap-2">

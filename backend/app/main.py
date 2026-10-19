@@ -25,7 +25,7 @@ from input_layer import URL_RE, analyze_phone, build_evidence, normalize_text, p
 from model_ids import model_id  # noqa: E402
 from risk_engine import LANG_PACKS, analyze, level, precursor_hits as engine_precursor  # noqa: E402
 
-from . import services  # noqa: E402
+from . import appcheck, services  # noqa: E402
 from .agent import router as agent_router  # noqa: E402
 from .analytics import log_event  # noqa: E402
 from .guard import GuardMiddleware  # noqa: E402
@@ -340,6 +340,13 @@ class Report(BaseModel):
 def report(body: Report, request: Request):
     if not body.consent:
         raise HTTPException(400, "consent is required")
+    # A report changes what other people see about a number, so in enforce mode it needs a fresh limited-use App Check
+    # token, consumed here: a script cannot replay one token, and a page without reCAPTCHA cannot report (it can check).
+    if appcheck.mode() != "off":
+        ac = appcheck.status(request.headers.get(appcheck.HEADER), consume=True)
+        appcheck.log.info("POST /report ac=%s", ac)
+        if appcheck.mode() == "enforce" and ac != "valid":
+            raise HTTPException(403, "This report could not be confirmed as sent from the app. Reload the page and try again.")
     info = analyze_phone(body.phone, check_lang(body.lang)) if body.phone else None
     # community_hits counts distinct reporters, so one person cannot flag an honest number alone. The reporter key is
     # an HMAC of the app's random id; without one, of address + date (rotates daily: not a persistent identifier).

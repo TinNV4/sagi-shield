@@ -55,3 +55,19 @@ variable "phish_reload_schedule" {
   type        = string
   default     = "0 6 15 * *"
 }
+
+variable "app_check_mode" {
+  description = "off | monitor | enforce (backend/app/appcheck.py): start with monitor, enforce once real traffic shows ac=valid"
+  type        = string
+  default     = "off"
+  validation {
+    condition     = contains(["off", "monitor", "enforce"], var.app_check_mode)
+    error_message = "app_check_mode must be off, monitor or enforce."
+  }
+}
+
+variable "app_check_domains" {
+  description = "Extra hosts for the reCAPTCHA key (a custom domain); the Cloud Run host is always included"
+  type        = list(string)
+  default     = []
+}

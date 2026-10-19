@@ -15,6 +15,10 @@ terraform {
       source  = "hashicorp/google"
       version = ">= 6.0"
     }
+    google-beta = { # only for the Firebase project and the web app config (not in the GA provider)
+      source  = "hashicorp/google-beta"
+      version = ">= 6.0"
+    }
     random = {
       source  = "hashicorp/random"
       version = ">= 3.5"
@@ -23,6 +27,11 @@ terraform {
 }
 
 provider "google" {
+  project = var.project
+  region  = var.region
+}
+
+provider "google-beta" {
   project = var.project
   region  = var.region
 }
@@ -41,6 +50,9 @@ resource "google_project_service" "apis" {
     "bigquery.googleapis.com",
     "logging.googleapis.com",
     "cloudscheduler.googleapis.com",
+    "firebase.googleapis.com",
+    "firebaseappcheck.googleapis.com",
+    "recaptchaenterprise.googleapis.com",
   ])
   service            = each.value
   disable_on_destroy = false
@@ -55,11 +67,12 @@ resource "google_service_account" "api" {
 
 resource "google_project_iam_member" "api_roles" {
   for_each = toset([
-    "roles/aiplatform.user",     # Gemini on Agent Platform
-    "roles/datastore.user",      # Firestore
-    "roles/speech.client",       # Chirp 3 fallback transcription
-    "roles/bigquery.dataEditor", # anonymous verdict rows
-    "roles/logging.logWriter",   # verdict log lines
+    "roles/aiplatform.user",                # Gemini on Agent Platform
+    "roles/datastore.user",                 # Firestore
+    "roles/speech.client",                  # Chirp 3 fallback transcription
+    "roles/bigquery.dataEditor",            # anonymous verdict rows
+    "roles/logging.logWriter",              # verdict log lines
+    "roles/firebaseappcheck.tokenVerifier", # consume limited-use App Check tokens on /report
   ])
   project = var.project
   role    = each.value
@@ -188,6 +201,7 @@ resource "google_cloud_run_v2_service" "api" {
           USE_LLM                     = "1"
           CORS_ORIGINS                = var.cors_origins
           BQ_TABLE                    = "${var.project}.${google_bigquery_dataset.sagi.dataset_id}.${google_bigquery_table.events.table_id}"
+          APPCHECK                    = var.app_check_mode
         }
         content {
           name  = env.key
@@ -307,4 +321,42 @@ resource "google_cloud_scheduler_job" "phish_loader" {
   }
 
   depends_on = [google_cloud_run_v2_job_iam_member.scheduler_invoker]
+}
+
+# ---------------------------------------------------------------- Firebase App Check (reCAPTCHA Enterprise)
+# Mirrors infra/setup_appcheck.ps1. The PWA is built with the web app's config and the site key (outputs below);
+# the API verifies tokens according to var.app_check_mode (backend/app/appcheck.py).
+resource "google_firebase_project" "default" {
+  provider   = google-beta
+  project    = var.project
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_firebase_web_app" "pwa" {
+  provider        = google-beta
+  project         = var.project
+  display_name    = "Sagi Shield PWA"
+  deletion_policy = "DELETE"
+  depends_on      = [google_firebase_project.default]
+}
+
+data "google_firebase_web_app_config" "pwa" {
+  provider   = google-beta
+  web_app_id = google_firebase_web_app.pwa.app_id
+}
+
+# score-based (App Check refuses checkbox keys); never localhost on a production key
+resource "google_recaptcha_enterprise_key" "app_check" {
+  display_name = "sagi-shield-appcheck"
+  web_settings {
+    integration_type = "SCORE"
+    allowed_domains  = concat([trimprefix(google_cloud_run_v2_service.api.uri, "https://")], var.app_check_domains)
+  }
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_firebase_app_check_recaptcha_enterprise_config" "pwa" {
+  app_id    = google_firebase_web_app.pwa.app_id
+  site_key  = google_recaptcha_enterprise_key.app_check.name
+  token_ttl = "14400s" # 4 h: the SDK refreshes at half the TTL, one reCAPTCHA assessment each
 }
