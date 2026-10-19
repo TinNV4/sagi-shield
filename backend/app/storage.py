@@ -36,6 +36,16 @@ def _new_family(member_name: str) -> dict:
             "code_expires": time.time() + PAIR_CODE_TTL_S, "member_name": member_name[:40], "guardians": []}
 
 
+MAX_PUSH_TOKENS = 10
+
+
+def _with_token(fam: dict, token: str) -> dict:
+    """push_tokens: guardians' browsers that turned notifications on after pairing; newest last, no repeats."""
+    tokens = [t for t in fam.get("push_tokens", []) if t != token] + [token]
+    fam["push_tokens"] = tokens[-MAX_PUSH_TOKENS:]
+    return fam
+
+
 def _alert(risk_level: str, scam_type: str, stage: int, summary: str, member_name: str) -> dict:
     return {"id": uuid.uuid4().hex[:12], "created_at": _now_iso(), "member_name": member_name,
             "risk_level": risk_level, "scam_type": scam_type, "stage": stage, "summary": summary[:300]}
@@ -149,6 +159,13 @@ class MemoryStore:
     def get_family(self, family_id: str) -> dict | None:
         return self.families.get(family_id)
 
+    def add_push_token(self, family_id: str, token: str) -> bool:
+        fam = self.families.get(family_id)
+        if not fam:
+            return False
+        _with_token(fam, token)
+        return True
+
     def add_alert(self, family_id: str, risk_level: str, scam_type: str, stage: int, summary: str) -> dict | None:
         fam = self.families.get(family_id)
         if not fam:
@@ -259,6 +276,13 @@ class FirestoreStore:
     def get_family(self, family_id: str) -> dict | None:
         doc = self.db.collection("families").document(family_id).get()
         return doc.to_dict() if doc.exists else None
+
+    def add_push_token(self, family_id: str, token: str) -> bool:
+        fam = self.get_family(family_id)
+        if not fam:
+            return False
+        self.db.collection("families").document(family_id).set(_with_token(fam, token))
+        return True
 
     def add_alert(self, family_id: str, risk_level: str, scam_type: str, stage: int, summary: str) -> dict | None:
         fam = self.get_family(family_id)

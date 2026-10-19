@@ -1,5 +1,5 @@
 import React, {Suspense, lazy, useEffect, useState} from 'react';
-import {api, mockApiInstance, PAIR_FROM_LINK} from './api/client';
+import {api, GUARDIAN_FROM_PUSH, mockApiInstance, PAIR_FROM_LINK} from './api/client';
 import {CheckResult} from './api/types';
 import {BottomNav, TabType} from './components/BottomNav';
 import {DemoHelperModal} from './components/DemoHelperModal';
@@ -74,7 +74,7 @@ function AppContent() {
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<FullTabType>(() => {
-    if (PAIR_FROM_LINK) return 'guardian_view'; // opened from a family member's QR code
+    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH) return 'guardian_view'; // a family member's QR code, or an alert notification
     // If kiosk mode is active, opening goes straight to Live Guard!
     try {
       if (localStorage.getItem('sagi_kiosk_mode') === 'true') {
@@ -94,7 +94,7 @@ function AppContent() {
     return window.location.pathname.includes('demo') || window.location.hash.includes('demo');
   });
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() => {
-    if (PAIR_FROM_LINK) return false; // a guardian scanning a QR code came to pair, not to set up a kiosk
+    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH) return false; // a guardian came to pair or to read an alert, not to set up a kiosk
     try {
       return localStorage.getItem('sagi_onboarding_completed') !== 'true';
     } catch {
@@ -135,6 +135,16 @@ function AppContent() {
     setCurrentTab(tab);
     window.scrollTo({top: 0, behavior: 'smooth'});
   };
+
+  // An alert notification clicked while the app is already open (public/push-sw.js): switch to the dashboard
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    const onMessage = (e: MessageEvent) => {
+      if (e.data === 'sagi:open-guardian') setCurrentTab('guardian_view');
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, []);
 
   const handleGoBack = () => {
     speech.warmUp();

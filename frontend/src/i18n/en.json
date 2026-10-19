@@ -373,6 +373,9 @@
   },
   "guardian": {
     "member_fallback": "your family member",
+    "push_enable": "Turn on alerts on this phone",
+    "push_on": "Alerts on this phone are on: you are notified even when this page is closed.",
+    "push_blocked": "Notifications are blocked in this browser's settings. Alerts still appear here while this page is open.",
     "title": "Guardian Dashboard",
     "subtitle": "Monitoring living call risks for your family members in real-time (Auto-refresh every 5s)",
     "back_btn": "Back to Family Settings",

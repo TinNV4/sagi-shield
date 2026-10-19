@@ -46,6 +46,8 @@ export default defineConfig(() => {
         workbox: {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           cleanupOutdatedCaches: true,
+          // guardian alerts by FCM web push (public/push-sw.js): one worker for the app shell and the notifications
+          importScripts: ['push-sw.js'],
           // the API lives on the same origin: never answer its routes with the cached app shell
           navigateFallbackDenylist: [/^\/(check|precheck|report|stats|health|healthz|family|agent|ws|spike|docs|openapi\.json)/],
           // recorded alert voices (public/voice): not precached (3 languages x 3 clips), cached on first fetch so an

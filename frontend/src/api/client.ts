@@ -25,6 +25,8 @@ export interface SagiApi {
   linkFamily(pairCode: string, fcmToken?: string): Promise<{ok: boolean; guardian_name: string}>;
   notifyFamily(result: CheckResult, lang: string): Promise<boolean>;
   getFamilyAlerts(): Promise<FamilyAlertItem[]>;
+  /** A paired guardian's browser registers its FCM token (notifications turned on later, or a renewed token). */
+  registerPush(fcmToken: string): Promise<void>;
   getStats(): Promise<StatsResult>;
   connectLiveSocket(
     lang: string,
@@ -55,6 +57,17 @@ export const PAIR_FROM_LINK: string = (() => {
     return m ? m[1] : '';
   } catch {
     return '';
+  }
+})();
+
+/** Opened from a guardian alert notification (public/push-sw.js opens /#guardian): go to the dashboard. Read once. */
+export const GUARDIAN_FROM_PUSH: boolean = (() => {
+  try {
+    const hit = window.location.hash === '#guardian';
+    if (hit) window.history.replaceState(null, '', window.location.pathname);
+    return hit;
+  } catch {
+    return false;
   }
 })();
 
@@ -233,6 +246,12 @@ export class RealApi implements SagiApi {
     const familyId = getFamilyId();
     if (!familyId) return Promise.resolve([]);
     return this.request<FamilyAlertItem[]>(`/family/alerts?family_id=${encodeURIComponent(familyId)}`);
+  }
+
+  async registerPush(fcmToken: string): Promise<void> {
+    const familyId = getFamilyId();
+    if (!familyId) throw new ApiError('failed', null, 0);
+    await this.postJson('/family/push', {family_id: familyId, fcm_token: fcmToken});
   }
 
   getStats(): Promise<StatsResult> {
@@ -739,6 +758,8 @@ class MockApi implements SagiApi {
     return [...this.mockAlerts];
   }
 
+  async registerPush(_fcmToken: string): Promise<void> {}
+
   addMockAlert(alert: FamilyAlertItem) {
     this.mockAlerts.unshift(alert);
   }
@@ -1048,6 +1069,9 @@ export const api: SagiApi = {
   },
   getFamilyAlerts() {
     return getActiveApi().getFamilyAlerts();
+  },
+  registerPush(fcmToken: string) {
+    return getActiveApi().registerPush(fcmToken);
   },
   getStats() {
     return getActiveApi().getStats();

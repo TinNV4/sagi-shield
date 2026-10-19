@@ -2,6 +2,11 @@
 #
 #   pwsh infra/setup_appcheck.ps1                        # set everything up, print the build values
 #   pwsh infra/setup_appcheck.ps1 -SetGitHubVariables    # ... and store them as repository variables (gh CLI)
+#   pwsh infra/setup_appcheck.ps1 -SetGitHubVariables -VapidKey <public Web Push key>   # ... and guardian push
+#
+# Guardian push (FCM web push, backend/app/notifier.py) rides on the same Firebase project: the script also enables
+# the FCM API and lets sagi-api send. The Web Push key pair itself can only be generated in the Firebase console
+# (Project settings > Cloud Messaging > Web configuration); its PUBLIC key goes to -VapidKey.
 #
 # Steps: enable the APIs -> add Firebase to the project (if it is not a Firebase project yet) -> register the web app
 # "Sagi Shield PWA" -> a score-based reCAPTCHA Enterprise key for the Cloud Run host (+ -Domains) -> register the key
@@ -20,12 +25,13 @@ param(
     [string]$AppName = "Sagi Shield PWA",
     [string]$KeyName = "sagi-shield-appcheck",
     [int]$TokenTtlHours = 4,
+    [string]$VapidKey = "",           # public Web Push key (Firebase console) -> VITE_FIREBASE_VAPID_KEY
     [switch]$SetGitHubVariables
 )
 $ErrorActionPreference = "Stop"
 function Check($what) { if ($LASTEXITCODE -ne 0) { throw "$what failed (exit $LASTEXITCODE)" } }
 
-gcloud services enable firebase.googleapis.com firebaseappcheck.googleapis.com recaptchaenterprise.googleapis.com `
+gcloud services enable firebase.googleapis.com firebaseappcheck.googleapis.com recaptchaenterprise.googleapis.com fcm.googleapis.com `
     --project $Project | Out-Null; Check "enable APIs"
 
 $token = gcloud auth print-access-token; Check "gcloud auth print-access-token"
@@ -92,11 +98,17 @@ gcloud projects add-iam-policy-binding $Project --member "serviceAccount:sagi-ap
     --role roles/firebaseappcheck.tokenVerifier --condition None --quiet | Out-Null
 Check "grant Firebase App Check Token Verifier to sagi-api"
 
+# 6. guardian push: the API sends HIGH alerts through FCM (HTTP v1 needs this role on the runtime account)
+gcloud projects add-iam-policy-binding $Project --member "serviceAccount:sagi-api@$Project.iam.gserviceaccount.com" `
+    --role roles/firebasecloudmessaging.admin --condition None --quiet | Out-Null
+Check "grant Firebase Cloud Messaging API Admin to sagi-api"
+
 $vars = [ordered]@{
     VITE_FIREBASE_API_KEY   = $config.apiKey
     VITE_FIREBASE_APP_ID    = $config.appId
     VITE_RECAPTCHA_SITE_KEY = $siteKey
 }
+if ($VapidKey) { $vars.VITE_FIREBASE_VAPID_KEY = $VapidKey }
 Write-Host "`nBuild values (public; deploy.yml reads them as repository variables, VITE_FIREBASE_PROJECT_ID = GCP_PROJECT):"
 $vars.GetEnumerator() | ForEach-Object { Write-Host ("  {0}={1}" -f $_.Key, $_.Value) }
 if ($SetGitHubVariables) {

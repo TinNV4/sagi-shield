@@ -81,3 +81,36 @@ def test_push_failure_does_not_lose_the_alert(client):
     assert client.post("/family/notify", json={"family_id": fam["family_id"], "risk_level": "HIGH",
                                                "reasons": ["r"]}).status_code == 200
     assert len(client.get("/family/alerts", params={"family_id": fam["family_id"]}).json()) == 1
+
+
+@pytest.fixture
+def sent(monkeypatch):
+    """A stand-in for firebase_admin.messaging that records the multicast instead of sending it."""
+    from types import SimpleNamespace
+    from app import notifier
+    out = []
+    fake = SimpleNamespace(MulticastMessage=lambda **kw: kw, Notification=lambda **kw: kw, WebpushConfig=lambda **kw: kw,
+                           send_each_for_multicast=lambda m: out.append(m))
+    monkeypatch.setattr(notifier, "_messaging", lambda: fake)
+    return out
+
+
+def test_a_paired_guardian_can_turn_on_push_later(client, sent):
+    fam, _ = pair(client)                                      # paired before notifications existed: no token
+    for _ in range(2):                                         # the same browser asking twice stores one token
+        assert client.post("/family/push", json={"family_id": fam["family_id"], "fcm_token": "tok-browser-1"}).status_code == 200
+    client.post("/family/notify", json={"family_id": fam["family_id"], "risk_level": "HIGH", "reasons": ["警察を名乗る電話"]})
+    assert len(sent) == 1 and sent[0]["tokens"] == ["tok-browser-1"]
+    assert sent[0]["notification"]["body"] == "警察を名乗る電話" and sent[0]["webpush"]["headers"]["Urgency"] == "high"
+
+
+def test_push_goes_to_pairing_tokens_and_later_tokens_once_each(client, sent):
+    fam, _ = pair(client, fcm_token="tok-a")
+    client.post("/family/push", json={"family_id": fam["family_id"], "fcm_token": "tok-a"})
+    client.post("/family/push", json={"family_id": fam["family_id"], "fcm_token": "tok-b"})
+    client.post("/family/notify", json={"family_id": fam["family_id"], "risk_level": "HIGH", "reasons": ["r"]})
+    assert sent[0]["tokens"] == ["tok-a", "tok-b"]
+
+
+def test_push_needs_a_known_family(client):
+    assert client.post("/family/push", json={"family_id": "x" * 22, "fcm_token": "tok"}).status_code == 404

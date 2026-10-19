@@ -53,6 +53,7 @@ resource "google_project_service" "apis" {
     "firebase.googleapis.com",
     "firebaseappcheck.googleapis.com",
     "recaptchaenterprise.googleapis.com",
+    "fcm.googleapis.com",
   ])
   service            = each.value
   disable_on_destroy = false
@@ -73,6 +74,7 @@ resource "google_project_iam_member" "api_roles" {
     "roles/bigquery.dataEditor",            # anonymous verdict rows
     "roles/logging.logWriter",              # verdict log lines
     "roles/firebaseappcheck.tokenVerifier", # consume limited-use App Check tokens on /report
+    "roles/firebasecloudmessaging.admin",   # guardian push (FCM HTTP v1, app/notifier.py)
   ])
   project = var.project
   role    = each.value

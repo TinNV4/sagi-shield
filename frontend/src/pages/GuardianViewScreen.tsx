@@ -16,10 +16,30 @@ import {FamilyAlertItem} from '../api/types';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
 import {telHref} from '../components/TrustedContact';
+import {pushPermission, pushToken} from '../lib/push';
 
 // The protected person's number, kept on THIS (guardian) device only. The server never stores it,
 // so the call button must not invent one.
 const MEMBER_TEL_KEY = 'sagi_member_tel';
+// "This browser registered its push token": per device, so the dashboard can say notifications are on.
+const PUSH_KEY = 'sagi_push_on';
+type PushState = 'on' | 'off' | 'blocked' | 'unsupported';
+const readPushState = (): PushState => {
+  const permission = pushPermission();
+  if (permission === 'unsupported') return 'unsupported';
+  if (permission === 'denied') return 'blocked';
+  try {
+    return permission === 'granted' && localStorage.getItem(PUSH_KEY) === '1' ? 'on' : 'off';
+  } catch {
+    return 'off';
+  }
+};
+const rememberPush = () => {
+  try {
+    localStorage.setItem(PUSH_KEY, '1');
+  } catch {}
+};
+
 const readMemberTel = () => {
   try {
     return localStorage.getItem(MEMBER_TEL_KEY) || '';
@@ -43,6 +63,8 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   const [linkError, setLinkError] = useState(false);
   const [memberTel, setMemberTel] = useState(readMemberTel);
   const [telInput, setTelInput] = useState('');
+  const [push, setPush] = useState<PushState>(readPushState);
+  const [pushBusy, setPushBusy] = useState(false);
 
   const saveMemberTel = () => {
     const tel = telInput.trim().slice(0, 30);
@@ -62,13 +84,43 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   const handleLink = async () => {
     setLinkError(false);
     try {
-      await api.linkFamily(codeInput);
+      // the permission prompt rides on this click; a refusal or a slow token never stops the pairing
+      const token = await pushToken();
+      await api.linkFamily(codeInput, token ?? undefined);
+      if (token) rememberPush();
+      setPush(readPushState());
       setLinked(true);
       fetchAlerts();
     } catch {
       setLinkError(true);
     }
   };
+
+  const enablePush = async () => {
+    setPushBusy(true);
+    try {
+      const token = await pushToken();
+      if (token) {
+        await api.registerPush(token);
+        rememberPush();
+      }
+    } catch {
+      // the dashboard keeps polling: an alert still shows here
+    } finally {
+      setPush(readPushState());
+      setPushBusy(false);
+    }
+  };
+
+  // browsers rotate push tokens: re-register quietly whenever the dashboard opens with notifications on
+  useEffect(() => {
+    if (!linked || readPushState() !== 'on') return;
+    pushToken()
+      .then((token) => {
+        if (token) return api.registerPush(token);
+      })
+      .catch(() => {});
+  }, [linked]);
 
   const fetchAlerts = async (silent = false) => {
     if (!silent) setIsRefreshing(true);
@@ -150,6 +202,23 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
           </button>
         </div>
       </div>
+
+      {linked && push !== 'unsupported' && (
+        <div id="guardian-push-card" className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700">
+          <BellRing className={`w-5 h-5 shrink-0 ${push === 'on' ? 'text-emerald-600' : 'text-gray-400'}`} />
+          {push === 'off' ? (
+            <button
+              onClick={enablePush}
+              disabled={pushBusy}
+              className="flex-1 min-h-[44px] rounded-lg bg-[#1B4D3E] text-white text-sm font-bold disabled:opacity-50"
+            >
+              {t('guardian.push_enable')}
+            </button>
+          ) : (
+            <p className="text-sm text-gray-700 dark:text-gray-300">{t(push === 'on' ? 'guardian.push_on' : 'guardian.push_blocked')}</p>
+          )}
+        </div>
+      )}
 
       {!linked && (
         <div id="guardian-link-card" className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-600/30 space-y-3">

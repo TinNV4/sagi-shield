@@ -385,6 +385,19 @@ def family_link(body: FamilyLink):
     return {"ok": True, "family_id": fam["family_id"], "guardian_name": body.guardian_name, "member_name": fam["member_name"]}
 
 
+class FamilyPush(BaseModel):
+    family_id: FamilyId
+    fcm_token: str = Field(min_length=1, max_length=4096)
+
+
+@app.post("/family/push")
+def family_push(body: FamilyPush):
+    """A paired guardian turns on notifications later (or the browser renewed its token). family_id is the secret."""
+    if not store.add_push_token(body.family_id, body.fcm_token):
+        raise HTTPException(404, "unknown family")
+    return {"ok": True}
+
+
 @app.get("/family/alerts")
 def family_alerts(family_id: str):
     if not store.get_family(family_id):

@@ -8,12 +8,11 @@
  * The Firebase SDK and reCAPTCHA load in their own chunk, after the first screen (startAppCheck in main.tsx).
  */
 import type {AppCheck} from 'firebase/app-check';
+import {firebaseApp, firebaseConfigured} from './firebaseApp';
 
-const env = import.meta.env;
-const config = {apiKey: env.VITE_FIREBASE_API_KEY, appId: env.VITE_FIREBASE_APP_ID, projectId: env.VITE_FIREBASE_PROJECT_ID};
-const siteKey: string | undefined = env.VITE_RECAPTCHA_SITE_KEY;
+const siteKey: string | undefined = import.meta.env.VITE_RECAPTCHA_SITE_KEY;
 
-export const appCheckEnabled = Boolean(config.apiKey && config.appId && config.projectId && siteKey);
+export const appCheckEnabled = firebaseConfigured && Boolean(siteKey);
 export const APP_CHECK_HEADER = 'X-Firebase-AppCheck';
 const TOKEN_WAIT_MS = 3000;
 
@@ -22,9 +21,9 @@ let instance: Promise<AppCheck | null> | null = null;
 /** Load the SDK and start refreshing tokens in the background; safe to call more than once. */
 export function startAppCheck(): Promise<AppCheck | null> {
   if (!appCheckEnabled) return Promise.resolve(null);
-  instance ??= Promise.all([import('firebase/app'), import('firebase/app-check')])
-    .then(([firebase, appCheck]) =>
-      appCheck.initializeAppCheck(firebase.initializeApp(config), {
+  instance ??= Promise.all([firebaseApp(), import('firebase/app-check')])
+    .then(([app, appCheck]) =>
+      appCheck.initializeAppCheck(app, {
         provider: new appCheck.ReCaptchaEnterpriseProvider(siteKey!),
         isTokenAutoRefreshEnabled: true,
       })
