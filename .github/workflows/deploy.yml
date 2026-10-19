@@ -89,6 +89,15 @@ jobs:
             --concurrency 40 --cpu 1 --memory 1Gi --no-use-http2 \
             --set-env-vars "^@^$ENV" --set-secrets "$SECRETS" --quiet
 
+      - name: Point the phishing-list job at the new image
+        run: |
+          # the monthly JPCERT/CC reload (infra/setup_phish_job.ps1) runs app/phish_list.py from the API image
+          if gcloud run jobs describe sagi-phish-loader --project "${{ vars.GCP_PROJECT }}" --region "$REGION" >/dev/null 2>&1; then
+            gcloud run jobs update sagi-phish-loader --project "${{ vars.GCP_PROJECT }}" --region "$REGION"               --image "$IMAGE:${SHA::12}" --quiet
+          else
+            echo "sagi-phish-loader not set up (infra/setup_phish_job.ps1) - skipped"
+          fi
+
       - name: Smoke test
         run: |
           URL="$(gcloud run services describe "$SERVICE" --project "${{ vars.GCP_PROJECT }}" --region "$REGION" --format 'value(status.url)')"

@@ -1,64 +1,25 @@
-"""Load the JPCERT/CC phishing URL list (github.com/JPCERTCC/phishurl-list, monthly CSVs) into the store.
+"""Load the JPCERT/CC phishing URL list into the store from a laptop. The loader itself is backend/app/phish_list.py,
+which the monthly Cloud Run Job runs (infra/setup_phish_job.ps1); this wrapper adds local files and a gcloud user token.
 
     STORE=firestore python tools/load_phish_list.py                 # last 12 months into Firestore (needs ADC)
     python tools/load_phish_list.py --months 3 --dry-run            # just count
     python tools/load_phish_list.py --file 2026/202605.csv          # one month, local file or repo path
+    python tools/load_phish_list.py --gcloud-token --project <id>   # no ADC on this machine
 
-Columns (README of the repo): date (confirmed by JPCERT/CC), URL (entire phishing URL), description (spoofed brand).
-Stored per URL: hashed URL key, brand, date, source - never the victim's URL, that is hashed at lookup time too.
-The list lags by weeks to months and is Japanese-brand phishing; a miss proves nothing (the check says so).
-Attribution: JPCERT/CC. The repo carries no licence file - keep the data server-side, do not redistribute it.
+Idempotent: URLs already stored are skipped. Attribution and terms: see the module docstring.
 """
 from __future__ import annotations
 
 import argparse
-import csv
-import io
 import os
 import sys
-import time
-import urllib.request
-from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 sys.path.insert(0, str(ROOT / "backend" / "core"))
 
-RAW = "https://raw.githubusercontent.com/JPCERTCC/phishurl-list/main/{year}/{ym}.csv"
-SOURCE = "jpcertcc"
-
-
-def months_back(n: int) -> list[str]:
-    y, m = date.today().year, date.today().month
-    out = []
-    for _ in range(n):
-        out.append(f"{y}{m:02d}")
-        m -= 1
-        if m == 0:
-            y, m = y - 1, 12
-    return out
-
-
-def fetch(ym: str) -> str | None:
-    url = RAW.format(year=ym[:4], ym=ym)
-    try:
-        with urllib.request.urlopen(url, timeout=30) as r:
-            return r.read().decode("utf-8")
-    except Exception as e:  # noqa: BLE001
-        print(f"  {ym}: not available ({type(e).__name__})")
-        return None
-
-
-def parse(text: str) -> list[dict]:
-    rows = []
-    for r in csv.DictReader(io.StringIO(text)):
-        u = (r.get("URL") or "").strip()
-        if not u:
-            continue
-        rows.append({"url": u, "brand": (r.get("description") or "")[:60], "date": (r.get("date") or "")[:10].replace("/", "-"),
-                     "source": SOURCE})
-    return rows
+from app.phish_list import SOURCE, collect, fetch, load, parse  # noqa: E402
 
 
 def main() -> None:
@@ -77,12 +38,7 @@ def main() -> None:
         text = p.read_text(encoding="utf-8") if p.exists() else fetch(Path(a.file).stem)
         entries = parse(text or "")
     else:
-        for ym in months_back(a.months):
-            text = fetch(ym)
-            if text:
-                got = parse(text)
-                print(f"  {ym}: {len(got)} urls")
-                entries += got
+        entries = collect(a.months)
     hosts = {e["url"].split("/")[2].lower() for e in entries if "//" in e["url"]}
     print(f"{len(entries)} urls, {len(hosts)} hosts, source={SOURCE}")
     if a.dry_run or not entries:
@@ -97,9 +53,7 @@ def main() -> None:
         store.fs, store.db = firestore, firestore.Client(project=a.project or os.environ["GOOGLE_CLOUD_PROJECT"], credentials=Credentials(token))
     else:
         from app.storage import STORE as store  # STORE=firestore for the real thing, memory for a dry test
-    t0 = time.time()
-    n = store.add_phish_urls(entries)
-    print(f"stored {n} into {type(store).__name__} in {time.time() - t0:.1f}s")
+    load(store, entries)
 
 
 if __name__ == "__main__":

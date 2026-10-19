@@ -91,14 +91,19 @@ class MemoryStore:
                              "prefecture": prefecture, "date": _today(), "reporter": reporter})
 
     def add_phish_urls(self, entries: list[dict]) -> int:
-        """entries: [{url, brand, date, source}] from a published phishing list. Returns the number stored."""
+        """entries: [{url, brand, date, source}] from a published phishing list. Returns the number of new URLs;
+        a URL already stored is skipped, so reloading a month does not inflate the host counts."""
+        n = 0
         for e in entries:
             uk, hk = phish_keys(e["url"])
+            if uk in self.phish_urls:
+                continue
             self.phish_urls[uk] = {"brand": e.get("brand", ""), "date": e.get("date", ""), "source": e.get("source", "")}
             h = self.phish_hosts.setdefault(hk, {"count": 0, "latest": ""})
             h["count"] += 1
             h["latest"] = max(h["latest"], e.get("date", ""))
-        return len(entries)
+            n += 1
+        return n
 
     def phish_lookup(self, url: str) -> dict | None:
         """Exact URL hit -> {"match": "url", ...}; a host seen in the list -> {"match": "host", ...}; else None."""
@@ -180,18 +185,25 @@ class FirestoreStore:
                                            "prefecture": prefecture, "date": _today(), "reporter": reporter})
 
     def add_phish_urls(self, entries: list[dict]) -> int:
-        """Batched writes: one doc per URL key, one counter doc per host (Firestore batches take 500 ops)."""
+        """Batched writes: one doc per URL key, one counter doc per host (Firestore batches take 500 ops). URL keys
+        already stored are read first and skipped (reads cost a third of writes), so a reload is idempotent."""
         n = 0
+        urls = self.db.collection("phish_urls")
         for start in range(0, len(entries), 200):
-            batch = self.db.batch()
+            chunk = {}
             for e in entries[start:start + 200]:
-                uk, hk = phish_keys(e["url"])
-                batch.set(self.db.collection("phish_urls").document(uk),
-                          {"brand": e.get("brand", ""), "date": e.get("date", ""), "source": e.get("source", "")})
+                chunk.setdefault(phish_keys(e["url"]), e)  # the same URL twice in one chunk counts once
+            known = {doc.id for doc in self.db.get_all([urls.document(uk) for uk, _ in chunk]) if doc.exists}
+            fresh = [(uk, hk, e) for (uk, hk), e in chunk.items() if uk not in known]
+            if not fresh:
+                continue
+            batch = self.db.batch()
+            for uk, hk, e in fresh:
+                batch.set(urls.document(uk), {"brand": e.get("brand", ""), "date": e.get("date", ""), "source": e.get("source", "")})
                 batch.set(self.db.collection("phish_hosts").document(hk),
                           {"count": self.fs.Increment(1), "latest": e.get("date", "")}, merge=True)
-                n += 1
             batch.commit()
+            n += len(fresh)
         return n
 
     def phish_lookup(self, url: str) -> dict | None:

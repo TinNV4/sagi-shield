@@ -49,3 +49,9 @@ variable "stt_api_key_secret" {
   type        = bool
   default     = false
 }
+
+variable "phish_reload_schedule" {
+  description = "unix-cron, Asia/Tokyo: when the JPCERT/CC list is reloaded (it publishes the previous month early in the month)"
+  type        = string
+  default     = "0 6 15 * *"
+}

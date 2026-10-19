@@ -37,6 +37,12 @@ gcloud run deploy "$SERVICE" --project "$PROJECT" --region "$REGION" --source . 
   --concurrency 40 --cpu 1 --memory 1Gi --no-use-http2 \
   --set-env-vars "^@^$ENV" --set-secrets "$SECRETS"
 
+# the monthly phishing-list reload (infra/setup_phish_job.ps1) runs from the same image: keep it current
+if gcloud run jobs describe sagi-phish-loader --project "$PROJECT" --region "$REGION" >/dev/null 2>&1; then
+  IMAGE="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(spec.template.spec.containers[0].image)')"
+  gcloud run jobs update sagi-phish-loader --project "$PROJECT" --region "$REGION" --image "$IMAGE" --quiet
+fi
+
 URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(status.url)')"
 echo "Deployed: $URL"
 curl -fsS "$URL/health" && echo

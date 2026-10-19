@@ -40,6 +40,7 @@ resource "google_project_service" "apis" {
     "speech.googleapis.com",
     "bigquery.googleapis.com",
     "logging.googleapis.com",
+    "cloudscheduler.googleapis.com",
   ])
   service            = each.value
   disable_on_destroy = false
@@ -230,4 +231,71 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
   location = google_cloud_run_v2_service.api.location
   role     = "roles/run.invoker"
   member   = "allUsers"
+}
+
+# ---------------------------------------------------------------- monthly reload of the JPCERT/CC phishing URL list
+# Same image as the API, another entry point (backend/app/phish_list.py); idempotent, so a re-run costs reads only.
+resource "google_cloud_run_v2_job" "phish_loader" {
+  name                = "sagi-phish-loader"
+  location            = var.region
+  deletion_protection = false
+
+  template {
+    task_count = 1
+    template {
+      service_account = google_service_account.api.email
+      max_retries     = 1
+      timeout         = "900s"
+      containers {
+        image   = var.image
+        command = ["python"]
+        args    = ["-m", "app.phish_list", "--months", "2"]
+        resources {
+          limits = { cpu = "1", memory = "512Mi" }
+        }
+        env {
+          name  = "STORE"
+          value = "firestore"
+        }
+        env {
+          name  = "GOOGLE_CLOUD_PROJECT"
+          value = var.project
+        }
+      }
+    }
+  }
+
+  depends_on = [google_project_iam_member.api_roles]
+}
+
+# the scheduler's identity can start this one job and nothing else
+resource "google_service_account" "scheduler" {
+  account_id   = "sagi-scheduler"
+  display_name = "Sagi Shield scheduler"
+  depends_on   = [google_project_service.apis]
+}
+
+resource "google_cloud_run_v2_job_iam_member" "scheduler_invoker" {
+  name     = google_cloud_run_v2_job.phish_loader.name
+  location = google_cloud_run_v2_job.phish_loader.location
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+resource "google_cloud_scheduler_job" "phish_loader" {
+  name        = "sagi-phish-loader"
+  region      = var.region
+  description = "Monthly reload of the JPCERT/CC phishing URL list"
+  schedule    = var.phish_reload_schedule
+  time_zone   = "Asia/Tokyo"
+
+  http_target {
+    http_method = "POST"
+    uri         = "https://run.googleapis.com/v2/projects/${var.project}/locations/${var.region}/jobs/${google_cloud_run_v2_job.phish_loader.name}:run"
+    oauth_token {
+      service_account_email = google_service_account.scheduler.email
+    }
+  }
+
+  depends_on = [google_cloud_run_v2_job_iam_member.scheduler_invoker]
 }
