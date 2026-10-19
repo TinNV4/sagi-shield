@@ -11,6 +11,7 @@ screenshots and gives the second opinion.
   GEMINI_VISION_MODEL   screenshots / documents
   GEMINI_DEEP_MODEL     opt-in Google-Search deep check  (unset -> GEMINI_CONFIRM_MODEL)
   STT_BATCH_MODEL       uploaded-recording transcription
+  GEMINI_TTS_MODEL      the spoken alerts, generated once by tools/make_alert_voice.py (never at run time)
 """
 from __future__ import annotations
 import os
@@ -21,6 +22,7 @@ DEFAULTS = {
     "GEMINI_LIVE_MODEL": "gemini-3.5-flash-lite",
     "GEMINI_CONFIRM_MODEL": "gemini-3.8-flash",
     "STT_BATCH_MODEL": "gemini-3.5-transcribe",
+    "GEMINI_TTS_MODEL": "gemini-3.8-flash-tts",
 }
 FALLBACK = {"GEMINI_DEEP_MODEL": "GEMINI_CONFIRM_MODEL"}
 

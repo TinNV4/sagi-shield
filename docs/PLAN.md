@@ -86,7 +86,7 @@ A community-powered AI guard that listens to a suspicious call, reads suspicious
 
 MVP (Milestone A):
 - **F1 Live Guard**: mic → VAD → streaming STT → rolling 30 s transcript → score every 3–5 s → full-screen red alert. Kiosk + manual modes.
-- **F1b Spoken alert** (~2 h): on HIGH the tablet says loudly 「この通話は詐欺の可能性があります。電話を切ってください」 via browser `speechSynthesis` (no backend). The scammer hears it too → deterrent. Strong demo moment.
+- **F1b Spoken alert** (~2 h): on HIGH the tablet says loudly 「この通話は詐欺の可能性があります。電話を切ってください」 via browser `speechSynthesis` (no backend). The scammer hears it too → deterrent. Strong demo moment. **2026-10-19:** the sentences are now Gemini TTS clips recorded once (`tools/make_alert_voice.py` → `frontend/public/voice/`), preloaded in memory when Live Guard / the guardian screen opens; `speechSynthesis` stays as the fallback.
 - **F2 Quick Check**: text / screenshot / audio file / phone number / URL → risk + type + reasons.
 - **F2b 振込前チェック**: "I'm about to send money because…" → 3 short questions → verdict. This is the BFSI hook: positioned as an API banks can embed in app / ATM flow (roadmap slide).
 - **F3 Plain-language advice**: やさしい日本語 / simple Vietnamese; actions (hang up, #9110 / 113, call bank's official number). Hotlines and the action line stay canned (safety); the *why* sentence is Gemini-written from the actual transcript.
@@ -310,6 +310,8 @@ gantt
 - [x] Rules every chunk, Gemini (`thinking_level="low"`) every 5 s or on rule hit; feed `LiveTracker.update(window_hits, llm_score, llm_stage, reporting)`; call `reset()` on the silence timeout; add the 2-window latch Done as `gate=periodic` (every 20 s / 6 unseen lines) + rules on every line, latch after 2 HIGH, `reset()` on silence
 - [x] Frontend: Screen Wake Lock, kiosk mode (auto-start on load, auto-restart on error). Auto-restart since 2026-10-10 with back-off (0.5 s → 10 s when the recognizer ends right after starting) and a stop on fatal errors (`not-allowed`, `service-not-allowed`, `language-not-supported`: restarting those spun in a tight loop). The VAD gate item is dropped with `audioCapture.js`: the on-device recognizer does its own endpointing and only final lines are sent
 - [x] F1b spoken alert via `speechSynthesis` (pre-warm voice on first user gesture — browsers block TTS before one) (`src/lib/speak.ts`, used by the HIGH takeover)
+- [x] Alert voice in Gemini TTS (`gemini-3.8-flash-tts`, voice Kore): hang-up / guardian / test sentences in ja / vi / en, texts in `src/lib/alertVoice.json`; `tests/test_alert_voice.py` fails if a sentence changes without new audio or drifts from `LANG_PACKS[...]['speak']` / i18n (2026-10-19)
+- [x] Monthly JPCERT/CC phishing-list reload: Cloud Run Job `sagi-phish-loader` (`python -m app.phish_list --months 2`, idempotent) started by Cloud Scheduler on the 15th (`infra/setup_phish_job.ps1`, Terraform mirror; deploys move the job to the new image) (2026-10-19)
 - [ ] **TV test**: play a police drama / news segment about scams for 10 min → must not latch HIGH
 - [ ] Record the re-enacted demo call on a real speaker + tablet; keep the footage as demo fallback
 

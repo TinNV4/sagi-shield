@@ -33,7 +33,7 @@ interface GuardianViewScreenProps {
 }
 
 export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) => {
-  const {t} = useI18n();
+  const {t, lang} = useI18n();
 
   const [alerts, setAlerts] = useState<FamilyAlertItem[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -79,7 +79,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
         const newest = data[0];
         if (newest && newest.risk_level === 'HIGH') {
           // Play sound and vibration alert
-          speech.speak(t('guardian.alert_spoken'));
+          speech.speak(t('guardian.alert_spoken'), lang, 'guardian');
           if (typeof window !== 'undefined' && 'vibrate' in navigator) {
             navigator.vibrate([400, 200, 400]);
           }
@@ -92,6 +92,11 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
       if (!silent) setIsRefreshing(false);
     }
   };
+
+  // the recorded alert voice, in memory before the first HIGH alert arrives
+  useEffect(() => {
+    void speech.preload('guardian', lang);
+  }, [lang]);
 
   // Poll every 5 seconds
   useEffect(() => {

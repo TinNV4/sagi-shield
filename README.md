@@ -13,7 +13,7 @@ A tablet or an old phone sits next to the landline. It listens to speaker calls,
 
 | Feature | How |
 |---|---|
-| **Live Guard** | Speech-to-text **on the device** (Web Speech API, `processLocally`). Only finalized, number-masked text goes to the server: rules on every line, and the masked rolling window goes to Gemini about every 20 s (or, with `gate=rules`, only once the rules reach MEDIUM). A set-up call ("my number changed, I have a cold") is remembered **on the device** for 48 h, so the money request that follows a day later raises the alarm. HIGH latches after two consecutive windows → full-screen alarm + spoken alert + family alert. |
+| **Live Guard** | Speech-to-text **on the device** (Web Speech API, `processLocally`). Only finalized, number-masked text goes to the server: rules on every line, and the masked rolling window goes to Gemini about every 20 s (or, with `gate=rules`, only once the rules reach MEDIUM). A set-up call ("my number changed, I have a cold") is remembered **on the device** for 48 h, so the money request that follows a day later raises the alarm. HIGH latches after two consecutive windows → full-screen alarm + spoken alert (a Gemini TTS voice recorded once, the browser voice as fallback) + family alert. |
 | **Quick Check** | Text, screenshot (Gemini vision: a "warrant" or police ID sent by chat is HIGH by rule), audio file (`gemini-3.5-transcribe`, Chirp 3 fallback), phone number (overseas caller, community reports), link (URL shape + Web Risk; the link is never opened). |
 | **Before You Pay** | Three questions before a transfer: who asked, who receives, why. "Police asked me to move my savings" is HIGH by rule. |
 | **Recovery agent** | "I already paid": an ADK 2.x agent walks the victim through the first hour (freeze the transfer, police, evidence, family) and drafts the police statement. Steps and phone numbers are server-owned - the model cannot invent a hotline. |
@@ -61,10 +61,10 @@ PWA (React + Vite, served by the API)
   │                  ├─ image  ─▶ Gemini 3.8 Flash (vision)
   │                  ├─ audio  ─▶ gemini-3.5-transcribe ─▶ Chirp 3 fallback
   │                  └─ url    ─▶ Web Risk
-  ├─ POST /agent/recovery ─▶ ADK 2.x agent (6 tools) · CI on every push, auto-deploy to Cloud Run after CI passes on main (`.github/workflows/`, WIF via `infra/setup_cd.sh`) · JPCERT/CC phishing list in Firestore (`tools/load_phish_list.py`) · opt-in deep check (`/deepcheck`, Gemini grounded with Google Search) ─▶ Firestore session (24 h TTL)
+  ├─ POST /agent/recovery ─▶ ADK 2.x agent (6 tools) · CI on every push, auto-deploy to Cloud Run after CI passes on main (`.github/workflows/`, WIF via `infra/setup_cd.sh`) · JPCERT/CC phishing list in Firestore, reloaded monthly by a Cloud Run Job on Cloud Scheduler (`backend/app/phish_list.py`, `infra/setup_phish_job.ps1`) · opt-in deep check (`/deepcheck`, Gemini grounded with Google Search) ─▶ Firestore session (24 h TTL)
   ├─ /family/*, /report ─▶ Firestore (lookups while the user waits: reported numbers, pairing, alerts)
   └─ every verdict ─▶ BigQuery `sagi.events` (anonymous: no text, numbers or ids) ─▶ Looker Studio scam map
-Cloud Run (asia-northeast1) · Gemini on Agent Platform (global) · Firestore · BigQuery · Web Risk · Speech-to-Text · Secret Manager
+Cloud Run (asia-northeast1) + a Cloud Run Job on Cloud Scheduler · Gemini on Agent Platform (global) · Gemini TTS (alert voices, generated once) · Firestore · BigQuery · Web Risk · Speech-to-Text · Secret Manager
 ```
 
 Details, decisions and the phase checklist: [docs/PLAN.md](docs/PLAN.md). Working notes for coding agents: [CLAUDE.md](CLAUDE.md).

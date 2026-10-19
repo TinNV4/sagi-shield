@@ -1,0 +1,33 @@
+{
+  "voice": "Kore",
+  "style": "calm, clear and firm; speaking slowly, like a trusted announcer warning an elderly listener; never panicked",
+  "clips": {
+    "hangup": {
+      "ja": "この通話は詐欺の可能性があります。電話を切ってください。",
+      "vi": "Cuộc gọi này có dấu hiệu lừa đảo. Hãy cúp máy ngay.",
+      "en": "This call may be a scam. Please hang up the phone now."
+    },
+    "guardian": {
+      "ja": "ご家族の端末で高危険度詐欺アラートが検知されました。すぐに連絡してください。",
+      "vi": "Phát hiện cuộc gọi có dấu hiệu lừa đảo nguy hiểm trên máy người thân. Hãy gọi kiểm tra ngay.",
+      "en": "High-risk scam detected on your family member's phone. Please call them immediately."
+    },
+    "test": {
+      "ja": "これはサギシールドの音声警告テストです。危険時はこのように声でお知らせします。",
+      "vi": "Đây là âm thanh thử nghiệm của Sagi Shield. Ứng dụng sẽ cảnh báo bằng giọng nói khi có nguy hiểm.",
+      "en": "This is a voice alert test for Sagi Shield. You will be warned aloud when danger is detected."
+    }
+  },
+  "generated": {
+    "hangup-ja": "eac6f998c35f",
+    "hangup-vi": "991ac8f693df",
+    "hangup-en": "f0bcff234365",
+    "guardian-ja": "9fd4a98dd72d",
+    "guardian-vi": "5459538deb69",
+    "guardian-en": "cc251834cc36",
+    "test-ja": "4f706be2e224",
+    "test-vi": "b0d11114f5d9",
+    "test-en": "d0d557fd5f32"
+  },
+  "model": "gemini-3.8-flash-tts"
+}

@@ -72,6 +72,11 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
     }
   }, [lang]);
 
+  // the recorded "hang up" voice, in memory before a call can turn HIGH
+  useEffect(() => {
+    void speech.preload('hangup', lang);
+  }, [lang]);
+
   useEffect(() => {
     refreshSpeechStatus();
   }, [refreshSpeechStatus]);

@@ -1,7 +1,7 @@
 # Majors pinned (google-genai README: pin < 3.0.0; ADK 2.x broke the 1.x agent API). Every push to main builds a
 # fresh image (deploy.yml), so an upper bound on each major is what keeps a breaking release out of production.
 # Lower bounds = the versions the deployed image was last verified with (2026-10-10).
-google-genai>=2.24,<3
+google-genai>=2.25,<3  # 2.25: speech_metadata in interactions (tools/make_alert_voice.py)
 google-adk>=2.9,<3
 google-cloud-speech>=2.40,<3
 google-cloud-webrisk>=1.14,<2
