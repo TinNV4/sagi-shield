@@ -84,6 +84,7 @@ jobs:
           # one --set-env-vars only (gcloud keeps the last); "^@^" makes @ the separator so CORS_ORIGINS may hold commas
           ENV="GOOGLE_GENAI_USE_ENTERPRISE=true@GOOGLE_CLOUD_PROJECT=${{ vars.GCP_PROJECT }}@GOOGLE_CLOUD_LOCATION=global"
           ENV="$ENV@STORE=firestore@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=*"
+          ENV="$ENV@BQ_TABLE=${{ vars.GCP_PROJECT }}.sagi.events"  # analytics stream; omitting it turns analytics off
           # models: backend/core/model_ids.py holds the defaults; a repository variable of the same name overrides one
           for job in GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL                      APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN; do
             if [ -n "${!job:-}" ]; then ENV="$ENV@$job=${!job}"; fi

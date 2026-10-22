@@ -20,6 +20,7 @@ cd ../backend
 # so CORS_ORIGINS may contain commas.
 ENV="GOOGLE_GENAI_USE_ENTERPRISE=true@GOOGLE_CLOUD_PROJECT=$PROJECT@GOOGLE_CLOUD_LOCATION=global"
 ENV="$ENV@STORE=firestore@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=${CORS_ORIGINS:-*}"
+ENV="$ENV@BQ_TABLE=$PROJECT.sagi.events"  # analytics stream (app/analytics.py); omitting it turns analytics off
 # Models: backend/core/model_ids.py holds the defaults Cloud Run runs; a job's env var set in this shell overrides it
 # APPCHECK (off | monitor | enforce) and RATE_LIMIT_UNVERIFIED_PER_MIN travel the same way
 for job in GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL            APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN; do
