@@ -82,3 +82,24 @@ def test_a_guardian_watches_two_households(client):
     client.post(f"/household/{b['household_id']}/notify", json={"risk_level": "HIGH", "lang": "ja"}, headers=H("db:anonymous"))
     assert client.get(f"/household/{a['household_id']}/alerts", headers=H(G1)).json() == []
     assert len(client.get(f"/household/{b['household_id']}/alerts", headers=H(G1)).json()) == 1
+
+
+def test_owner_cannot_leave_but_can_hand_over(client):
+    h = client.post("/household", json={"market": "ja"}, headers=H(G1)).json(); hid = h["household_id"]
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G2))
+    assert client.delete(f"/household/{hid}/guardians/g1", headers=H(G1)).status_code == 409
+    assert client.delete(f"/household/{hid}/guardians/g1", headers=H(G2)).status_code == 403    # not the owner
+    assert client.post(f"/household/{hid}/owner", json={"uid": "g2"}, headers=H(G2)).status_code == 403
+    assert client.post(f"/household/{hid}/owner", json={"uid": "g2"}, headers=H(G1)).status_code == 200
+    assert client.delete(f"/household/{hid}/guardians/g1", headers=H(G1)).status_code == 200      # now a plain guardian leaving
+    detail = client.get(f"/household/{hid}", headers=H(G2)).json()
+    assert detail["guardians"] == [{"uid": "g2", "name": "", "owner": True, "me": True}]
+
+
+def test_admin_reassigns_a_lost_owner(client):
+    h = client.post("/household", json={"market": "ja"}, headers=H(G1)).json(); hid = h["household_id"]
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G2))
+    assert client.post(f"/admin/household/{hid}/owner", json={"uid": "g2"}, headers=H(G2)).status_code == 403
+    assert client.post(f"/admin/household/{hid}/owner", json={"uid": "g2"}, headers=H("root:google.com:admin")).status_code == 200
+    assert client.post(f"/admin/household/{hid}/owner", json={"uid": "zz"}, headers=H("root:google.com:admin")).status_code == 404
+    assert client.get(f"/household/{hid}/alerts", headers=H("root:google.com:admin")).status_code == 403  # admin is not a member

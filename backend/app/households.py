@@ -125,6 +125,16 @@ def household_code(hid: str, body: Empty, p: Principal = Depends(auth.principal)
     return {"pair_code": hh["pair_code"], "expires_in": 900}
 
 
+@router.get("/household/{hid}")
+def household_detail(hid: str, p: Principal = Depends(auth.principal)):
+    """One household; guardians of it also get each guardian's uid (needed to pick a new owner)."""
+    hh = _member(hid, p)
+    out = public(hh, p)
+    if _is_guardian(hh, p):
+        out["guardians"] = [{"uid": g["uid"], **shown} for g, shown in zip(hh["guardians"], out["guardians"])]
+    return out
+
+
 @router.get("/household/{hid}/alerts")
 def household_alerts(hid: str, p: Principal = Depends(auth.principal)):
     _member(hid, p)
@@ -167,3 +177,26 @@ def household_delete(hid: str, p: Principal = Depends(auth.principal)):
     _owner(hid, p)
     STORE.delete_household(hid)
     return {"ok": True}
+
+
+class OwnerChange(BaseModel):
+    uid: str = Field(min_length=1, max_length=128)
+
+
+def _hand_over(hid: str, uid: str) -> dict:
+    if not STORE.set_owner(hid, uid):
+        raise HTTPException(404, "unknown guardian")
+    return {"ok": True}
+
+
+@router.post("/household/{hid}/owner")
+def household_owner(hid: str, body: OwnerChange, p: Principal = Depends(auth.principal)):
+    _owner(hid, p)
+    return _hand_over(hid, body.uid)
+
+
+@router.post("/admin/household/{hid}/owner")
+def admin_household_owner(hid: str, body: OwnerChange, p: Principal = Depends(auth.admin_only)):
+    """The one admin route that crosses households: it changes ownership and reveals nothing."""
+    _household(hid)
+    return _hand_over(hid, body.uid)
