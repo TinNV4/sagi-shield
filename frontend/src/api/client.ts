@@ -3,6 +3,9 @@ import {
   DeepCheckPayload,
   DeepCheckResult,
   FamilyAlertItem,
+  Household,
+  HouseholdCode,
+  HouseholdCreated,
   LiveSocketCallbacks,
   LiveSocketConnection,
   LiveWsClientMessage,
@@ -13,6 +16,7 @@ import {
   StatsResult,
 } from './types';
 import {APP_CHECK_HEADER, appCheckToken} from '../lib/appCheck';
+import {idToken} from '../lib/auth';
 
 export interface SagiApi {
   isMock: boolean;
@@ -27,6 +31,19 @@ export interface SagiApi {
   getFamilyAlerts(): Promise<FamilyAlertItem[]>;
   /** A paired guardian's browser registers its FCM token (notifications turned on later, or a renewed token). */
   registerPush(fcmToken: string): Promise<void>;
+  // Households (Firebase sign-in required; the household id is a path segment, never a query value)
+  createHousehold(input: {name?: string; member_name?: string; market: 'ja' | 'vi'}): Promise<HouseholdCreated>;
+  joinHousehold(code: string, name?: string, fcmToken?: string): Promise<Household>;
+  myHouseholds(): Promise<Household[]>;
+  /** One household; a guardian of it also gets every guardian's uid (to remove one or hand over ownership). */
+  householdDetail(id: string): Promise<Household>;
+  householdCode(id: string): Promise<HouseholdCode>;
+  householdAlerts(id: string): Promise<FamilyAlertItem[]>;
+  registerHouseholdPush(id: string, fcmToken: string): Promise<void>;
+  notifyHousehold(id: string, result: CheckResult, lang: string): Promise<boolean>;
+  removeGuardian(id: string, uid: string): Promise<void>;
+  deleteHousehold(id: string): Promise<void>;
+  handOver(id: string, uid: string): Promise<void>;
   getStats(): Promise<StatsResult>;
   connectLiveSocket(
     lang: string,
@@ -154,17 +171,24 @@ export class RealApi implements SagiApi {
    *  `detail` sentence when there is one. JSON bodies get their header; FormData sets its own boundary. */
   private async request<T>(path: string, init: RequestInit = {}, appCheck?: AppCheckUse): Promise<T> {
     const use = appCheck ?? (init.method === 'POST' ? 'session' : 'none');
-    const token = use === 'none' ? null : await appCheckToken(use === 'limited');
-    if (token) {
+    // One attempt with the given ID token. App Check is asked again for each attempt: a one-time token is consumed.
+    const attempt = async (bearer: string | null): Promise<Response> => {
+      const appCheckValue = use === 'none' ? null : await appCheckToken(use === 'limited');
       const headers = new Headers(init.headers);
-      headers.set(APP_CHECK_HEADER, token);
-      init = {...init, headers};
-    }
-    let res: Response;
-    try {
-      res = await fetch(`${this.baseUrl}${path}`, init);
-    } catch {
-      throw new ApiError('offline', null, 0);
+      if (appCheckValue) headers.set(APP_CHECK_HEADER, appCheckValue);
+      if (bearer) headers.set('Authorization', `Bearer ${bearer}`);
+      try {
+        return await fetch(`${this.baseUrl}${path}`, {...init, headers});
+      } catch {
+        throw new ApiError('offline', null, 0);
+      }
+    };
+    const bearer = await idToken();
+    let res = await attempt(bearer);
+    if (res.status === 401 && bearer) {
+      // an expired token: ask the SDK for a new one and try once more, never in a loop
+      const fresh = await idToken(true);
+      if (fresh) res = await attempt(fresh);
     }
     if (!res.ok) {
       const detail = await res.json().then((b) => (typeof b?.detail === 'string' ? b.detail : null)).catch(() => null);
@@ -197,7 +221,6 @@ export class RealApi implements SagiApi {
       message,
       lang: apiLang(lang),
       ui_lang: lang,
-      family_id: getFamilyId(),
     });
   }
 
@@ -254,6 +277,66 @@ export class RealApi implements SagiApi {
     await this.postJson('/family/push', {family_id: familyId, fcm_token: fcmToken});
   }
 
+  createHousehold(input: {name?: string; member_name?: string; market: 'ja' | 'vi'}): Promise<HouseholdCreated> {
+    return this.postJson('/household', input);
+  }
+
+  async joinHousehold(code: string, name?: string, fcmToken?: string): Promise<Household> {
+    const data = await this.postJson<{household: Household}>('/household/join', {
+      pair_code: code.replace(/\D/g, ''),
+      name,
+      fcm_token: fcmToken,
+    });
+    return data.household;
+  }
+
+  myHouseholds(): Promise<Household[]> {
+    return this.request<Household[]>('/household');
+  }
+
+  householdDetail(id: string): Promise<Household> {
+    return this.request<Household>(`/household/${encodeURIComponent(id)}`);
+  }
+
+  householdCode(id: string): Promise<HouseholdCode> {
+    return this.postJson(`/household/${encodeURIComponent(id)}/code`, {});
+  }
+
+  householdAlerts(id: string): Promise<FamilyAlertItem[]> {
+    return this.request<FamilyAlertItem[]>(`/household/${encodeURIComponent(id)}/alerts`);
+  }
+
+  async registerHouseholdPush(id: string, fcmToken: string): Promise<void> {
+    await this.postJson(`/household/${encodeURIComponent(id)}/push`, {fcm_token: fcmToken});
+  }
+
+  async notifyHousehold(id: string, result: CheckResult, lang: string): Promise<boolean> {
+    try {
+      await this.postJson(`/household/${encodeURIComponent(id)}/notify`, {
+        risk_level: result.risk_level,
+        scam_type: result.scam_type,
+        stage: result.stage,
+        reasons: result.reasons.slice(0, 2),
+        lang: apiLang(lang),
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async removeGuardian(id: string, uid: string): Promise<void> {
+    await this.request(`/household/${encodeURIComponent(id)}/guardians/${encodeURIComponent(uid)}`, {method: 'DELETE'});
+  }
+
+  async deleteHousehold(id: string): Promise<void> {
+    await this.request(`/household/${encodeURIComponent(id)}`, {method: 'DELETE'});
+  }
+
+  async handOver(id: string, uid: string): Promise<void> {
+    await this.postJson(`/household/${encodeURIComponent(id)}/owner`, {uid});
+  }
+
   getStats(): Promise<StatsResult> {
     return this.request<StatsResult>('/stats');
   }
@@ -265,8 +348,8 @@ export class RealApi implements SagiApi {
   ): LiveSocketConnection {
     // Text-only WebSocket (PLAN 6.9). There is deliberately NO per-line HTTP fallback: the server
     // decides when a masked window may go to Gemini; while offline, lines are dropped, not queued.
-    const wsUrl = `${this.baseUrl.replace(/^http/, 'ws')}/ws/live?lang=${apiLang(lang)}&mode=${mode}&input=text` +
-      (getFamilyId() ? `&family_id=${encodeURIComponent(getFamilyId()!)}` : '');
+    // No household in the URL: a signed-in user identifies itself with the first message on the open socket.
+    const wsUrl = `${this.baseUrl.replace(/^http/, 'ws')}/ws/live?lang=${apiLang(lang)}&mode=${mode}&input=text`;
     // Cross-call memory lives on this device: a flag + expiry, never any text. A set-up call ("my number changed")
     // asks for nothing; the money request comes a day later, and the server must know the first call happened.
     const PRECURSOR_KEY = 'sagi_precursor_until';
@@ -292,8 +375,16 @@ export class RealApi implements SagiApi {
       // a browser WebSocket cannot set headers: the App Check token rides in the query (never logged by the server)
       const token = await appCheckToken();
       if (isClosed) return;
-      ws = new WebSocket(wsUrl + priorParam() + gate + (token ? `&appcheck=${encodeURIComponent(token)}` : ''));
-      ws.onopen = () => {
+      const socket = new WebSocket(wsUrl + priorParam() + gate + (token ? `&appcheck=${encodeURIComponent(token)}` : ''));
+      ws = socket;
+      socket.onopen = async () => {
+        // the ID token goes in the first message (a URL would be logged); a fresh one on every reconnect
+        const bearer = await idToken();
+        if (isClosed || ws !== socket) return;
+        if (bearer && socket.readyState === WebSocket.OPEN) {
+          const auth: LiveWsClientMessage = {type: 'auth', token: bearer};
+          socket.send(JSON.stringify(auth));
+        }
         reconnectDelay = 1000;
         callbacks.onStatus('connected');
         callbacks.onStatus('listening');
@@ -760,6 +851,103 @@ class MockApi implements SagiApi {
 
   async registerPush(_fcmToken: string): Promise<void> {}
 
+  // ---- households, in memory: one household with two guardians, the caller being its owner ----
+  private mockHouseholds: Household[] = [
+    {
+      household_id: 'mock-h1',
+      name: '',
+      member_name: '母（敏子さん）',
+      market: 'ja',
+      live_guard_enabled: false,
+      devices: 1,
+      guardians: [
+        {name: '長男（太郎・神奈川）', owner: true, me: true, uid: 'mock-g1'},
+        {name: '長女（花子・東京）', owner: false, me: false, uid: 'mock-g2'},
+      ],
+      created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
+    },
+  ];
+
+  private copyHousehold = (h: Household): Household => ({...h, guardians: h.guardians.map((g) => ({...g}))});
+
+  private mockHousehold(id: string): Household {
+    const h = this.mockHouseholds.find((x) => x.household_id === id);
+    if (!h) throw new ApiError('failed', null, 404);
+    return h;
+  }
+
+  async createHousehold(input: {name?: string; member_name?: string; market: 'ja' | 'vi'}): Promise<HouseholdCreated> {
+    const household: Household = {
+      household_id: `mock-h${this.mockHouseholds.length + 1}`,
+      name: input.name ?? '',
+      member_name: input.member_name ?? '',
+      market: input.market,
+      live_guard_enabled: false,
+      devices: 1,
+      guardians: [],
+      created_at: new Date().toISOString(),
+    };
+    this.mockHouseholds.push(household);
+    return {household_id: household.household_id, pair_code: '782904', expires_in: 900, household: this.copyHousehold(household)};
+  }
+
+  async joinHousehold(code: string, name?: string): Promise<Household> {
+    await new Promise((r) => setTimeout(r, 800));
+    if (code.replace(/\D/g, '').length !== 6) throw new ApiError('failed', null, 404);
+    const household: Household = {
+      household_id: `mock-h${this.mockHouseholds.length + 1}`,
+      name: '',
+      member_name: '父（健一さん）',
+      market: 'ja',
+      live_guard_enabled: false,
+      devices: 1,
+      guardians: [
+        {name: '長男（太郎・神奈川）', owner: true, me: false, uid: 'mock-g1'},
+        {name: name || '長女（花子・東京）', owner: false, me: true, uid: 'mock-g3'},
+      ],
+      created_at: new Date().toISOString(),
+    };
+    this.mockHouseholds.push(household);
+    return this.copyHousehold(household);
+  }
+
+  async myHouseholds(): Promise<Household[]> {
+    return this.mockHouseholds.map((h) => ({...this.copyHousehold(h), guardians: h.guardians.map(({uid: _uid, ...g}) => g)}));
+  }
+
+  async householdDetail(id: string): Promise<Household> {
+    return this.copyHousehold(this.mockHousehold(id));
+  }
+
+  async householdCode(_id: string): Promise<HouseholdCode> {
+    return {pair_code: '782904', expires_in: 900};
+  }
+
+  async householdAlerts(_id: string): Promise<FamilyAlertItem[]> {
+    return this.getFamilyAlerts();
+  }
+
+  async registerHouseholdPush(_id: string, _fcmToken: string): Promise<void> {}
+
+  async notifyHousehold(): Promise<boolean> {
+    return true;
+  }
+
+  async removeGuardian(id: string, uid: string): Promise<void> {
+    const h = this.mockHousehold(id);
+    h.guardians = h.guardians.filter((g) => g.uid !== uid);
+  }
+
+  async deleteHousehold(id: string): Promise<void> {
+    this.mockHousehold(id);
+    this.mockHouseholds = this.mockHouseholds.filter((h) => h.household_id !== id);
+  }
+
+  async handOver(id: string, uid: string): Promise<void> {
+    const h = this.mockHousehold(id);
+    h.guardians = h.guardians.map((g) => ({...g, owner: g.uid === uid}));
+  }
+
   addMockAlert(alert: FamilyAlertItem) {
     this.mockAlerts.unshift(alert);
   }
@@ -1072,6 +1260,39 @@ export const api: SagiApi = {
   },
   registerPush(fcmToken: string) {
     return getActiveApi().registerPush(fcmToken);
+  },
+  createHousehold(input: {name?: string; member_name?: string; market: 'ja' | 'vi'}) {
+    return getActiveApi().createHousehold(input);
+  },
+  joinHousehold(code: string, name?: string, fcmToken?: string) {
+    return getActiveApi().joinHousehold(code, name, fcmToken);
+  },
+  myHouseholds() {
+    return getActiveApi().myHouseholds();
+  },
+  householdDetail(id: string) {
+    return getActiveApi().householdDetail(id);
+  },
+  householdCode(id: string) {
+    return getActiveApi().householdCode(id);
+  },
+  householdAlerts(id: string) {
+    return getActiveApi().householdAlerts(id);
+  },
+  registerHouseholdPush(id: string, fcmToken: string) {
+    return getActiveApi().registerHouseholdPush(id, fcmToken);
+  },
+  notifyHousehold(id: string, result: CheckResult, lang: string) {
+    return getActiveApi().notifyHousehold(id, result, lang);
+  },
+  removeGuardian(id: string, uid: string) {
+    return getActiveApi().removeGuardian(id, uid);
+  },
+  deleteHousehold(id: string) {
+    return getActiveApi().deleteHousehold(id);
+  },
+  handOver(id: string, uid: string) {
+    return getActiveApi().handOver(id, uid);
   },
   getStats() {
     return getActiveApi().getStats();
