@@ -15,8 +15,8 @@ import QRCode from 'qrcode';
 import {api, describeApiError} from '../api/client';
 import type {Household} from '../api/types';
 import {useI18n} from '../i18n';
-import {currentUser, ensureDeviceSignIn} from '../lib/auth';
-import {formatPairCode, guardianRows, marketForLang, memberScreenState} from '../lib/householdState';
+import {authEnabled, currentUser, ensureDeviceSignIn} from '../lib/auth';
+import {formatPairCode, guardianName, guardianRows, marketForLang, memberScreenState} from '../lib/householdState';
 import * as speech from '../lib/speak';
 
 interface FamilyScreenProps {
@@ -32,7 +32,8 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
 }) => {
   const {t, lang} = useI18n();
 
-  // uid: undefined = sign-in pending, null = not available on this build. households: null = not loaded yet.
+  // uid: undefined = sign-in pending, null = no user (no Firebase on this build, or the sign-in failed / was slow).
+  // households: null = not loaded yet.
   const [uid, setUid] = useState<string | null | undefined>(undefined);
   const [guardianSession, setGuardianSession] = useState(false); // this browser is signed in as a guardian
   const [households, setHouseholds] = useState<Household[] | null>(null);
@@ -86,7 +87,7 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
     }
   };
 
-  const view = memberScreenState({uid, households, failed: failure !== null, guardianSession});
+  const view = memberScreenState({uid, households, failed: failure !== null, guardianSession, authEnabled: authEnabled && !api.isMock});
   const linkedGuardians = view.kind === 'household' ? guardianRows(view.household) : [];
 
   // The QR opens this app on the guardian's phone with the code pre-filled. Fragment, not query: never sent to a server.
@@ -159,6 +160,23 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
           <p id="family-signin-unavailable" role="status" className="text-sm font-bold text-gray-700 dark:text-gray-300">
             {t('family.signin_unavailable')}
           </p>
+        )}
+
+        {view.kind === 'signin_failed' && (
+          <div className="space-y-3">
+            <p id="family-signin-retry" role="alert" className="text-sm font-bold text-red-700 dark:text-red-400">
+              {t('family.signin_retry')}
+            </p>
+            <button
+              onClick={() => {
+                setUid(undefined);
+                setReloadKey((k) => k + 1);
+              }}
+              className="min-h-[48px] px-5 rounded-xl bg-[#1B4D3E] text-white text-base font-bold"
+            >
+              {t('common.retry')}
+            </button>
+          </div>
         )}
 
         {view.kind === 'guardian_session' && (
@@ -274,7 +292,7 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
           {t('family.linked_list_title')} ({linkedGuardians.length} {t('family.unit_guardians')})
         </h3>
         <div className="space-y-2.5">
-          {linkedGuardians.map((g) => (
+          {linkedGuardians.map((g, i) => (
             <div
               key={g.key}
               className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 flex items-center justify-between"
@@ -285,7 +303,8 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
                 </div>
                 <div>
                   <div className="text-base font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                    <span>{g.name || t('family.role_primary')}</span>
+                    <span>{guardianName(g, i, (n) => t('family.guardian_fallback', {n}))}</span>
+                    {g.me && <span className="font-normal text-gray-600 dark:text-gray-400">{t('family.you_marker')}</span>}
                     {g.owner && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
                         {t('family.owner_badge')}

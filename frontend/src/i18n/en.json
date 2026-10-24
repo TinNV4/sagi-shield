@@ -358,7 +358,6 @@
     "toggle_label": "Alert my family when HIGH risk is detected",
     "toggle_desc": "Automatically dispatches push notifications to guardians for Stage 4-5 threats",
     "linked_list_title": "Connected Guardians",
-    "role_primary": "Primary Guardian",
     "role_secondary": "Secondary Guardian",
     "status_connected": "Connected",
     "device_label": "Device: {{device}} • Linked: {{date}}",
@@ -374,7 +373,10 @@
     "create_btn": "Set up my family link",
     "member_name_label": "Your first name (optional)",
     "owner_badge": "Owner",
-    "signed_in_as_guardian": "This browser is signed in as a guardian. Open the family link on the protected person's own phone."
+    "signed_in_as_guardian": "This browser is signed in as a guardian. Open the family link on the protected person's own phone.",
+    "guardian_fallback": "Guardian {{n}}",
+    "you_marker": "(you)",
+    "signin_retry": "This device could not sign in just now. Check the connection and try again."
   },
   "guardian": {
     "member_fallback": "your family member",
@@ -425,7 +427,15 @@
     "sign_out": "Sign out",
     "device_is_protected": "This device protects {{name}}. Open the guardian dashboard on your own phone.",
     "no_longer_member": "You are no longer a guardian of this household.",
-    "household_gone": "This household no longer exists."
+    "household_gone": "This household no longer exists.",
+    "your_name_label": "Your name, shown to the family (optional)",
+    "devices_count": "Paired devices: {{n}}",
+    "reset_devices": "Reset paired devices",
+    "reset_devices_confirm": "Unpair every device of {{name}}? Their phone must pair again with a new code.",
+    "code_sent_to": "Code sent to {{number}}",
+    "resend_code": "Send again",
+    "resend_wait": "Send again in {{s}} s",
+    "change_number": "Change number"
   },
   "community": {
     "title": "Community Fraud Radar",

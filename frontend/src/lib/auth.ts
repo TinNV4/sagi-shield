@@ -114,9 +114,10 @@ export async function signInGuardian(method: 'google' | 'phone', phone?: string)
       return {state: 'signed_in', user: toUser(cred.user)};
     }
     if (!phone) return null;
-    clearVerifier();
-    pendingPhone = null;
-    verifier = new sdk.RecaptchaVerifier(auth, RECAPTCHA_CONTAINER_ID, {size: 'invisible'});
+    // also "Send again": the old widget is cleared and a new one goes into a fresh element, because reCAPTCHA
+    // refuses to render twice into the same node
+    cancelPhoneSignIn();
+    verifier = new sdk.RecaptchaVerifier(auth, freshRecaptchaHost(), {size: 'invisible'});
     pendingPhone = await sdk.signInWithPhoneNumber(auth, phone, verifier);
     return {state: 'code_sent'};
   } catch (err) {
@@ -124,6 +125,21 @@ export async function signInGuardian(method: 'google' | 'phone', phone?: string)
     if (method === 'phone') clearVerifier();
     return null;
   }
+}
+
+/** An empty child of the reCAPTCHA container (or the container id when the screen has not rendered it). */
+function freshRecaptchaHost(): HTMLElement | string {
+  const container = typeof document === 'undefined' ? null : document.getElementById(RECAPTCHA_CONTAINER_ID);
+  if (!container) return RECAPTCHA_CONTAINER_ID;
+  const host = document.createElement('div');
+  container.replaceChildren(host);
+  return host;
+}
+
+/** "Change number": forget the code that was sent and its reCAPTCHA. Safe to call at any time. */
+export function cancelPhoneSignIn(): void {
+  pendingPhone = null;
+  clearVerifier();
 }
 
 /** Second step of the phone sign-in. Null for a wrong code (try again) or when no code is pending. */

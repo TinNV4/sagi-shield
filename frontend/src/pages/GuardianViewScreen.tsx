@@ -17,14 +17,18 @@ import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
 import {telHref} from '../components/TrustedContact';
 import {pushPermission, pushToken} from '../lib/push';
-import {AuthUser, confirmPhoneCode, onAuth, RECAPTCHA_CONTAINER_ID, signInGuardian, signOut} from '../lib/auth';
+import {AuthUser, cancelPhoneSignIn, confirmPhoneCode, onAuth, RECAPTCHA_CONTAINER_ID, signInGuardian, signOut} from '../lib/auth';
 import {
+  guardianName,
   guardianScreenState,
   householdLabel,
   householdRouteFailure,
   manageActions,
   marketForLang,
   newHighAlert,
+  nextPhoneFlow,
+  PhoneFlow,
+  resendWaitMs,
   selectedHousehold,
   toE164,
 } from '../lib/householdState';
@@ -71,9 +75,19 @@ const SignInCard: React.FC<SignInCardProps> = ({expired, onSignedIn}) => {
   const {t, lang} = useI18n();
   const [phone, setPhone] = useState('');
   const [code, setCode] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
+  const [flow, setFlow] = useState<PhoneFlow>({step: 'number'});
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const codeSent = flow.step === 'code';
+  const resendWait = resendWaitMs(flow, now);
+
+  // "Send again" opens a little after each SMS: tick once a second while waiting
+  useEffect(() => {
+    if (resendWait <= 0) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(resendWait, 1000));
+    return () => clearTimeout(timer);
+  }, [resendWait, now]);
 
   const run = async (work: () => Promise<boolean>) => {
     setBusy(true);
@@ -93,15 +107,26 @@ const SignInCard: React.FC<SignInCardProps> = ({expired, onSignedIn}) => {
       return true;
     });
 
+  // first send and "Send again" alike: a new reCAPTCHA, a new SMS, the code field emptied
   const sendCode = () =>
     run(async () => {
       const number = toE164(phone, marketForLang(lang));
       if (!number) return false;
       const result = await signInGuardian('phone', number);
       if (result?.state !== 'code_sent') return false;
-      setCodeSent(true);
+      const at = Date.now();
+      setFlow((f) => nextPhoneFlow(f, {type: 'code_sent', to: number, at}));
+      setNow(at);
+      setCode('');
       return true;
     });
+
+  const changeNumber = () => {
+    cancelPhoneSignIn();
+    setFlow((f) => nextPhoneFlow(f, {type: 'change_number'}));
+    setCode('');
+    setFailed(false);
+  };
 
   const confirmCode = () =>
     run(async () => {
@@ -154,8 +179,11 @@ const SignInCard: React.FC<SignInCardProps> = ({expired, onSignedIn}) => {
         )}
       </div>
 
-      {codeSent && (
+      {flow.step === 'code' && (
         <div className="space-y-2">
+          <p id="guardian-code-sent-to" role="status" className="text-sm text-gray-700 dark:text-gray-300">
+            {t('guardian.code_sent_to', {number: flow.sentTo})}
+          </p>
           <label htmlFor="guardian-sms-input" className="block text-sm font-bold text-gray-700 dark:text-gray-300">
             {t('guardian.code_label')}
           </label>
@@ -175,6 +203,24 @@ const SignInCard: React.FC<SignInCardProps> = ({expired, onSignedIn}) => {
           >
             {t('common.confirm')}
           </button>
+          <div className="flex gap-2">
+            <button
+              id="guardian-resend-code"
+              onClick={sendCode}
+              disabled={busy || resendWait > 0}
+              className="flex-1 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-bold disabled:opacity-40"
+            >
+              {resendWait > 0 ? t('guardian.resend_wait', {s: Math.ceil(resendWait / 1000)}) : t('guardian.resend_code')}
+            </button>
+            <button
+              id="guardian-change-number"
+              onClick={changeNumber}
+              disabled={busy}
+              className="flex-1 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 text-sm font-bold disabled:opacity-40"
+            >
+              {t('guardian.change_number')}
+            </button>
+          </div>
         </div>
       )}
 
@@ -191,7 +237,8 @@ const SignInCard: React.FC<SignInCardProps> = ({expired, onSignedIn}) => {
 type PendingAction =
   | {kind: 'remove' | 'handover'; uid: string; name: string}
   | {kind: 'leave'; uid: string}
-  | {kind: 'delete'};
+  | {kind: 'delete'}
+  | {kind: 'reset_devices'};
 
 interface GuardianViewScreenProps {
   onBack: () => void;
@@ -216,6 +263,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
 
   const [addOpen, setAddOpen] = useState(Boolean(PAIR_FROM_LINK));
   const [codeInput, setCodeInput] = useState(PAIR_FROM_LINK);
+  const [nameInput, setNameInput] = useState('');
   const [linkError, setLinkError] = useState(false);
   const [joining, setJoining] = useState(false);
 
@@ -295,10 +343,11 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
     try {
       // the permission prompt rides on this click; a refusal or a slow token never stops the pairing
       const token = await pushToken();
-      const joined = await api.joinHousehold(codeInput, undefined, token ?? undefined);
+      const joined = await api.joinHousehold(codeInput, nameInput.trim() || undefined, token ?? undefined);
       if (token) rememberPush();
       setPush(readPushState());
       setCodeInput('');
+      setNameInput('');
       setAddOpen(false);
       setNotice(null);
       await loadHouseholds();
@@ -415,6 +464,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
     try {
       if (pending.kind === 'remove' || pending.kind === 'leave') await api.removeGuardian(polledId, pending.uid);
       else if (pending.kind === 'handover') await api.handOver(polledId, pending.uid);
+      else if (pending.kind === 'reset_devices') await api.resetHouseholdDevices(polledId);
       else await api.deleteHousehold(polledId);
       setPending(null);
       await loadHouseholds();
@@ -458,14 +508,17 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   };
 
   const label = (h: Household) => householdLabel(h, t('guardian.member_fallback'));
+  const shownName = (g: {name: string}, i: number) => guardianName(g, i, (n) => t('family.guardian_fallback', {n}));
   const actions = detail ? manageActions(detail) : null;
   const pendingText = !pending
     ? ''
     : pending.kind === 'delete'
       ? t('guardian.delete_confirm', {name: selected ? label(selected) : ''})
-      : `${t(pending.kind === 'handover' ? 'guardian.hand_over' : pending.kind === 'remove' ? 'guardian.remove' : 'guardian.leave')}${
-          pending.kind === 'leave' ? '' : `: ${pending.name}`
-        }`;
+      : pending.kind === 'reset_devices'
+        ? t('guardian.reset_devices_confirm', {name: selected ? label(selected) : ''})
+        : `${t(pending.kind === 'handover' ? 'guardian.hand_over' : pending.kind === 'remove' ? 'guardian.remove' : 'guardian.leave')}${
+            pending.kind === 'leave' ? '' : `: ${pending.name}`
+          }`;
 
   const addCard = (
     <div id="guardian-link-card" className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-600/30 space-y-3">
@@ -481,6 +534,17 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
         onChange={(e) => setCodeInput(e.target.value)}
         placeholder="123-456"
         className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 font-mono text-2xl tracking-widest text-center"
+      />
+      <label htmlFor="guardian-name-input" className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+        {t('guardian.your_name_label')}
+      </label>
+      <input
+        id="guardian-name-input"
+        autoComplete="name"
+        maxLength={40}
+        value={nameInput}
+        onChange={(e) => setNameInput(e.target.value)}
+        className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 text-lg"
       />
       <button
         onClick={handleJoin}
@@ -669,7 +733,8 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
                     {detail.guardians.map((g, i) => (
                       <li key={g.uid ?? i} className="flex items-center justify-between gap-2 text-sm">
                         <span className="font-bold text-gray-900 dark:text-white">
-                          {g.name || t('family.role_primary')}
+                          {shownName(g, i)}
+                          {g.me && <span className="ml-1 font-normal text-gray-600 dark:text-gray-400">{t('family.you_marker')}</span>}
                           {g.owner && (
                             <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
                               {t('family.owner_badge')}
@@ -679,13 +744,13 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
                         {actions.others.some((o) => o.uid === g.uid) && g.uid && (
                           <span className="flex gap-2">
                             <button
-                              onClick={() => setPending({kind: 'handover', uid: g.uid!, name: g.name})}
+                              onClick={() => setPending({kind: 'handover', uid: g.uid!, name: shownName(g, i)})}
                               className="min-h-[40px] px-3 rounded-lg border border-gray-300 dark:border-gray-700 font-bold"
                             >
                               {t('guardian.hand_over')}
                             </button>
                             <button
-                              onClick={() => setPending({kind: 'remove', uid: g.uid!, name: g.name})}
+                              onClick={() => setPending({kind: 'remove', uid: g.uid!, name: shownName(g, i)})}
                               className="min-h-[40px] px-3 rounded-lg border border-red-300 text-red-700 dark:text-red-400 font-bold"
                             >
                               {t('guardian.remove')}
@@ -695,6 +760,20 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
                       </li>
                     ))}
                   </ul>
+
+                  <p id="guardian-devices-count" className="text-sm text-gray-700 dark:text-gray-300">
+                    {t('guardian.devices_count', {n: detail.devices})}
+                  </p>
+
+                  {actions.canResetDevices && (
+                    <button
+                      id="guardian-reset-devices"
+                      onClick={() => setPending({kind: 'reset_devices'})}
+                      className="w-full min-h-[48px] rounded-xl border-2 border-red-300 text-red-700 dark:text-red-400 font-bold"
+                    >
+                      {t('guardian.reset_devices')}
+                    </button>
+                  )}
 
                   {actions.ownerCannotLeave && <p className="text-xs text-gray-600 dark:text-gray-400">{t('guardian.owner_cannot_leave')}</p>}
 

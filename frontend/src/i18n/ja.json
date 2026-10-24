@@ -358,7 +358,6 @@
     "toggle_label": "危険度「高」が検知されたら家族に緊急通知する",
     "toggle_desc": "危険通話（Stage 4〜5）の発生時に家族へプッシュ通知を自動配信",
     "linked_list_title": "連携済みの見守り人",
-    "role_primary": "主見守り人",
     "role_secondary": "副見守り人",
     "status_connected": "連携中",
     "device_label": "端末: {{device}} • 登録日: {{date}}",
@@ -374,7 +373,10 @@
     "create_btn": "家族との連携を始める",
     "member_name_label": "お名前（任意）",
     "owner_badge": "管理者",
-    "signed_in_as_guardian": "このブラウザは見守り人としてログイン中です。連携コードは、見守られる方ご本人のスマホで表示してください。"
+    "signed_in_as_guardian": "このブラウザは見守り人としてログイン中です。連携コードは、見守られる方ご本人のスマホで表示してください。",
+    "guardian_fallback": "見守り人{{n}}",
+    "you_marker": "（あなた）",
+    "signin_retry": "この端末のログインがうまくいきませんでした。通信状態を確認して、もう一度お試しください。"
   },
   "guardian": {
     "member_fallback": "ご家族",
@@ -425,7 +427,15 @@
     "sign_out": "ログアウト",
     "device_is_protected": "この端末は{{name}}さんを守っています。見守り人の画面は、ご自身のスマホで開いてください。",
     "no_longer_member": "この見守りの見守り人ではなくなりました。",
-    "household_gone": "この見守りはすでに削除されています。"
+    "household_gone": "この見守りはすでに削除されています。",
+    "your_name_label": "ご家族に表示するお名前（任意）",
+    "devices_count": "連携中の端末：{{n}}台",
+    "reset_devices": "連携中の端末をリセット",
+    "reset_devices_confirm": "{{name}}さんの端末の連携をすべて解除しますか？ご本人のスマホで新しいコードを使って、もう一度連携する必要があります。",
+    "code_sent_to": "{{number}} に確認コードを送りました",
+    "resend_code": "もう一度送る",
+    "resend_wait": "{{s}}秒後に再送できます",
+    "change_number": "番号を変える"
   },
   "community": {
     "title": "地域防犯ダッシュボード",

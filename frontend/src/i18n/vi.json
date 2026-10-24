@@ -358,7 +358,6 @@
     "toggle_label": "Tự động gửi cảnh báo khẩn cấp khi mức rủi ro CAO",
     "toggle_desc": "Tự động gửi thông báo đẩy đến người thân khi có dấu hiệu nguy hiểm",
     "linked_list_title": "Người thân đang giám sát bảo vệ",
-    "role_primary": "Người giám hộ chính",
     "role_secondary": "Người giám hộ phụ",
     "status_connected": "Đang kết nối",
     "device_label": "Thiết bị: {{device}} • Ngày liên kết: {{date}}",
@@ -374,7 +373,10 @@
     "create_btn": "Bắt đầu kết nối người thân",
     "member_name_label": "Tên của bạn (không bắt buộc)",
     "owner_badge": "Người quản lý",
-    "signed_in_as_guardian": "Trình duyệt này đang đăng nhập với tư cách người giám hộ. Hãy mở phần kết nối trên điện thoại của người được bảo vệ."
+    "signed_in_as_guardian": "Trình duyệt này đang đăng nhập với tư cách người giám hộ. Hãy mở phần kết nối trên điện thoại của người được bảo vệ.",
+    "guardian_fallback": "Người giám hộ {{n}}",
+    "you_marker": "(bạn)",
+    "signin_retry": "Thiết bị này chưa đăng nhập được. Hãy kiểm tra kết nối rồi thử lại."
   },
   "guardian": {
     "member_fallback": "người thân",
@@ -425,7 +427,15 @@
     "sign_out": "Đăng xuất",
     "device_is_protected": "Thiết bị này đang bảo vệ {{name}}. Hãy mở bảng điều khiển người giám hộ trên điện thoại của bạn.",
     "no_longer_member": "Bạn không còn là người giám hộ của nhóm này.",
-    "household_gone": "Nhóm này không còn tồn tại."
+    "household_gone": "Nhóm này không còn tồn tại.",
+    "your_name_label": "Tên của bạn, hiển thị cho gia đình (không bắt buộc)",
+    "devices_count": "Thiết bị đã liên kết: {{n}}",
+    "reset_devices": "Đặt lại thiết bị đã liên kết",
+    "reset_devices_confirm": "Hủy liên kết mọi thiết bị của {{name}}? Điện thoại của người thân cần liên kết lại bằng mã mới.",
+    "code_sent_to": "Đã gửi mã đến {{number}}",
+    "resend_code": "Gửi lại",
+    "resend_wait": "Gửi lại sau {{s}} giây",
+    "change_number": "Đổi số"
   },
   "community": {
     "title": "Bản đồ lừa đảo cộng đồng",

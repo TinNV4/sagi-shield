@@ -24,6 +24,7 @@ const confirm = vi.fn(async (_code: string) => {
 });
 const signInWithPhoneNumber = vi.fn(async (_auth: unknown, _phone: string, _verifier: unknown) => ({confirm}));
 const verifierClear = vi.fn();
+const verifierHosts: unknown[] = [];
 const firebaseSignOut = vi.fn(async () => {
   current = null;
   listener?.(null);
@@ -51,6 +52,9 @@ vi.mock('firebase/auth', () => ({
   GoogleAuthProvider: class {},
   RecaptchaVerifier: class {
     clear = verifierClear;
+    constructor(_auth: unknown, host: unknown) {
+      verifierHosts.push(host);
+    }
   },
 }));
 
@@ -150,6 +154,24 @@ describe('guardian sign-in', () => {
     await auth.signInGuardian('phone', '+819012345678');
     confirm.mockRejectedValueOnce(new Error('invalid-verification-code'));
     expect(await auth.confirmPhoneCode('000000')).toBeNull();
+  });
+
+  it('phone: send again renders a new reCAPTCHA in a fresh element; change number drops the pending code', async () => {
+    const auth = await load(true);
+    verifierHosts.length = 0;
+    document.body.innerHTML = '<div id="recaptcha-container"></div>';
+    await auth.signInGuardian('phone', '+819012345678');
+    await auth.signInGuardian('phone', '+819012345678'); // "Send again"
+    expect(signInWithPhoneNumber).toHaveBeenCalledTimes(2);
+    expect(verifierClear).toHaveBeenCalledTimes(1);
+    const container = document.getElementById('recaptcha-container')!;
+    expect(verifierHosts.length).toBe(2);
+    expect(verifierHosts[0]).not.toBe(verifierHosts[1]); // a widget cannot be rendered twice into one element
+    expect(container.children.length).toBe(1);
+    expect(container.firstElementChild).toBe(verifierHosts[1]);
+    auth.cancelPhoneSignIn(); // "Change number"
+    expect(verifierClear).toHaveBeenCalledTimes(2);
+    expect(await auth.confirmPhoneCode('123456')).toBeNull();
   });
 
   it('a cancelled Google popup gives null', async () => {

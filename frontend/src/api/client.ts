@@ -46,6 +46,8 @@ export interface SagiApi {
   /** "Alert my family" from a result: the signed-in device's first household, else the legacy family while one exists. */
   notifyMyHousehold(result: CheckResult, lang: string): Promise<boolean>;
   removeGuardian(id: string, uid: string): Promise<void>;
+  /** Owner only: unpair every device of the household (a lost or replaced phone); resolves to the number removed. */
+  resetHouseholdDevices(id: string): Promise<number>;
   deleteHousehold(id: string): Promise<void>;
   handOver(id: string, uid: string): Promise<void>;
   getStats(): Promise<StatsResult>;
@@ -160,6 +162,13 @@ const kindOf = (status: number): ApiErrorKind =>
 /** Which App Check token a request carries: POSTs a session token, a report a one-time token, reads none. */
 type AppCheckUse = 'session' | 'limited' | 'none';
 
+/** Routes that act for a signed-in user. Checks, reports and stats are anonymous by design: no ID token ever rides
+ *  on them (it would tie a person's checks to an account) and they never wait for the auth SDK. */
+const SIGNED_IN_ROUTE = /^\/(household(\/|$)|agent\/)/;
+
+/** Live Guard: how often a signed-in socket asks again for an ID token that was not ready when it opened. */
+export const AUTH_RETRY_MS = 3000;
+
 // ==========================================
 // REAL API IMPLEMENTATION
 // ==========================================
@@ -187,9 +196,10 @@ export class RealApi implements SagiApi {
         throw new ApiError('offline', null, 0);
       }
     };
-    const bearer = await idToken();
+    const signed = SIGNED_IN_ROUTE.test(path);
+    const bearer = signed ? await idToken() : null;
     let res = await attempt(bearer);
-    if (res.status === 401 && (bearer || currentUser())) {
+    if (signed && res.status === 401 && (bearer || currentUser())) {
       // an expired token, or none because the SDK was too slow after the phone slept: ask for a new one, once
       const fresh = await idToken(true);
       if (fresh) res = await attempt(fresh);
@@ -320,7 +330,9 @@ export class RealApi implements SagiApi {
   }
 
   async notifyMyHousehold(result: CheckResult, lang: string): Promise<boolean> {
-    if (await idToken()) {
+    // only the protected device (anonymous) alerts its household: a guardian checking something on their own phone
+    // must not alert the families they watch. idToken() first: it loads the SDK, so currentUser() is the real answer.
+    if ((await idToken()) && currentUser()?.anonymous === true) {
       try {
         const [first] = await this.myHouseholds();
         if (first) return await this.notifyHousehold(first.household_id, result, lang);
@@ -348,6 +360,11 @@ export class RealApi implements SagiApi {
 
   async removeGuardian(id: string, uid: string): Promise<void> {
     await this.request(`/household/${encodeURIComponent(id)}/guardians/${encodeURIComponent(uid)}`, {method: 'DELETE'});
+  }
+
+  async resetHouseholdDevices(id: string): Promise<number> {
+    const data = await this.request<{removed?: number}>(`/household/${encodeURIComponent(id)}/devices`, {method: 'DELETE'});
+    return data.removed ?? 0;
   }
 
   async deleteHousehold(id: string): Promise<void> {
@@ -386,6 +403,7 @@ export class RealApi implements SagiApi {
     let reconnectDelay = 1000;
     let setThisCall = false; // did THIS call set the set-up flag? (only then may it clear it again)
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let authTimer: ReturnType<typeof setTimeout> | null = null;
 
     const connect = async () => {
       if (isClosed) return;
@@ -398,14 +416,28 @@ export class RealApi implements SagiApi {
       if (isClosed) return;
       const socket = new WebSocket(wsUrl + priorParam() + gate + (token ? `&appcheck=${encodeURIComponent(token)}` : ''));
       ws = socket;
-      socket.onopen = async () => {
-        // the ID token goes in the first message (a URL would be logged); a fresh one on every reconnect
+      // the ID token goes in the first message (a URL would be logged); a fresh one on every reconnect. A signed-in
+      // user whose token was not ready (the SDK is slow after the phone slept) keeps asking in the background while
+      // this socket lives: without it the call is still judged, but a HIGH would never reach the household.
+      const live = () => !isClosed && ws === socket && socket.readyState === WebSocket.OPEN;
+      const sendAuth = async (): Promise<boolean> => {
         const bearer = await idToken();
+        if (!live() || !bearer) return false;
+        const auth: LiveWsClientMessage = {type: 'auth', token: bearer};
+        socket.send(JSON.stringify(auth));
+        return true;
+      };
+      const retryAuth = () => {
+        authTimer = setTimeout(async () => {
+          authTimer = null;
+          if (!live()) return;
+          if (!(await sendAuth()) && live()) retryAuth();
+        }, AUTH_RETRY_MS);
+      };
+      socket.onopen = async () => {
+        const sent = await sendAuth();
         if (isClosed || ws !== socket) return;
-        if (bearer && socket.readyState === WebSocket.OPEN) {
-          const auth: LiveWsClientMessage = {type: 'auth', token: bearer};
-          socket.send(JSON.stringify(auth));
-        }
+        if (!sent && currentUser()) retryAuth();
         reconnectDelay = 1000;
         callbacks.onStatus('connected');
         callbacks.onStatus('listening');
@@ -432,6 +464,8 @@ export class RealApi implements SagiApi {
         }
       };
       ws.onclose = () => {
+        if (authTimer) clearTimeout(authTimer); // the next socket starts its own sign-in
+        authTimer = null;
         if (isClosed) return;
         callbacks.onStatus('reconnecting');
         reconnectTimer = setTimeout(() => void connect(), reconnectDelay);
@@ -459,6 +493,7 @@ export class RealApi implements SagiApi {
       close: () => {
         isClosed = true;
         if (reconnectTimer) clearTimeout(reconnectTimer);
+        if (authTimer) clearTimeout(authTimer);
         if (ws) ws.close();
         callbacks.onStatus('disconnected');
       },
@@ -974,6 +1009,13 @@ class MockApi implements SagiApi {
     h.guardians = h.guardians.filter((g) => g.uid !== uid);
   }
 
+  async resetHouseholdDevices(id: string): Promise<number> {
+    const h = this.mockHousehold(id);
+    const removed = h.devices;
+    h.devices = 0;
+    return removed;
+  }
+
   async deleteHousehold(id: string): Promise<void> {
     this.mockHousehold(id);
     this.mockHouseholds = this.mockHouseholds.filter((h) => h.household_id !== id);
@@ -1329,6 +1371,9 @@ export const api: SagiApi = {
   },
   removeGuardian(id: string, uid: string) {
     return getActiveApi().removeGuardian(id, uid);
+  },
+  resetHouseholdDevices(id: string) {
+    return getActiveApi().resetHouseholdDevices(id);
   },
   deleteHousehold(id: string) {
     return getActiveApi().deleteHousehold(id);

@@ -7,10 +7,14 @@ import {
   guardianScreenState,
   householdLabel,
   householdRouteFailure,
+  guardianName,
   manageActions,
   marketForLang,
   memberScreenState,
   newHighAlert,
+  nextPhoneFlow,
+  resendWaitMs,
+  RESEND_AFTER_MS,
   selectedHousehold,
   toE164,
 } from './householdState';
@@ -35,6 +39,11 @@ describe('memberScreenState', () => {
 
   it('says pairing is unavailable when the sign-in returned null; no household is looked at', () => {
     expect(memberScreenState({uid: null, households: [household()], failed: false})).toEqual({kind: 'unavailable'});
+    expect(memberScreenState({uid: null, households: null, failed: false, authEnabled: false})).toEqual({kind: 'unavailable'});
+  });
+
+  it('a build with sign-in whose anonymous sign-in failed or was slow offers a retry, not "not available"', () => {
+    expect(memberScreenState({uid: null, households: null, failed: false, authEnabled: true})).toEqual({kind: 'signin_failed'});
   });
 
   it('a browser signed in as a guardian gets a notice, never a household code', () => {
@@ -78,9 +87,35 @@ describe('guardianRows', () => {
   it('lists names with the owner mark and keeps the order', () => {
     const rows = guardianRows(household({guardians: [{name: 'Taro', owner: true, me: false}, {name: '', owner: false, me: false}]}));
     expect(rows).toEqual([
-      {key: 'g-0', name: 'Taro', owner: true},
-      {key: 'g-1', name: '', owner: false},
+      {key: 'g-0', name: 'Taro', owner: true, me: false},
+      {key: 'g-1', name: '', owner: false, me: false},
     ]);
+  });
+});
+
+describe('guardianName', () => {
+  const fallback = (n: number) => `Guardian ${n}`;
+  it('a guardian without a name (phone sign-in) is "Guardian N" by list position, never "Primary Guardian"', () => {
+    expect(guardianName({name: ''}, 0, fallback)).toBe('Guardian 1');
+    expect(guardianName({name: '  '}, 2, fallback)).toBe('Guardian 3');
+    expect(guardianName({name: 'Taro'}, 1, fallback)).toBe('Taro');
+  });
+});
+
+describe('phone sign-in steps', () => {
+  it('code sent -> code step; send again stays there with a new time; change number goes back', () => {
+    const sent = nextPhoneFlow({step: 'number'}, {type: 'code_sent', to: '+819012345678', at: 1000});
+    expect(sent).toEqual({step: 'code', sentTo: '+819012345678', sentAt: 1000});
+    expect(nextPhoneFlow(sent, {type: 'code_sent', to: '+819012345678', at: 50000})).toEqual({step: 'code', sentTo: '+819012345678', sentAt: 50000});
+    expect(nextPhoneFlow(sent, {type: 'change_number'})).toEqual({step: 'number'});
+  });
+
+  it('send again waits a little after each SMS (Firebase blocks rapid resends)', () => {
+    const sent = {step: 'code' as const, sentTo: '+81', sentAt: 1000};
+    expect(resendWaitMs(sent, 1000)).toBe(RESEND_AFTER_MS);
+    expect(resendWaitMs(sent, 1000 + RESEND_AFTER_MS - 1)).toBe(1);
+    expect(resendWaitMs(sent, 1000 + RESEND_AFTER_MS)).toBe(0);
+    expect(resendWaitMs({step: 'number'}, 5)).toBe(0);
   });
 });
 
@@ -94,6 +129,13 @@ describe('guardianScreenState', () => {
     expect(guardianScreenState({...base, authKnown: false, user: null})).toEqual({kind: 'loading'});
   });
 
+  it('an anonymous device whose household load failed gets an error with a retry, never the sign-in card', () => {
+    // a visiting relative on flaky Wi-Fi must not be able to replace the device's identity with a guardian sign-in
+    expect(guardianScreenState({...base, user: user({anonymous: true}), households: null, failure: {status: 503}})).toEqual({kind: 'error'});
+    expect(guardianScreenState({...base, user: user({anonymous: true}), households: null, failure: new Error('offline')})).toEqual({kind: 'error'});
+    expect(guardianScreenState({...base, user: user({anonymous: true}), households: null, failure: {status: 401}})).toEqual({kind: 'error'});
+  });
+
   it('not signed in, or only the anonymous device account: the sign-in card', () => {
     expect(guardianScreenState({...base, user: null})).toEqual({kind: 'signin', expired: false});
     expect(guardianScreenState({...base, user: user({anonymous: true}), households: []})).toEqual({kind: 'signin', expired: false});
@@ -104,9 +146,8 @@ describe('guardianScreenState', () => {
     expect(guardianScreenState({...base, user: user({anonymous: true}), households: [h]})).toEqual({kind: 'protected_device', household: h});
   });
 
-  it('an anonymous user whose households are still loading waits; a failed load does not block sign-in', () => {
+  it('an anonymous user whose households are still loading waits', () => {
     expect(guardianScreenState({...base, user: user({anonymous: true}), households: null})).toEqual({kind: 'loading'});
-    expect(guardianScreenState({...base, user: user({anonymous: true}), households: null, failure: {status: 503}})).toEqual({kind: 'signin', expired: false});
   });
 
   it('a 401 that survived the client retry is "session expired" with the sign-in card, never an empty list', () => {
@@ -169,10 +210,11 @@ describe('manageActions', () => {
     ],
   });
 
-  it('the owner can remove and hand over to the others and delete, but not leave', () => {
+  it('the owner can remove and hand over to the others, reset the devices and delete, but not leave', () => {
     expect(manageActions(owner)).toEqual({
       isOwner: true,
       canDelete: true,
+      canResetDevices: true,
       leaveUid: null,
       ownerCannotLeave: true,
       others: [{uid: 'u2', name: 'Sis'}],
@@ -180,7 +222,18 @@ describe('manageActions', () => {
   });
 
   it('a non-owner guardian can only leave', () => {
-    expect(manageActions(member)).toEqual({isOwner: false, canDelete: false, leaveUid: 'u1', ownerCannotLeave: false, others: []});
+    expect(manageActions(member)).toEqual({
+      isOwner: false,
+      canDelete: false,
+      canResetDevices: false,
+      leaveUid: 'u1',
+      ownerCannotLeave: false,
+      others: [],
+    });
+  });
+
+  it('nothing to reset when no device is paired', () => {
+    expect(manageActions({...owner, devices: 0}).canResetDevices).toBe(false);
   });
 
   it('without uids (the list view) nobody can be picked', () => {

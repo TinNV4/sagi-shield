@@ -10,15 +10,17 @@ import type {AuthUser} from './auth';
 export type MemberScreenState =
   | {kind: 'loading'}
   | {kind: 'unavailable'}
+  | {kind: 'signin_failed'}
   | {kind: 'guardian_session'}
   | {kind: 'error'}
   | {kind: 'create'}
   | {kind: 'household'; household: Household};
 
 /**
- * `uid`: undefined = the sign-in has not answered yet, null = it answered "not available" (no Firebase on this
- * build, or it failed). `households`: null = not loaded yet. A failed call is an error with a retry, never an
- * empty "create" state: offering to create a second household because a request failed would be wrong.
+ * `uid`: undefined = the sign-in has not answered yet, null = it answered "no user" (no Firebase on this build, or
+ * the sign-in failed / was too slow). `authEnabled` tells the two apart: only a build without Firebase is "not
+ * available"; a failed sign-in gets a retry. `households`: null = not loaded yet. A failed call is an error with a
+ * retry, never an empty "create" state: offering to create a second household because a request failed would be wrong.
  */
 export function memberScreenState(input: {
   uid: string | null | undefined;
@@ -26,9 +28,11 @@ export function memberScreenState(input: {
   failed: boolean;
   /** This browser is signed in as a guardian (Google / phone), not as a protected device. */
   guardianSession?: boolean;
+  /** The build has Firebase values (auth.ts `authEnabled`). */
+  authEnabled?: boolean;
 }): MemberScreenState {
   if (input.uid === undefined) return {kind: 'loading'};
-  if (input.uid === null) return {kind: 'unavailable'};
+  if (input.uid === null) return input.authEnabled ? {kind: 'signin_failed'} : {kind: 'unavailable'};
   if (input.guardianSession) return {kind: 'guardian_session'};
   if (input.failed) return {kind: 'error'};
   if (input.households === null) return {kind: 'loading'};
@@ -46,10 +50,15 @@ export interface GuardianRow {
   key: string;
   name: string;
   owner: boolean;
+  me: boolean;
 }
 
 export const guardianRows = (household: Household): GuardianRow[] =>
-  household.guardians.map((g, i) => ({key: `g-${i}`, name: g.name, owner: g.owner}));
+  household.guardians.map((g, i) => ({key: `g-${i}`, name: g.name, owner: g.owner, me: g.me}));
+
+/** How a guardian is listed: their name, else "Guardian N" by list position (a phone sign-in carries no name). */
+export const guardianName = (g: {name: string}, index: number, fallback: (n: number) => string): string =>
+  g.name.trim() || fallback(index + 1);
 
 // ---------------------------------------------------------------- guardian side (GuardianViewScreen)
 
@@ -81,8 +90,9 @@ export function guardianScreenState(input: {
     if (!input.user) return {kind: 'signin', expired: false};
     if (input.user.anonymous) {
       // The protected person's own device: a guardian sign-in here would replace its anonymous session and cut it
-      // out of its household. Only a device without a household may go on to sign in.
-      if (input.failure !== null && input.failure !== undefined) return {kind: 'signin', expired: false};
+      // out of its household. Only a device known to have no household may go on to sign in; a failed load (flaky
+      // Wi-Fi) is an error with a retry, so a visiting relative cannot replace the device's identity by accident.
+      if (input.failure !== null && input.failure !== undefined) return {kind: 'error'};
       if (input.households === null) return {kind: 'loading'};
       return input.households.length > 0 ? {kind: 'protected_device', household: input.households[0]} : {kind: 'signin', expired: false};
     }
@@ -110,6 +120,8 @@ export function newHighAlert(previousCount: number | null, alerts: Pick<FamilyAl
 export interface ManageActions {
   isOwner: boolean;
   canDelete: boolean;
+  /** The owner may unpair every device (a lost or replaced phone); only shown while one is paired. */
+  canResetDevices: boolean;
   /** The caller's own uid when they may leave (a non-owner); null for an owner, who hands over or deletes. */
   leaveUid: string | null;
   ownerCannotLeave: boolean;
@@ -123,6 +135,7 @@ export function manageActions(household: Household): ManageActions {
   return {
     isOwner,
     canDelete: isOwner,
+    canResetDevices: isOwner && household.devices > 0,
     leaveUid: !isOwner && me?.uid ? me.uid : null,
     ownerCannotLeave: isOwner,
     others: isOwner ? household.guardians.filter((g) => !g.me && g.uid).map((g) => ({uid: g.uid!, name: g.name})) : [],
@@ -131,6 +144,27 @@ export function manageActions(household: Household): ManageActions {
 
 /** What a household is called on a chip and in the delete confirmation: the protected person first. */
 export const householdLabel = (household: Household, fallback: string): string => household.member_name || household.name || fallback;
+
+// ---------------------------------------------------------------- phone sign-in (SignInCard)
+
+/** Number entry, or waiting for the SMS code that was sent to `sentTo` at `sentAt` (ms). */
+export type PhoneFlow = {step: 'number'} | {step: 'code'; sentTo: string; sentAt: number};
+export type PhoneEvent = {type: 'code_sent'; to: string; at: number} | {type: 'change_number'};
+
+/** Firebase refuses rapid resends (auth/too-many-requests): "Send again" opens this long after each SMS. */
+export const RESEND_AFTER_MS = 30000;
+
+/** A sent code (first or again) moves to / stays on the code step with the new time; "Change number" goes back. */
+export function nextPhoneFlow(_flow: PhoneFlow, event: PhoneEvent): PhoneFlow {
+  if (event.type === 'change_number') return {step: 'number'};
+  return {step: 'code', sentTo: event.to, sentAt: event.at};
+}
+
+/** Milliseconds until "Send again" may be used; 0 = now (and always 0 on the number step). */
+export function resendWaitMs(flow: PhoneFlow, now: number): number {
+  if (flow.step !== 'code') return 0;
+  return Math.max(0, flow.sentAt + RESEND_AFTER_MS - now);
+}
 
 const COUNTRY_CODE: Record<'ja' | 'vi', string> = {ja: '81', vi: '84'};
 
