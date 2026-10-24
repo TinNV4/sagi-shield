@@ -14,7 +14,8 @@ cd "$(dirname "$0")/../frontend"
 if [ -z "${SKIP_FRONTEND:-}" ]; then               # SKIP_FRONTEND=1: backend-only change, keep backend/static as built
   # the PWA is served by the API itself (one URL, same origin); App Check values (infra/setup_appcheck.ps1), if
   # exported as VITE_FIREBASE_API_KEY / VITE_FIREBASE_APP_ID / VITE_RECAPTCHA_SITE_KEY (+ VITE_FIREBASE_VAPID_KEY
-  # for guardian push), are baked into the build
+  # for guardian push), are baked into the build. VITE_FIREBASE_AUTH_DOMAIN (Google sign-in popup host) is optional:
+  # unset -> <project>.firebaseapp.com
   VITE_API_BASE=same-origin VITE_FIREBASE_PROJECT_ID="${VITE_FIREBASE_PROJECT_ID:-$PROJECT}" npm run build
   rm -rf ../backend/static && cp -r dist ../backend/static
 fi

@@ -96,6 +96,8 @@ jobs:
           VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
           VITE_FIREBASE_PROJECT_ID: ${{ vars.GCP_PROJECT }}
+          # Google sign-in popup host; optional, defaults to <project>.firebaseapp.com (frontend/src/lib/firebaseApp.ts)
+          VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
           VITE_RECAPTCHA_SITE_KEY: ${{ vars.VITE_RECAPTCHA_SITE_KEY }}
           VITE_FIREBASE_VAPID_KEY: ${{ vars.VITE_FIREBASE_VAPID_KEY }}  # guardian push; unset -> no notifications
       - run: rm -rf backend/static && cp -r frontend/dist backend/static
