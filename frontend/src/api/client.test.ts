@@ -73,3 +73,24 @@ describe('RealApi requests', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe('link fragments', () => {
+  const load = async (hash: string) => {
+    vi.resetModules();
+    window.history.replaceState(null, '', '/' + hash);
+    return import('./client');
+  };
+
+  it('#join=123456 gives JOIN_FROM_LINK and is stripped from the address bar', async () => {
+    const mod = await load('#join=123456');
+    expect(mod.JOIN_FROM_LINK).toBe('123456');
+    expect(mod.PAIR_FROM_LINK).toBe('');
+    expect(window.location.hash).toBe('');
+  });
+
+  it('#pair=123456 does not set JOIN_FROM_LINK', async () => {
+    const mod = await load('#pair=123456');
+    expect(mod.PAIR_FROM_LINK).toBe('123456');
+    expect(mod.JOIN_FROM_LINK).toBe('');
+  });
+});

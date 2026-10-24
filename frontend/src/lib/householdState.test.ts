@@ -11,6 +11,7 @@ import {
   householdLabel,
   householdRouteFailure,
   kioskFromHousehold,
+  normalizePairCode,
   kioskUnlockActive,
   KIOSK_UNLOCK_MS,
   guardianName,
@@ -343,5 +344,32 @@ describe('cardSteps', () => {
 
   it('adds the microphone step before the charger with Live Guard', () => {
     expect(cardSteps(true)).toEqual(['card.step_open', 'card.step_code', 'card.step_mic', 'card.step_charger']);
+  });
+});
+
+describe('memberScreenState: joining by code', () => {
+  const base = {uid: 'dev', households: [] as Household[], failed: false};
+
+  it('joinChosen opens the join view with the pre-filled code', () => {
+    expect(memberScreenState({...base, joinChosen: true})).toEqual({kind: 'join'});
+    expect(memberScreenState({...base, joinChosen: false})).toEqual({kind: 'create'});
+  });
+
+  it('a device that already has a household never gets the join view', () => {
+    expect(memberScreenState({...base, households: [household()], joinChosen: true}).kind).toBe('household');
+  });
+
+  it('loading, errors and guardian sessions win over the join choice', () => {
+    expect(memberScreenState({...base, households: null, joinChosen: true}).kind).toBe('loading');
+    expect(memberScreenState({...base, failed: true, joinChosen: true}).kind).toBe('error');
+    expect(memberScreenState({...base, guardianSession: true, joinChosen: true}).kind).toBe('guardian_session');
+  });
+});
+
+describe('normalizePairCode', () => {
+  it('keeps digits only, turns full-width digits into ASCII and stops at six', () => {
+    expect(normalizePairCode('123-456')).toBe('123456');
+    expect(normalizePairCode('１２３ ４５６７')).toBe('123456');
+    expect(normalizePairCode('ab12')).toBe('12');
   });
 });

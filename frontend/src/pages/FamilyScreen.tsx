@@ -12,11 +12,11 @@ import {
   Users,
 } from 'lucide-react';
 import QRCode from 'qrcode';
-import {api, describeApiError} from '../api/client';
+import {api, ApiError, describeApiError, JOIN_FROM_LINK} from '../api/client';
 import type {Household} from '../api/types';
 import {useI18n} from '../i18n';
 import {authEnabled, currentUser, ensureDeviceSignIn} from '../lib/auth';
-import {formatPairCode, guardianName, guardianRows, marketForLang, memberScreenState} from '../lib/householdState';
+import {formatPairCode, guardianName, guardianRows, marketForLang, memberScreenState, normalizePairCode} from '../lib/householdState';
 import * as speech from '../lib/speak';
 
 interface FamilyScreenProps {
@@ -44,6 +44,11 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
   const [reloadKey, setReloadKey] = useState(0);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copiedCode, setCopiedCode] = useState(false);
+  // "I have a code from my family": a /#join= link lands here with the code filled in
+  const [joinChosen, setJoinChosen] = useState(Boolean(JOIN_FROM_LINK));
+  const [joinCode, setJoinCode] = useState(JOIN_FROM_LINK);
+  const [joining, setJoining] = useState(false);
+  const [joinError, setJoinError] = useState<unknown>(null);
 
   // This device signs in anonymously, then shows its household with a fresh single-use code (valid 15 min).
   useEffect(() => {
@@ -87,7 +92,22 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
     }
   };
 
-  const view = memberScreenState({uid, households, failed: failure !== null, guardianSession, authEnabled: authEnabled && !api.isMock});
+  // A device joins as a protected device: the household's own code is fetched by the reload, as for any member.
+  const handleJoin = async () => {
+    setJoining(true);
+    setJoinError(null);
+    try {
+      await api.joinHousehold(joinCode);
+      setHouseholds(null);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      setJoinError(err);
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const view = memberScreenState({uid, households, failed: failure !== null, guardianSession, authEnabled: authEnabled && !api.isMock, joinChosen});
   const linkedGuardians = view.kind === 'household' ? guardianRows(view.household) : [];
 
   // The QR opens this app on the guardian's phone with the code pre-filled. Fragment, not query: never sent to a server.
@@ -221,6 +241,55 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
               className="w-full min-h-[56px] rounded-xl bg-[#1B4D3E] text-white text-lg font-bold disabled:opacity-40"
             >
               {t('family.create_btn')}
+            </button>
+            <button
+              id="family-have-code-btn"
+              onClick={() => setJoinChosen(true)}
+              className="w-full min-h-[48px] rounded-xl border-2 border-[#1B4D3E] text-[#1B4D3E] dark:text-emerald-300 dark:border-emerald-600 text-base font-bold"
+            >
+              {t('family.have_code')}
+            </button>
+          </div>
+        )}
+
+        {view.kind === 'join' && (
+          <div className="space-y-3 text-left">
+            <label htmlFor="family-join-code" className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+              {t('family.join_code_label')}
+            </label>
+            <input
+              id="family-join-code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={12}
+              value={joinCode}
+              onChange={(e) => {
+                setJoinCode(normalizePairCode(e.target.value));
+                setJoinError(null);
+              }}
+              className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 text-2xl font-mono tracking-widest text-center"
+            />
+            {joinError !== null && (
+              <p id="family-join-error" role="alert" className="text-sm font-bold text-red-700 dark:text-red-400">
+                {joinError instanceof ApiError && joinError.status === 404 ? t('family.join_wrong_code') : describeApiError(joinError, t)}
+              </p>
+            )}
+            <button
+              id="family-join-btn"
+              onClick={handleJoin}
+              disabled={joining || !/^\d{6}$/.test(joinCode)}
+              className="w-full min-h-[56px] rounded-xl bg-[#1B4D3E] text-white text-lg font-bold disabled:opacity-40"
+            >
+              {t('family.join_btn')}
+            </button>
+            <button
+              onClick={() => {
+                setJoinChosen(false);
+                setJoinError(null);
+              }}
+              className="w-full min-h-[44px] text-sm font-bold text-gray-700 dark:text-gray-300 underline"
+            >
+              {t('family.join_back')}
             </button>
           </div>
         )}

@@ -87,6 +87,18 @@ export const PAIR_FROM_LINK: string = (() => {
   }
 })();
 
+/** Join code carried by the setup card's QR (#join=123456), opened on the protected person's own device. Same rules
+ *  as PAIR_FROM_LINK: fragment only, read once, removed from the address bar. */
+export const JOIN_FROM_LINK: string = (() => {
+  try {
+    const m = window.location.hash.match(/join=(\d{6})/);
+    if (m) window.history.replaceState(null, '', window.location.pathname);
+    return m ? m[1] : '';
+  } catch {
+    return '';
+  }
+})();
+
 /** Opened from a guardian alert notification (public/push-sw.js opens /#guardian): go to the dashboard. Read once. */
 export const GUARDIAN_FROM_PUSH: boolean = (() => {
   try {

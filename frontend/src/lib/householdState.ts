@@ -14,6 +14,7 @@ export type MemberScreenState =
   | {kind: 'guardian_session'}
   | {kind: 'error'}
   | {kind: 'create'}
+  | {kind: 'join'}
   | {kind: 'household'; household: Household};
 
 /**
@@ -30,15 +31,20 @@ export function memberScreenState(input: {
   guardianSession?: boolean;
   /** The build has Firebase values (auth.ts `authEnabled`). */
   authEnabled?: boolean;
+  /** The person chose "I have a code from my family" (or opened a /#join= link) on a device without a household. */
+  joinChosen?: boolean;
 }): MemberScreenState {
   if (input.uid === undefined) return {kind: 'loading'};
   if (input.uid === null) return input.authEnabled ? {kind: 'signin_failed'} : {kind: 'unavailable'};
   if (input.guardianSession) return {kind: 'guardian_session'};
   if (input.failed) return {kind: 'error'};
   if (input.households === null) return {kind: 'loading'};
-  if (input.households.length === 0) return {kind: 'create'};
+  if (input.households.length === 0) return input.joinChosen ? {kind: 'join'} : {kind: 'create'};
   return {kind: 'household', household: input.households[0]};
 }
+
+/** What a code field keeps: ASCII digits only (full-width digits are folded by NFKC), at most six. */
+export const normalizePairCode = (raw: string): string => raw.normalize('NFKC').replace(/\D/g, '').slice(0, 6);
 
 /** The API knows two markets; the English UI is served with the Japanese pack, as `apiLang` does. */
 export const marketForLang = (lang: string): 'ja' | 'vi' => (lang === 'vi' ? 'vi' : 'ja');
