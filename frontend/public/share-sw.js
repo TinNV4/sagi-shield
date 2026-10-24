@@ -11,14 +11,18 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(
     (async () => {
       try {
-        const form = await request.formData();
         const cache = await caches.open(SHARE_CACHE);
-        for (const key of await cache.keys()) await cache.delete(key); // a new share replaces an unread one
+        for (const key of await cache.keys()) await cache.delete(key); // a new share replaces an unread one, even if this one fails
+        const form = await request.formData();
         const field = (name) => {
           const value = form.get(name);
           return typeof value === 'string' ? value : '';
         };
         const files = form.getAll('images').filter((f) => typeof f !== 'string');
+        // files first, the index last: a partial write never leaves an index pointing at missing files
+        for (let i = 0; i < files.length; i++) {
+          await cache.put('/share-inbox/' + i, new Response(files[i], {headers: {'Content-Type': files[i].type || 'application/octet-stream'}}));
+        }
         const index = {
           title: field('title'),
           text: field('text'),
@@ -26,11 +30,8 @@ self.addEventListener('fetch', (event) => {
           files: files.map((f) => ({name: f.name || 'shared', type: f.type || ''})),
         };
         await cache.put('/share-inbox', new Response(JSON.stringify(index), {headers: {'Content-Type': 'application/json'}}));
-        for (let i = 0; i < files.length; i++) {
-          await cache.put('/share-inbox/' + i, new Response(files[i], {headers: {'Content-Type': files[i].type || 'application/octet-stream'}}));
-        }
       } catch (e) {
-        // a share that cannot be stored just opens the app empty
+        // no index was written, so the app opens at /#share and tells the person nothing could be read
       }
       return Response.redirect('/#share', 303);
     })()

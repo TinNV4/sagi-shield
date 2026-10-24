@@ -59,8 +59,14 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
       setActiveTab('text');
     }
     const reasons = new Set(initialInput.rejected.map((r) => r.reason));
+    const nothing = !initialInput.text && !initialInput.images.length;
     setShareNotice(
-      [reasons.has('size') ? t('quick.share_rejected_size') : '', reasons.has('type') ? t('quick.share_rejected_type') : '']
+      [
+        nothing || reasons.has('missing') ? t('quick.share_empty') : '',
+        reasons.has('size') ? t('quick.share_rejected_size') : '',
+        reasons.has('type') ? t('quick.share_rejected_type') : '',
+        reasons.has('count') ? t('quick.images_limit') : '',
+      ]
         .filter(Boolean)
         .join(' ')
     );

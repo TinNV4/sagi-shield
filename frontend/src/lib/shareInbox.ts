@@ -12,11 +12,13 @@ export interface SharedInput {
   text: string;
   url: string;
   files: {name: string; type: string; blob: Blob}[];
+  /** Files the index lists but the cache no longer holds. */
+  missing: number;
 }
 
 export interface RejectedShare {
   name: string;
-  reason: 'size' | 'type';
+  reason: 'size' | 'type' | 'count' | 'missing';
 }
 
 export interface ShareCheckInput {
@@ -25,25 +27,40 @@ export interface ShareCheckInput {
   rejected: RejectedShare[];
 }
 
-/** Reads the shared content once and clears it. Null when nothing was shared (or Cache Storage is unavailable). */
+/** Reads the shared content once and always clears it. Null when there is no (readable) index or Cache Storage is
+ *  unavailable. Files the index lists but the cache lost are counted in `missing`, never skipped silently. */
 export async function readShareInbox(): Promise<SharedInput | null> {
+  if (typeof caches === 'undefined') return null;
+  let cache: Cache;
   try {
-    if (typeof caches === 'undefined') return null;
-    const cache = await caches.open(CACHE_NAME);
+    cache = await caches.open(CACHE_NAME);
+  } catch {
+    return null;
+  }
+  try {
     const indexResponse = await cache.match(INDEX_KEY);
     if (!indexResponse) return null;
     const index = (await indexResponse.json()) as {title?: string; text?: string; url?: string; files?: {name: string; type: string}[]};
+    const metas = Array.isArray(index.files) ? index.files : [];
     const files: SharedInput['files'] = [];
-    for (let i = 0; i < (index.files?.length ?? 0); i++) {
+    let missing = 0;
+    for (let i = 0; i < metas.length; i++) {
       const response = await cache.match(`${INDEX_KEY}/${i}`);
-      if (!response) continue;
-      const meta = index.files![i];
-      files.push({name: meta.name, type: meta.type, blob: await response.blob()});
+      if (!response) {
+        missing++;
+        continue;
+      }
+      files.push({name: metas[i].name, type: metas[i].type, blob: await response.blob()});
     }
-    for (const key of await cache.keys()) await cache.delete(key);
-    return {title: index.title ?? '', text: index.text ?? '', url: index.url ?? '', files};
+    return {title: index.title ?? '', text: index.text ?? '', url: index.url ?? '', files, missing};
   } catch {
     return null;
+  } finally {
+    try {
+      for (const key of await cache.keys()) await cache.delete(key);
+    } catch {
+      // nothing more to do; the next share clears the cache first
+    }
   }
 }
 
@@ -53,7 +70,9 @@ export function toCheckInput(shared: SharedInput): ShareCheckInput {
   for (const f of shared.files) {
     if (!f.type.startsWith('image/')) rejected.push({name: f.name, reason: 'type'});
     else if (f.blob.size > MAX_IMAGE_BYTES) rejected.push({name: f.name, reason: 'size'});
-    else if (images.length < MAX_IMAGES) images.push(new File([f.blob], f.name, {type: f.type}));
+    else if (images.length >= MAX_IMAGES) rejected.push({name: f.name, reason: 'count'});
+    else images.push(new File([f.blob], f.name, {type: f.type}));
   }
+  for (let i = 0; i < shared.missing; i++) rejected.push({name: '', reason: 'missing'});
   return {text: [shared.title, shared.text, shared.url].filter(Boolean).join('\n'), images, rejected};
 }

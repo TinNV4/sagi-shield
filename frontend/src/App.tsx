@@ -102,9 +102,10 @@ function AppContent() {
   const [sharedInput, setSharedInput] = useState<ShareCheckInput | null>(null);
   useEffect(() => {
     if (!SHARE_FROM_LINK) return;
-    readShareInbox().then((shared) => {
-      if (shared) setSharedInput(toCheckInput(shared));
-    });
+    // nothing readable still hands Quick Check an empty input, so it says so instead of showing a blank screen
+    readShareInbox()
+      .then((shared) => setSharedInput(shared ? toCheckInput(shared) : {text: '', images: [], rejected: []}))
+      .catch(() => setSharedInput({text: '', images: [], rejected: []}));
   }, []);
   const [activeCheckResult, setActiveCheckResult] = useState<CheckResult | null>(null);
   const [activeCheckInput, setActiveCheckInput] = useState<CheckInput>({});

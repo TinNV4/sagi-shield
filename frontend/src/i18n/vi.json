@@ -199,6 +199,7 @@
     "error_general": "Đã xảy ra lỗi trong quá trình phân tích.",
     "images_hint": "{n} / {max} ảnh. Các trang của cùng một cuộc trò chuyện được xét chung.",
     "images_limit": "Mỗi lần kiểm tra tối đa 5 ảnh. Đã giữ 5 ảnh đầu.",
+    "share_empty": "Không mở được nội dung bạn đã chia sẻ. Vui lòng dán hoặc đính kèm lại tại đây.",
     "share_rejected_size": "Một số tệp được chia sẻ chưa được kiểm tra: ảnh trên 8 MB bị bỏ qua.",
     "share_rejected_type": "Một số tệp được chia sẻ chưa được kiểm tra: chỉ có thể kiểm tra ảnh.",
     "remove_image": "Bỏ ảnh"
