@@ -45,3 +45,22 @@ def test_clear_devices_unpairs_every_device_and_keeps_the_guardians():
     kept = s.get_household(h["household_id"])
     assert kept["devices"] == [] and [g["uid"] for g in kept["guardians"]] == ["g1"]
     assert s.households_for("dev1") == [] and s.clear_household_devices("nope") == 0
+
+def test_heartbeat_keeps_one_entry_per_device_and_clears_the_offline_mark():
+    s = MemoryStore()
+    h = s.create_household("", "Mom", "ja", DEV)
+    hid = h["household_id"]
+    h["offline_notified_at"] = "2026-10-01T00:00:00+00:00"
+    assert s.record_heartbeat(hid, "dev1", True, at="2026-10-02T00:00:00+00:00") and s.record_heartbeat(hid, "dev1", False, at="2026-10-03T00:00:00+00:00")
+    got = s.get_household(hid)
+    assert got["devices_seen"] == {"dev1": {"at": "2026-10-03T00:00:00+00:00", "listening": False}} and got["offline_notified_at"] is None
+    assert s.record_heartbeat("nope", "dev1", True) is False
+    s.clear_household_devices(hid)
+    assert s.get_household(hid)["devices_seen"] == {}
+
+def test_update_household_whitelists_fields_and_cuts_names():
+    s = MemoryStore()
+    h = s.create_household("", "", "ja", DEV)
+    out = s.update_household(h["household_id"], {"name": "x" * 50, "live_guard_enabled": True, "market": "vi", "devices": []})
+    assert len(out["name"]) == 40 and out["live_guard_enabled"] is True and out["market"] == "ja" and out["devices"] == ["dev1"]
+    assert s.update_household("nope", {"name": "a"}) is None

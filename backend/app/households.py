@@ -7,13 +7,13 @@ from dataclasses import replace
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from . import auth
 from .analytics import log_event
 from .auth import Principal
 from .notifier import alert_household
-from .storage import STORE
+from .storage import STORE, device_status
 
 router = APIRouter()
 NOT_MEMBER = "not a member of this household"
@@ -29,7 +29,7 @@ def public(hh: dict, p: Principal) -> dict:
     return {"household_id": hh["household_id"], "name": hh["name"], "member_name": hh["member_name"],
             "market": hh["market"], "live_guard_enabled": hh["live_guard_enabled"], "devices": len(hh["devices"]),
             "guardians": [{"name": g["name"], "owner": g["owner"], "me": g["uid"] == p.uid} for g in hh["guardians"]],
-            "created_at": hh["created_at"]}
+            "device_status": device_status(hh), "created_at": hh["created_at"]}
 
 
 def resolve_household(principal: Principal | None) -> str | None:
@@ -73,6 +73,22 @@ class HouseholdCreate(BaseModel):
     name: str = Field(default="", max_length=40)
     member_name: str = Field(default="", max_length=40)
     market: Literal["ja", "vi"]
+
+
+class HouseholdUpdate(BaseModel):
+    name: str | None = Field(default=None, max_length=40)
+    member_name: str | None = Field(default=None, max_length=40)
+    live_guard_enabled: bool | None = None
+
+    @model_validator(mode="after")
+    def _something_set(self):
+        if not self.model_fields_set:
+            raise ValueError("nothing to change")
+        return self
+
+
+class Heartbeat(BaseModel):
+    listening: bool
 
 
 class Empty(BaseModel):
@@ -133,6 +149,24 @@ def household_detail(hid: str, p: Principal = Depends(auth.principal)):
     if _is_guardian(hh, p):
         out["guardians"] = [{"uid": g["uid"], **shown} for g, shown in zip(hh["guardians"], out["guardians"])]
     return out
+
+
+@router.patch("/household/{hid}")
+def household_update(hid: str, body: HouseholdUpdate, p: Principal = Depends(auth.principal)):
+    """Owner only: the household's names and whether Live Guard is on for the protected person."""
+    _owner(hid, p)
+    hh = STORE.update_household(hid, body.model_dump(exclude_unset=True))
+    return {"household": public(hh, p)}
+
+
+@router.post("/household/{hid}/heartbeat")
+def household_heartbeat(hid: str, body: Heartbeat, p: Principal = Depends(auth.principal)):
+    """Devices only: "I am alive, and listening or not". No text, no numbers; guardians have no heartbeat."""
+    hh = _member(hid, p)
+    if p.uid not in hh["devices"]:
+        raise HTTPException(403, NOT_MEMBER)
+    STORE.record_heartbeat(hid, p.uid, body.listening)
+    return {"ok": True}
 
 
 @router.get("/household/{hid}/alerts")

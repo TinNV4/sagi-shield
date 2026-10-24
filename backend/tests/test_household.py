@@ -359,3 +359,24 @@ def test_push_removal_is_guardian_only(client):
     assert client.request("DELETE", f"/household/{hid}/push", json=body, headers=H(DEV)).status_code == 403
     assert client.request("DELETE", f"/household/{hid}/push", json=body, headers=H("out:google.com")).status_code == 403
     assert client.request("DELETE", f"/household/{hid}/push", json=body).status_code == 401
+
+def test_owner_updates_settings_and_device_sees_them(client):
+    h = client.post("/household", json={"market": "ja"}, headers=H(DEV)).json(); hid = h["household_id"]
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
+    client.post("/household/join", json={"pair_code": client.post(f"/household/{hid}/code", json={}, headers=H(G1)).json()["pair_code"]}, headers=H(G2))
+    assert client.patch(f"/household/{hid}", json={"live_guard_enabled": True}, headers=H(G2)).status_code == 403
+    assert client.patch(f"/household/{hid}", json={}, headers=H(G1)).status_code == 422
+    r = client.patch(f"/household/{hid}", json={"live_guard_enabled": True, "member_name": "Mom"}, headers=H(G1))
+    assert r.status_code == 200 and r.json()["household"]["live_guard_enabled"] is True
+    mine = client.get("/household", headers=H(DEV)).json()[0]
+    assert mine["live_guard_enabled"] is True and mine["member_name"] == "Mom"
+
+def test_heartbeat_is_device_only_and_shows_on_the_dashboard(client):
+    h = client.post("/household", json={"market": "ja"}, headers=H(DEV)).json(); hid = h["household_id"]
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
+    assert client.get(f"/household/{hid}", headers=H(G1)).json()["device_status"] == {"last_seen": None, "listening": False}
+    assert client.post(f"/household/{hid}/heartbeat", json={"listening": True}, headers=H(G1)).status_code == 403
+    assert client.post(f"/household/{hid}/heartbeat", json={"listening": True}, headers=H(DEV)).status_code == 200
+    status = client.get(f"/household/{hid}", headers=H(G1)).json()["device_status"]
+    assert status["listening"] is True and status["last_seen"] is not None
+    assert "devices_seen" not in client.get(f"/household/{hid}", headers=H(G1)).json()  # uids never leave the server

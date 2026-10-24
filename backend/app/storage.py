@@ -54,6 +54,25 @@ def _new_household(name: str, member_name: str, market: str, creator: Principal 
     return hh
 
 
+SETTINGS_FIELDS = ("name", "member_name", "live_guard_enabled")
+
+
+def _apply_settings(hh: dict, fields: dict) -> None:
+    """Owner-editable settings only (whitelist); names are cut like at creation."""
+    for key in SETTINGS_FIELDS:
+        if key in fields and fields[key] is not None:
+            hh[key] = fields[key][:40] if key != "live_guard_enabled" else bool(fields[key])
+
+
+def device_status(hh: dict) -> dict:
+    """The newest heartbeat across devices; uids stay in `devices_seen`, never in the answer."""
+    seen = list((hh.get("devices_seen") or {}).values())
+    if not seen:
+        return {"last_seen": None, "listening": False}
+    newest = max(seen, key=lambda e: e["at"])
+    return {"last_seen": newest["at"], "listening": bool(newest["listening"])}
+
+
 def _add_member(hh: dict, principal: Principal, fcm_token: str | None) -> bool:
     """Put a principal into a household (a device or a guardian); False when that side is full."""
     if principal.role == "device":
@@ -294,7 +313,22 @@ class MemoryStore:
         if not hh:
             return 0
         removed, hh["devices"] = len(hh["devices"]), []
+        hh["devices_seen"] = {}
         return removed
+
+    def update_household(self, household_id: str, fields: dict) -> dict | None:
+        hh = self.households.get(household_id)
+        if hh:
+            _apply_settings(hh, fields)
+        return hh
+
+    def record_heartbeat(self, household_id: str, uid: str, listening: bool, at: str | None = None) -> bool:
+        hh = self.households.get(household_id)
+        if not hh:
+            return False
+        hh.setdefault("devices_seen", {})[uid] = {"at": at or _now_iso(), "listening": listening}
+        hh["offline_notified_at"] = None
+        return True
 
     def delete_household(self, household_id: str) -> bool:
         self.household_alerts.pop(household_id, None)
@@ -519,8 +553,23 @@ class FirestoreStore:
             return 0
         removed = len(hh.get("devices", []))
         # `devices` is the array households_for() queries with array_contains: emptying it is the whole unpairing
-        self.db.collection("households").document(household_id).update({"devices": []})
+        self.db.collection("households").document(household_id).update({"devices": [], "devices_seen": {}})
         return removed
+
+    def update_household(self, household_id: str, fields: dict) -> dict | None:
+        hh = self.get_household(household_id)
+        if hh:
+            _apply_settings(hh, fields)
+            self.db.collection("households").document(household_id).set(hh)
+        return hh
+
+    def record_heartbeat(self, household_id: str, uid: str, listening: bool, at: str | None = None) -> bool:
+        ref = self.db.collection("households").document(household_id)
+        if not ref.get().exists:
+            return False
+        # update() with a dotted path touches only this device's entry; a whole-document set() would race the alert code
+        ref.update({f"devices_seen.{uid}": {"at": at or _now_iso(), "listening": listening}, "offline_notified_at": None})
+        return True
 
     def delete_household(self, household_id: str) -> bool:
         ref = self.db.collection("households").document(household_id)
