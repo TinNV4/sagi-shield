@@ -369,7 +369,11 @@
     "mock_guardian_2_name": "Daughter (Hanako · Tokyo)",
     "mock_guardian_2_date": "Sep 5, 2026",
     "copy_code_tooltip": "Copy pairing code",
-    "unit_guardians": "members"
+    "unit_guardians": "members",
+    "signin_unavailable": "Pairing is not available in this version of the app.",
+    "create_btn": "Set up my family link",
+    "member_name_label": "Your first name (optional)",
+    "owner_badge": "Owner"
   },
   "guardian": {
     "member_fallback": "your family member",

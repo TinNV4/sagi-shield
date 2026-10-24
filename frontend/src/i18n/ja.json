@@ -369,7 +369,11 @@
     "mock_guardian_2_name": "長女（花子・東京）",
     "mock_guardian_2_date": "2026年9月5日",
     "copy_code_tooltip": "コードをコピー",
-    "unit_guardians": "名"
+    "unit_guardians": "名",
+    "signin_unavailable": "このバージョンのアプリでは、家族との連携はご利用いただけません。",
+    "create_btn": "家族との連携を始める",
+    "member_name_label": "お名前（任意）",
+    "owner_badge": "管理者"
   },
   "guardian": {
     "member_fallback": "ご家族",

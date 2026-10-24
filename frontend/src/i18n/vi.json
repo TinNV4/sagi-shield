@@ -369,7 +369,11 @@
     "mock_guardian_2_name": "Con gái út (Hanako · Tokyo)",
     "mock_guardian_2_date": "05/09/2026",
     "copy_code_tooltip": "Sao chép mã ghép nối",
-    "unit_guardians": "người"
+    "unit_guardians": "người",
+    "signin_unavailable": "Phiên bản ứng dụng này chưa hỗ trợ kết nối người thân.",
+    "create_btn": "Bắt đầu kết nối người thân",
+    "member_name_label": "Tên của bạn (không bắt buộc)",
+    "owner_badge": "Người quản lý"
   },
   "guardian": {
     "member_fallback": "người thân",
