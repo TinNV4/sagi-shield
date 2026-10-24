@@ -74,3 +74,45 @@ def test_device_status_is_the_newest_heartbeat_across_devices():
     assert device_status(s.get_household(hid)) == {"last_seen": "2026-10-02T00:00:00+00:00", "listening": True}
     s.record_heartbeat(hid, "dev2", False, at="2026-10-03T00:00:00+00:00")
     assert device_status(s.get_household(hid)) == {"last_seen": "2026-10-03T00:00:00+00:00", "listening": False}
+
+def test_turning_live_guard_on_stamps_live_guard_since_once(monkeypatch):
+    from app import storage
+    s = MemoryStore()
+    h = s.create_household("", "", "ja", DEV)
+    hid = h["household_id"]
+    monkeypatch.setattr(storage, "_now_iso", lambda: "2026-10-05T00:00:00+00:00")
+    assert s.update_household(hid, {"live_guard_enabled": True})["live_guard_since"] == "2026-10-05T00:00:00+00:00"
+    monkeypatch.setattr(storage, "_now_iso", lambda: "2026-10-06T00:00:00+00:00")
+    assert s.update_household(hid, {"live_guard_enabled": True, "name": "a"})["live_guard_since"] == "2026-10-05T00:00:00+00:00"
+    s.update_household(hid, {"live_guard_enabled": False})
+    assert s.update_household(hid, {"live_guard_enabled": True})["live_guard_since"] == "2026-10-06T00:00:00+00:00"
+
+def test_firestore_update_household_writes_live_guard_since_as_a_field(monkeypatch):
+    from app import storage
+    doc = {"household_id": "h1", "live_guard_enabled": False, "name": ""}
+    updates = []
+
+    class Snap:
+        exists = True
+        def to_dict(self):
+            return dict(doc)
+
+    class Ref:
+        def get(self):
+            return Snap()
+        def update(self, changed):
+            updates.append(changed)
+            doc.update(changed)
+
+    class Db:
+        def collection(self, _name):
+            return self
+        def document(self, _id):
+            return Ref()
+
+    fs = object.__new__(storage.FirestoreStore)
+    fs.db = Db()
+    monkeypatch.setattr(storage, "_now_iso", lambda: "2026-10-05T00:00:00+00:00")
+    fs.update_household("h1", {"live_guard_enabled": True})
+    fs.update_household("h1", {"live_guard_enabled": True})
+    assert updates == [{"live_guard_enabled": True, "live_guard_since": "2026-10-05T00:00:00+00:00"}, {"live_guard_enabled": True}]

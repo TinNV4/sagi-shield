@@ -57,11 +57,16 @@ def _new_household(name: str, member_name: str, market: str, creator: Principal 
 SETTINGS_FIELDS = ("name", "member_name", "live_guard_enabled")
 
 
-def _apply_settings(hh: dict, fields: dict) -> None:
-    """Owner-editable settings only (whitelist); names are cut like at creation."""
+def _settings_changes(current: dict, fields: dict) -> dict:
+    """Owner-editable settings only (whitelist); names are cut like at creation. Turning Live Guard on stamps
+    `live_guard_since`, so the offline sweep measures silence from that moment, not from the household's creation."""
+    changed: dict = {}
     for key in SETTINGS_FIELDS:
         if key in fields and fields[key] is not None:
-            hh[key] = fields[key][:40] if key != "live_guard_enabled" else bool(fields[key])
+            changed[key] = fields[key][:40] if key != "live_guard_enabled" else bool(fields[key])
+    if changed.get("live_guard_enabled") and not current.get("live_guard_enabled"):
+        changed["live_guard_since"] = _now_iso()
+    return changed
 
 
 def device_status(hh: dict) -> dict:
@@ -319,7 +324,7 @@ class MemoryStore:
     def update_household(self, household_id: str, fields: dict) -> dict | None:
         hh = self.households.get(household_id)
         if hh:
-            _apply_settings(hh, fields)
+            hh.update(_settings_changes(hh, fields))
         return hh
 
     def record_heartbeat(self, household_id: str, uid: str, listening: bool, at: str | None = None) -> bool:
@@ -566,11 +571,11 @@ class FirestoreStore:
         return removed
 
     def update_household(self, household_id: str, fields: dict) -> dict | None:
-        changed: dict = {}
-        _apply_settings(changed, fields)  # the same whitelist and cuts as memory, collected instead of applied
         ref = self.db.collection("households").document(household_id)
-        if not ref.get().exists:
+        snap = ref.get()
+        if not snap.exists:
             return None
+        changed = _settings_changes(snap.to_dict() or {}, fields)  # the same whitelist, cuts and stamp as memory
         if changed:
             ref.update(changed)  # only these keys: a concurrent heartbeat, token or code refresh is never reverted
         return self.get_household(household_id)

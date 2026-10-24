@@ -81,3 +81,24 @@ def test_one_failing_household_does_not_stop_the_others(store, sent, frozen_now,
     monkeypatch.setattr(store, "add_household_alert", flaky)
     assert sweep(now=frozen_now) == {"checked": 2, "notified": 1, "failed": 1}
     assert ids[0] not in capsys.readouterr().err  # the log line carries a short prefix, never the whole id
+
+
+def test_silence_counts_from_when_live_guard_was_turned_on(store, sent, frozen_now, monkeypatch):
+    hh = store.create_household("", "Mom", "ja", DEV); hid = hh["household_id"]
+    store.join_household(hh["pair_code"], GUARD, "tok")
+    hh["created_at"] = iso(frozen_now - 5 * 86400)                       # an old household ...
+    monkeypatch.setattr(storage, "_now_iso", lambda: iso(frozen_now))
+    store.update_household(hid, {"live_guard_enabled": True})            # ... that only now turns Live Guard on
+    assert sweep(now=frozen_now) == {"checked": 1, "notified": 0, "failed": 0}
+    assert sweep(now=frozen_now + 25 * 3600) == {"checked": 1, "notified": 1, "failed": 0}
+
+
+def test_status_code_is_nonzero_when_a_household_failed():
+    assert heartbeat_sweep.status_code({"checked": 2, "notified": 1, "failed": 0}) == 0
+    assert heartbeat_sweep.status_code({"checked": 2, "notified": 1, "failed": 1}) == 1
+
+
+def test_main_exits_1_when_a_household_failed(monkeypatch, capsys):
+    monkeypatch.setattr(heartbeat_sweep, "sweep", lambda: {"checked": 1, "notified": 0, "failed": 1})
+    assert heartbeat_sweep.main() == 1
+    assert '"failed": 1' in capsys.readouterr().out

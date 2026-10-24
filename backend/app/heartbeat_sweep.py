@@ -4,7 +4,9 @@ Sagi Shield - hourly sweep for silent Live Guard devices.
     python -m app.heartbeat_sweep        # what the Cloud Run Job runs (STORE=firestore in its env); prints the counts
 
 A household with Live Guard turned on whose newest heartbeat is older than OFFLINE_AFTER_S gets one "device offline"
-alert (stored + a normal-urgency push). A household that never sent a heartbeat is measured from `created_at`.
+alert (stored + a normal-urgency push). Silence is measured from the newest heartbeat or from the moment Live Guard
+was turned on (`live_guard_since`, else `created_at`), whichever is later: switching Live Guard on for an old household
+must not page the family before the device had a day to check in.
 The next heartbeat clears `offline_notified_at`, so a later outage notifies again. Heartbeats carry no text.
 """
 from __future__ import annotations
@@ -30,7 +32,8 @@ def sweep(now: float | None = None) -> dict:
     for hh in STORE.households_for_sweep():
         checked += 1
         try:  # one broken household must not stop the sweep for the others
-            since = device_status(hh)["last_seen"] or hh.get("created_at")
+            marks = [m for m in (device_status(hh)["last_seen"], hh.get("live_guard_since") or hh.get("created_at")) if m]
+            since = max(marks, key=_ts) if marks else None
             if not since or now - _ts(since) <= OFFLINE_AFTER_S:
                 continue
             done = hh.get("offline_notified_at")
@@ -45,6 +48,16 @@ def sweep(now: float | None = None) -> dict:
     return {"checked": checked, "notified": notified, "failed": failed}
 
 
+def status_code(result: dict) -> int:
+    """Non-zero when any household failed, so the Cloud Run Job execution shows red."""
+    return 1 if result.get("failed") else 0
+
+
+def main() -> int:
+    result = sweep()
+    print(json.dumps(result))
+    return status_code(result)
+
+
 if __name__ == "__main__":
-    print(json.dumps(sweep()))
-    sys.exit(0)
+    sys.exit(main())
