@@ -17,6 +17,7 @@ from typing import Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -25,7 +26,7 @@ from input_layer import URL_RE, analyze_phone, build_evidence, normalize_text, p
 from model_ids import model_id  # noqa: E402
 from risk_engine import LANG_PACKS, analyze, level, precursor_hits as engine_precursor  # noqa: E402
 
-from . import appcheck, services  # noqa: E402
+from . import appcheck, auth, households, services  # noqa: E402
 from .agent import router as agent_router  # noqa: E402
 from .analytics import log_event  # noqa: E402
 from .guard import GuardMiddleware  # noqa: E402
@@ -74,6 +75,14 @@ app.add_middleware(CORSMiddleware, allow_origins=os.getenv("CORS_ORIGINS", "*").
 store = STORE
 app.include_router(live_router)
 app.include_router(agent_router)
+app.include_router(households.router)
+
+
+@app.exception_handler(auth.AuthError)
+def _auth_error(request: Request, exc: auth.AuthError):
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status)
+
+
 SPIKE = Path(__file__).resolve().parents[2] / "frontend" / "spike"  # dev only: not copied into the Docker image
 if SPIKE.is_dir():
     app.mount("/spike", StaticFiles(directory=SPIKE), name="spike")
