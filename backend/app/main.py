@@ -15,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Literal
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -373,7 +373,7 @@ class FamilyCode(BaseModel):
     family_id: FamilyId | None = None  # existing family: issue a fresh code
 
 
-@app.post("/family/code")
+@app.post("/family/code", dependencies=[Depends(auth.require_legacy_family)])
 def family_code(body: FamilyCode):
     """Protected person's device: start a family. Keep family_id secret; show pair_code (valid 15 min)."""
     fam = (store.refresh_code(body.family_id) if body.family_id else None) or store.create_family(body.member_name)
@@ -387,7 +387,7 @@ class FamilyLink(BaseModel):
     fcm_token: str | None = Field(default=None, max_length=4096)
 
 
-@app.post("/family/link")
+@app.post("/family/link", dependencies=[Depends(auth.require_legacy_family)])
 def family_link(body: FamilyLink):
     fam = store.link_guardian("".join(c for c in body.pair_code if c.isdigit()), body.guardian_name, body.fcm_token)
     if not fam:
@@ -400,7 +400,7 @@ class FamilyPush(BaseModel):
     fcm_token: str = Field(min_length=1, max_length=4096)
 
 
-@app.post("/family/push")
+@app.post("/family/push", dependencies=[Depends(auth.require_legacy_family)])
 def family_push(body: FamilyPush):
     """A paired guardian turns on notifications later (or the browser renewed its token). family_id is the secret."""
     if not store.add_push_token(body.family_id, body.fcm_token):
@@ -408,7 +408,7 @@ def family_push(body: FamilyPush):
     return {"ok": True}
 
 
-@app.get("/family/alerts")
+@app.get("/family/alerts", dependencies=[Depends(auth.require_legacy_family)])
 def family_alerts(family_id: str):
     if not store.get_family(family_id):
         raise HTTPException(404, "unknown family")
@@ -424,7 +424,7 @@ class FamilyNotify(BaseModel):
     lang: str = "ja"
 
 
-@app.post("/family/notify")
+@app.post("/family/notify", dependencies=[Depends(auth.require_legacy_family)])
 def family_notify(body: FamilyNotify):
     """"Notify my family" on a result screen."""
     alert = alert_family(body.family_id, body.model_dump(), check_lang(body.lang))

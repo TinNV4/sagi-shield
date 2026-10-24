@@ -104,6 +104,16 @@ def admin_only(p: Principal = Depends(principal)) -> Principal:
     return p
 
 
+def legacy_family_enabled() -> bool:
+    """LEGACY_FAMILY=0 switches the shared-secret family routes off (removed for good on 2026-11-14)."""
+    return os.getenv("LEGACY_FAMILY", "1") != "0"
+
+
+def require_legacy_family() -> None:
+    if not legacy_family_enabled():
+        raise HTTPException(410, "this version of the app is outdated; reload to update")
+
+
 def principal_from_query(token: str | None) -> Principal | None:
     """For the WebSocket: never raises, so a scared caller is never refused."""
     if not token:

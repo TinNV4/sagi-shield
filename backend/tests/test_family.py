@@ -114,3 +114,9 @@ def test_push_goes_to_pairing_tokens_and_later_tokens_once_each(client, sent):
 
 def test_push_needs_a_known_family(client):
     assert client.post("/family/push", json={"family_id": "x" * 22, "fcm_token": "tok"}).status_code == 404
+
+
+def test_legacy_routes_can_be_switched_off(client, monkeypatch):
+    monkeypatch.setenv("LEGACY_FAMILY", "0")
+    assert client.post("/family/code", json={}).status_code == 410
+    assert client.get("/family/alerts", params={"family_id": "x"}).status_code == 410
