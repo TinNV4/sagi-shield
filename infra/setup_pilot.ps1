@@ -48,11 +48,16 @@ if (-not $SkipPhishList) {
 
 # 3. once the service exists: its host joins the reCAPTCHA Enterprise key, so App Check tokens verify on the pilot URL
 #    (without it every pilot request runs on the unverified budget, RATE_LIMIT_UNVERIFIED_PER_MIN)
-$url = gcloud run services describe $Service --project $Project --region $Region --format "value(status.url)" 2>$null
-if ($LASTEXITCODE -eq 0 -and $url) {
-    $pilotHost = ([Uri]$url).Host
-    Write-Host "Pilot URL: $url"
-    & (Join-Path $PSScriptRoot "setup_appcheck.ps1") -Project $Project -Region $Region -Domains @($pilotHost)
+$svc = gcloud run services describe $Service --project $Project --region $Region --format json 2>$null | ConvertFrom-Json
+if ($LASTEXITCODE -eq 0 -and $svc) {
+    # a Cloud Run service answers on two hosts (<name>-<hash>-an.a.run.app and <name>-<number>.<region>.run.app): both
+    # must be on the reCAPTCHA key or a token minted on one of them fails verification
+    $urls = $svc.metadata.annotations.'run.googleapis.com/urls'   # same source as setup_appcheck.ps1
+    $urls = if ($urls) { @($urls | ConvertFrom-Json) } else { @($svc.status.url) }
+    $pilotHosts = @($urls | ForEach-Object { ([Uri]$_).Host } | Select-Object -Unique)
+    $url = $svc.status.url
+    Write-Host "Pilot URL: $url  (hosts: $($pilotHosts -join ', '))"
+    & (Join-Path $PSScriptRoot "setup_appcheck.ps1") -Project $Project -Region $Region -Domains $pilotHosts
     Write-Host ""
     Write-Host "Done. By hand: bookmark $url as the pilot URL; install it on the pilot phones from this address."
 } else {
