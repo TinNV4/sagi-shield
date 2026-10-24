@@ -41,7 +41,9 @@ from input_layer import build_evidence
 from model_ids import model_id
 
 from .analytics import log_event
-from .notifier import alert_family
+from .auth import legacy_family_enabled, principal_from_query
+from .households import resolve_household
+from .notifier import alert_family, alert_household
 from .verdict_log import log_verdict
 
 router = APIRouter()
@@ -59,7 +61,15 @@ async def live(ws: WebSocket):
     if lang not in engine.LANG_PACKS or ws.query_params.get("input", "text") != "text":
         await ws.close(code=1008)  # audio input (server-side STT) is not implemented
         return
+    family_id = ws.query_params.get("family_id")
+    if family_id and not legacy_family_enabled():
+        await ws.close(code=1008)  # the shared-secret query is retired: the app reloads and signs in instead
+        return
     await ws.accept()
+    # who is calling: the sign-in token is checked once here (it may reach the network), never per line. No token, a bad
+    # one, or a device in no household leaves household_id None: the warning is still spoken, only the family alert is skipped
+    token = ws.query_params.get("token")
+    household_id = await asyncio.to_thread(lambda: resolve_household(principal_from_query(token))) if token else None
     silence_s = float(os.getenv("LIVE_SILENCE_S", "45"))
     llm_every_s = float(os.getenv("LIVE_LLM_EVERY_S", "5"))
     periodic_s = float(os.getenv("LIVE_PERIODIC_S", "20"))
@@ -70,8 +80,7 @@ async def live(ws: WebSocket):
     pack = engine.LANG_PACKS[lang]
     tracker, window = engine.LiveTracker(), deque(maxlen=WINDOW_LINES)
     tracker.prior_precursor = ws.query_params.get("prior") == "precursor"
-    family_id = ws.query_params.get("family_id")
-    state = {"session": uuid.uuid4().hex[:12], "spoken": False, "last_llm": float("-inf"), "task": None,  # -inf = never: monotonic() is small on a freshly booted machine
+    state = {"household_id": household_id, "session": uuid.uuid4().hex[:12], "spoken": False, "last_llm": float("-inf"), "task": None,  # -inf = never: monotonic() is small on a freshly booted machine
              "scam_type": "unknown", "reasons": [], "unseen": 0, "started": time.monotonic(), "opening": [], "lines": 0, "looks": 0,
              "max_score": 0, "max_level": "LOW", "alarm_line": None}
 
@@ -128,9 +137,13 @@ async def live(ws: WebSocket):
             log_verdict("live_alarm", session=state["session"], lang=lang, line=state["lines"], level=lv, score=score,
                         stage=tracker.max_stage, scam_type=state["scam_type"], trigger=trigger or None,
                         seconds=round(time.monotonic() - state["started"], 1))
-        if first_high and family_id:
+        if first_high and (state["household_id"] or family_id):
             reasons = state["reasons"] or engine.rule_reasons(tracker.hits, lang)
-            await asyncio.to_thread(alert_family, family_id, {**msg, "scam_type": state["scam_type"], "reasons": reasons}, lang)
+            body = {**msg, "scam_type": state["scam_type"], "reasons": reasons}
+            if state["household_id"]:
+                await asyncio.to_thread(alert_household, state["household_id"], body, lang)
+            else:
+                await asyncio.to_thread(alert_family, family_id, body, lang)
 
     async def ask_llm(text: str, session: str, trigger: str):
         # during a call every second counts: flash-lite scored 15/15 on tools/compare_llm.py at ~2.3 s median,

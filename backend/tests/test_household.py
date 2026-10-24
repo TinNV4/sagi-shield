@@ -184,3 +184,43 @@ def test_an_admin_who_is_also_a_guardian_may_use_guardian_routes(client):
     hid = h["household_id"]
     assert client.get(f"/household/{hid}/alerts", headers=H(adm)).status_code == 200
     assert client.post(f"/household/{hid}/push", json={"fcm_token": "x"}, headers=H(adm)).status_code == 200
+
+
+SCAM_LINES = ["警視庁の者です。電話番号は 03-1234-5678 です", "これからLINEで逮捕状を送ります", "すぐに確認してください", "もしもし"]
+
+
+def say(ws, text):
+    ws.send_json({"type": "transcript", "text": text, "final": True})
+
+
+def test_live_high_alerts_the_household_once_and_survives_deletion(client):
+    h = client.post("/household", json={"member_name": "Mom", "market": "ja"}, headers=H(DEV)).json()
+    hid = h["household_id"]
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
+    with client.websocket_connect("/ws/live?lang=ja&token=fake:d1:anonymous") as ws:
+        for line in SCAM_LINES:
+            say(ws, line)
+            ws.receive_json()
+    alerts = client.get(f"/household/{hid}/alerts", headers=H(G1)).json()
+    assert len(alerts) == 1 and alerts[0]["risk_level"] == "HIGH" and SCAM_LINES[0] not in str(alerts)
+    client.delete(f"/household/{hid}", headers=H(G1))
+    with client.websocket_connect("/ws/live?lang=ja&token=fake:d1:anonymous") as ws:   # orphaned device: still warns
+        for line in SCAM_LINES:
+            say(ws, line)
+            last = ws.receive_json()
+    assert last["risk_level"] == "HIGH"
+
+
+def test_live_with_a_bad_token_still_runs(client):
+    with client.websocket_connect("/ws/live?lang=ja&token=garbage") as ws:
+        say(ws, "もしもし")
+        assert ws.receive_json()["risk_level"] == "LOW"
+
+
+def test_live_legacy_family_id_is_refused_when_the_flag_is_off(client, monkeypatch):
+    monkeypatch.setenv("LEGACY_FAMILY", "0")
+    from starlette.websockets import WebSocketDisconnect
+    with pytest.raises(WebSocketDisconnect) as e:
+        with client.websocket_connect("/ws/live?lang=ja&family_id=x") as ws:
+            ws.receive_json()
+    assert e.value.code == 1008
