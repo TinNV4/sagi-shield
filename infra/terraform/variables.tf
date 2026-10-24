@@ -56,6 +56,12 @@ variable "phish_reload_schedule" {
   default     = "0 6 15 * *"
 }
 
+variable "heartbeat_sweep_schedule" {
+  description = "Cron (Asia/Tokyo) of the hourly offline sweep"
+  type        = string
+  default     = "0 * * * *"
+}
+
 variable "app_check_mode" {
   description = "off | monitor | enforce (backend/app/appcheck.py): start with monitor, enforce once real traffic shows ac=valid"
   type        = string

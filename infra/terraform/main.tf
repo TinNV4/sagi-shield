@@ -327,6 +327,155 @@ resource "google_cloud_scheduler_job" "phish_loader" {
   depends_on = [google_cloud_run_v2_job_iam_member.scheduler_invoker]
 }
 
+# ---------------------------------------------------------------- hourly sweep for silent Live Guard devices
+# Mirrors infra/setup_heartbeat_job.ps1. A job reads one Firestore database, so production and the pilot each get one;
+# the pilot's keeps the script's name (deploy-pilot.yml moves it to each new image).
+
+resource "google_cloud_run_v2_job" "heartbeat_sweep_prod" {
+  name                = "sagi-heartbeat-sweep-prod"
+  location            = var.region
+  deletion_protection = false
+
+  template {
+    task_count = 1
+    template {
+      service_account = google_service_account.api.email
+      max_retries     = 1
+      timeout         = "300s"
+      containers {
+        image   = var.image
+        command = ["python"]
+        args    = ["-m", "app.heartbeat_sweep"]
+        resources {
+          limits = { cpu = "1", memory = "512Mi" }
+        }
+        env {
+          name  = "STORE"
+          value = "firestore"
+        }
+        env {
+          name  = "GOOGLE_CLOUD_PROJECT"
+          value = var.project
+        }
+        env {
+          name  = "FIRESTORE_DB"
+          value = "(default)"
+        }
+        env {
+          name = "HASH_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.hash_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [google_project_service.apis, google_project_iam_member.api_roles, google_secret_manager_secret_iam_member.hash_key_reader]
+}
+
+resource "google_cloud_run_v2_job_iam_member" "heartbeat_sweep_prod_invoker" {
+  name     = google_cloud_run_v2_job.heartbeat_sweep_prod.name
+  location = google_cloud_run_v2_job.heartbeat_sweep_prod.location
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+resource "google_cloud_scheduler_job" "heartbeat_sweep_prod" {
+  name        = "sagi-heartbeat-sweep-prod"
+  region      = var.region
+  description = "Hourly check for Live Guard devices that stopped sending heartbeats"
+  schedule    = var.heartbeat_sweep_schedule
+  time_zone   = "Asia/Tokyo"
+
+  http_target {
+    http_method = "POST"
+    uri         = "https://run.googleapis.com/v2/projects/${var.project}/locations/${var.region}/jobs/${google_cloud_run_v2_job.heartbeat_sweep_prod.name}:run"
+    oauth_token {
+      service_account_email = google_service_account.scheduler.email
+    }
+  }
+
+  depends_on = [google_cloud_run_v2_job_iam_member.heartbeat_sweep_prod_invoker]
+}
+
+resource "google_cloud_run_v2_job" "heartbeat_sweep_pilot" {
+  count               = var.pilot_enabled ? 1 : 0
+  name                = "sagi-heartbeat-sweep"
+  location            = var.region
+  deletion_protection = false
+
+  template {
+    task_count = 1
+    template {
+      service_account = google_service_account.api.email
+      max_retries     = 1
+      timeout         = "300s"
+      containers {
+        image   = var.pilot_image != "" ? var.pilot_image : var.image
+        command = ["python"]
+        args    = ["-m", "app.heartbeat_sweep"]
+        resources {
+          limits = { cpu = "1", memory = "512Mi" }
+        }
+        env {
+          name  = "STORE"
+          value = "firestore"
+        }
+        env {
+          name  = "GOOGLE_CLOUD_PROJECT"
+          value = var.project
+        }
+        env {
+          name  = "FIRESTORE_DB"
+          value = google_firestore_database.pilot[0].name
+        }
+        env {
+          name = "HASH_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.hash_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [google_project_service.apis, google_project_iam_member.api_roles, google_secret_manager_secret_iam_member.hash_key_reader]
+}
+
+resource "google_cloud_run_v2_job_iam_member" "heartbeat_sweep_pilot_invoker" {
+  count    = var.pilot_enabled ? 1 : 0
+  name     = google_cloud_run_v2_job.heartbeat_sweep_pilot[0].name
+  location = google_cloud_run_v2_job.heartbeat_sweep_pilot[0].location
+  role     = "roles/run.invoker"
+  member   = "serviceAccount:${google_service_account.scheduler.email}"
+}
+
+resource "google_cloud_scheduler_job" "heartbeat_sweep_pilot" {
+  count       = var.pilot_enabled ? 1 : 0
+  name        = "sagi-heartbeat-sweep"
+  region      = var.region
+  description = "Hourly check for Live Guard devices that stopped sending heartbeats"
+  schedule    = var.heartbeat_sweep_schedule
+  time_zone   = "Asia/Tokyo"
+
+  http_target {
+    http_method = "POST"
+    uri         = "https://run.googleapis.com/v2/projects/${var.project}/locations/${var.region}/jobs/${google_cloud_run_v2_job.heartbeat_sweep_pilot[0].name}:run"
+    oauth_token {
+      service_account_email = google_service_account.scheduler.email
+    }
+  }
+
+  depends_on = [google_cloud_run_v2_job_iam_member.heartbeat_sweep_pilot_invoker]
+}
+
 # ---------------------------------------------------------------- Firebase App Check (reCAPTCHA Enterprise)
 # Mirrors infra/setup_appcheck.ps1. The PWA is built with the web app's config and the site key (outputs below);
 # the API verifies tokens according to var.app_check_mode (backend/app/appcheck.py).

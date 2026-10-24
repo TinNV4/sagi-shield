@@ -56,6 +56,12 @@ if [ "$SERVICE" = "sagi-shield-api" ] && gcloud run jobs describe sagi-phish-loa
   gcloud run jobs update sagi-phish-loader --project "$PROJECT" --region "$REGION" --image "$IMAGE" --quiet
 fi
 
+# the hourly heartbeat sweep (infra/setup_heartbeat_job.ps1) runs from the pilot image (it reads the pilot database)
+if [ "$SERVICE" = "sagi-shield-pilot" ] && gcloud run jobs describe sagi-heartbeat-sweep --project "$PROJECT" --region "$REGION" >/dev/null 2>&1; then
+  IMAGE="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(spec.template.spec.containers[0].image)')"
+  gcloud run jobs update sagi-heartbeat-sweep --project "$PROJECT" --region "$REGION" --image "$IMAGE" --quiet
+fi
+
 URL="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(status.url)')"
 echo "Deployed: $URL"
 curl -fsS "$URL/health" && echo

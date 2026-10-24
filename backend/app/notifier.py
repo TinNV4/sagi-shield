@@ -4,11 +4,15 @@ so it works even when push does not); FCM web push (the guardian's PWA, frontend
 """
 from __future__ import annotations
 import sys
+from datetime import datetime, timezone
 from functools import lru_cache
 
 from .storage import STORE
 
 TITLE = {"ja": "\u8a50\u6b3a\u306e\u7591\u3044\u306e\u3042\u308b\u96fb\u8a71\u3092\u691c\u77e5\u3057\u307e\u3057\u305f", "vi": "Ph\u00e1t hi\u1ec7n cu\u1ed9c g\u1ecdi nghi l\u1eeba \u0111\u1ea3o"}
+OFFLINE_TITLE = {"ja": "見守り端末から応答がありません", "vi": "Thiết bị bảo vệ không phản hồi"}
+OFFLINE_TEXT = {"ja": "見守り端末から{hours}時間以上応答がありません。電源と Wi-Fi を確認してください。",
+                "vi": "Thiết bị bảo vệ không phản hồi hơn {hours} giờ. Hãy kiểm tra nguồn và Wi-Fi."}
 
 
 @lru_cache(maxsize=1)
@@ -40,16 +44,17 @@ def _tokens(group: dict) -> list[str]:
                               + group.get("push_tokens", [])))
 
 
-def _push(tokens: list[str], lang: str, summary: str, alert: dict) -> None:
+def _push(tokens: list[str], lang: str, summary: str, alert: dict, urgency: str = "high",
+          titles: dict[str, str] = TITLE) -> None:
     if not tokens:
         return
     try:
         m = _messaging()
         m.send_each_for_multicast(m.MulticastMessage(
-            tokens=tokens, notification=m.Notification(title=TITLE.get(lang, TITLE["ja"]), body=summary),
+            tokens=tokens, notification=m.Notification(title=titles.get(lang, titles["ja"]), body=summary),
             data={"alert_id": alert["id"], "risk_level": alert["risk_level"]},
             # high urgency: delivered at once to a phone in battery saving; useless after an hour
-            webpush=m.WebpushConfig(headers={"Urgency": "high", "TTL": "3600"})))
+            webpush=m.WebpushConfig(headers={"Urgency": urgency, "TTL": "3600"})))
     except Exception as e:
         print(f"[notifier] push unavailable: {type(e).__name__}: {str(e)[:120]}", file=sys.stderr)
 
@@ -63,9 +68,22 @@ def alert_household(household_id: str | None, result: dict, lang: str) -> dict |
                                       int(result.get("stage", 0)), summary)
     if not alert:
         return None
-    hh = STORE.get_household(household_id) or {}
+    _push(_household_tokens(STORE.get_household(household_id) or {}), lang, summary, alert)
+    return alert
+
+
+def _household_tokens(hh: dict) -> list[str]:
     guardians = hh.get("guardians", [])
     uids = {g["uid"] for g in guardians}  # a removed guardian's push tokens are ignored
     own = [t["token"] for t in hh.get("push_tokens", []) if t.get("uid") in uids]
-    _push(_tokens({"guardians": guardians, "push_tokens": own}), lang, summary, alert)
+    return _tokens({"guardians": guardians, "push_tokens": own})
+
+
+def notify_offline(household: dict, since_iso: str, lang: str) -> dict | None:
+    """Tell the guardians the Live Guard device has been silent since `since_iso`. Normal urgency: nothing is on fire."""
+    hours = max(1, int((datetime.now(timezone.utc) - datetime.fromisoformat(since_iso)).total_seconds() // 3600))
+    summary = OFFLINE_TEXT.get(lang, OFFLINE_TEXT["ja"]).format(hours=hours)
+    alert = STORE.add_household_alert(household["household_id"], "LOW", "device_offline", 0, summary)
+    if alert:
+        _push(_household_tokens(household), lang, summary, alert, urgency="normal", titles=OFFLINE_TITLE)
     return alert

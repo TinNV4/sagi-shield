@@ -42,6 +42,11 @@ on:
         required: false
         type: boolean
         default: false
+      update_heartbeat_job:
+        description: Point the hourly heartbeat-sweep job at the new image (pilot only; the job reads one database)
+        required: false
+        type: boolean
+        default: false
       min_instances:
         required: false
         type: number
@@ -156,6 +161,16 @@ jobs:
               --image "$IMAGE:${SHA::12}" --quiet
           else
             echo "sagi-phish-loader not set up (infra/setup_phish_job.ps1) - skipped"
+          fi
+
+      - name: Point the heartbeat-sweep job at the new image
+        if: ${{ inputs.update_heartbeat_job }}
+        run: |
+          # the hourly offline sweep (infra/setup_heartbeat_job.ps1) runs app/heartbeat_sweep.py from this image
+          if gcloud run jobs describe sagi-heartbeat-sweep --project "${{ vars.GCP_PROJECT }}" --region "$REGION" >/dev/null 2>&1; then
+            gcloud run jobs update sagi-heartbeat-sweep --project "${{ vars.GCP_PROJECT }}" --region "$REGION" \n              --image "$IMAGE:${SHA::12}" --quiet
+          else
+            echo "sagi-heartbeat-sweep not set up (infra/setup_heartbeat_job.ps1) - skipped"
           fi
 
       - name: Smoke test

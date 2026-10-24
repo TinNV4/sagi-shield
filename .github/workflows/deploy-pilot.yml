@@ -66,3 +66,4 @@ jobs:
       bq_table: ""
       env_label: PILOT
       update_phish_job: false
+      update_heartbeat_job: true

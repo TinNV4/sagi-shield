@@ -330,6 +330,15 @@ class MemoryStore:
         hh["offline_notified_at"] = None
         return True
 
+    def households_for_sweep(self) -> list[dict]:
+        """Households with Live Guard turned on: the only ones whose silence means anything."""
+        return [h for h in self.households.values() if h.get("live_guard_enabled")]
+
+    def mark_offline_notified(self, household_id: str, at: str) -> None:
+        hh = self.households.get(household_id)
+        if hh:
+            hh["offline_notified_at"] = at
+
     def delete_household(self, household_id: str) -> bool:
         self.household_alerts.pop(household_id, None)
         return self.households.pop(household_id, None) is not None
@@ -573,6 +582,14 @@ class FirestoreStore:
         # update() with a dotted path touches only this device's entry; a whole-document set() would race the alert code
         ref.update({f"devices_seen.{uid}": {"at": at or _now_iso(), "listening": listening}, "offline_notified_at": None})
         return True
+
+    def households_for_sweep(self) -> list[dict]:
+        col = self.db.collection("households")
+        return [d.to_dict() for d in col.where(filter=self.fs.FieldFilter("live_guard_enabled", "==", True)).stream()]
+
+    def mark_offline_notified(self, household_id: str, at: str) -> None:
+        # field-level update: a heartbeat or a token change that lands meanwhile is never reverted
+        self.db.collection("households").document(household_id).update({"offline_notified_at": at})
 
     def delete_household(self, household_id: str) -> bool:
         ref = self.db.collection("households").document(household_id)
