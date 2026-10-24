@@ -4,6 +4,7 @@
 > Submission deadline: **2026-10-18** per the official homepage (older announcements said 10-04; FAQ/T&C still say the registration window closes 10-04) → **internal target: submittable by 10-04, polish until 10-17.** See section 0.
 > IDE: **Google Antigravity** (backend + integration) · **Google AI Studio Build** (UI prototype)
 > This file is the single source of truth. Work phase by phase; tick checkboxes when done.
+> **After the contest (2026-10-24):** the product roadmap - pilot with real families, accounts and roles, Live Guard field tests, the device route - is `docs/ROADMAP.md`. This file keeps the contest build and the decided technical approach.
 
 **v3 changes (2026-09-19):** Live Guard spike moved to day 1–2 · always-on kiosk mode (elderly won't press Start) · model refresh to Gemini 3.8 + STT bake-off · non-circular eval with real held-out data · rule/LLM fusion no longer plain `max` · BigQuery/Looker cut to stretch · new: spoken alert, ADK recovery agent, 振込前チェック · feature freeze 9/30.
 

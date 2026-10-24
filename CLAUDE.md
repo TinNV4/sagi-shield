@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Sagi Shield（サギシールド）** — a real-time AI guard against phone scams (オレオレ詐欺 / ニセ警察詐欺 in Japan, fake-công-an scams in Vietnam). Entry for the Google Cloud AI Builder Cup 2026, BFSI track.
 
-`docs/PLAN.md` is the **single source of truth** for scope, decisions, API contracts and phase checklists. Read the relevant section before changing anything; tick its checkboxes when a phase item is done. `docs/AGENT_RULES.md` holds the working rules for coding agents; the constraints below are the ones that bite most often.
+`docs/PLAN.md` is the **single source of truth** for scope, decisions, API contracts and phase checklists; `docs/ROADMAP.md` (2026-10-24) is the post-contest product roadmap (pilot, accounts and roles, Live Guard field tests, device route) and names which decisions are the owner's and which are the author's. Read the relevant section before changing anything; tick its checkboxes when a phase item is done. `docs/AGENT_RULES.md` holds the working rules for coding agents; the constraints below are the ones that bite most often.
 
 ## Commands
 
