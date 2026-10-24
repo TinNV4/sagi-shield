@@ -168,7 +168,8 @@ jobs:
         run: |
           # the hourly offline sweep (infra/setup_heartbeat_job.ps1) runs app/heartbeat_sweep.py from this image
           if gcloud run jobs describe sagi-heartbeat-sweep --project "${{ vars.GCP_PROJECT }}" --region "$REGION" >/dev/null 2>&1; then
-            gcloud run jobs update sagi-heartbeat-sweep --project "${{ vars.GCP_PROJECT }}" --region "$REGION" \n              --image "$IMAGE:${SHA::12}" --quiet
+            gcloud run jobs update sagi-heartbeat-sweep --project "${{ vars.GCP_PROJECT }}" --region "$REGION" \
+              --image "$IMAGE:${SHA::12}" --quiet
           else
             echo "sagi-heartbeat-sweep not set up (infra/setup_heartbeat_job.ps1) - skipped"
           fi

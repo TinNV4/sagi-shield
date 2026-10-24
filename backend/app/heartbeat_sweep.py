@@ -26,19 +26,23 @@ def sweep(now: float | None = None) -> dict:
     from .storage import STORE, device_status  # looked up at call time: the job sets STORE=firestore
 
     now = time.time() if now is None else now
-    checked = notified = 0
+    checked = notified = failed = 0
     for hh in STORE.households_for_sweep():
         checked += 1
-        since = device_status(hh)["last_seen"] or hh.get("created_at")
-        if not since or now - _ts(since) <= OFFLINE_AFTER_S:
-            continue
-        done = hh.get("offline_notified_at")
-        if done and _ts(done) >= _ts(since):
-            continue
-        if notify_offline(hh, since, hh.get("market", "ja")):
-            STORE.mark_offline_notified(hh["household_id"], datetime.fromtimestamp(now, timezone.utc).isoformat(timespec="seconds"))
-            notified += 1
-    return {"checked": checked, "notified": notified}
+        try:  # one broken household must not stop the sweep for the others
+            since = device_status(hh)["last_seen"] or hh.get("created_at")
+            if not since or now - _ts(since) <= OFFLINE_AFTER_S:
+                continue
+            done = hh.get("offline_notified_at")
+            if done and _ts(done) >= _ts(since):
+                continue
+            if notify_offline(hh, since, hh.get("market", "ja")):
+                STORE.mark_offline_notified(hh["household_id"], datetime.fromtimestamp(now, timezone.utc).isoformat(timespec="seconds"))
+                notified += 1
+        except Exception as e:
+            failed += 1
+            print(f"[heartbeat_sweep] household {str(hh.get('household_id', ''))[:4]}... failed: {type(e).__name__}", file=sys.stderr)
+    return {"checked": checked, "notified": notified, "failed": failed}
 
 
 if __name__ == "__main__":
