@@ -1,0 +1,154 @@
+name: Deploy a Cloud Run service
+
+# Reusable: builds the PWA into the API image and rolls one Cloud Run service. deploy-pilot.yml calls it for
+# sagi-shield-pilot from the pilot branch; after the judging freeze (2026-11-07) deploy.yml becomes a caller too for
+# sagi-shield-api. Auth is Workload Identity Federation through the repository variables (infra/setup_cd.sh).
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: Cloud Run service name
+        required: true
+        type: string
+      image_name:
+        description: Image name inside the Artifact Registry repository "sagi"
+        required: true
+        type: string
+      ref:
+        description: Commit SHA to check out and deploy
+        required: true
+        type: string
+      environment:
+        description: GitHub environment whose variables (APPCHECK, models) apply
+        required: true
+        type: string
+      firestore_db:
+        description: Firestore database the service reads and writes
+        required: false
+        type: string
+        default: "(default)"
+      bq_table:
+        description: BigQuery table for the analytics stream; empty turns analytics off
+        required: false
+        type: string
+        default: ""
+      env_label:
+        description: Badge shown in the PWA header (PILOT); empty for production
+        required: false
+        type: string
+        default: ""
+      update_phish_job:
+        description: Point the monthly phishing-list job at the new image (production only)
+        required: false
+        type: boolean
+        default: false
+      min_instances:
+        required: false
+        type: number
+        default: 0
+
+concurrency:
+  group: deploy-${{ inputs.service }}
+  cancel-in-progress: false   # never abort a deploy half-way; the next one waits
+
+permissions:
+  contents: read
+  id-token: write   # OIDC token for Workload Identity Federation
+
+env:
+  REGION: asia-northeast1
+  SERVICE: ${{ inputs.service }}
+  IMAGE: asia-northeast1-docker.pkg.dev/${{ vars.GCP_PROJECT }}/sagi/${{ inputs.image_name }}
+  SHA: ${{ inputs.ref }}
+
+jobs:
+  deploy:
+    name: Build image and roll ${{ inputs.service }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+
+      # The PWA ships inside the API image (one URL, same origin) - same order as infra/deploy.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run build
+        working-directory: frontend
+        env:
+          VITE_API_BASE: same-origin
+          VITE_ENV_LABEL: ${{ inputs.env_label }}
+          # Firebase App Check (infra/setup_appcheck.ps1 sets these public values); unset -> the PWA sends no token
+          VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
+          VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
+          VITE_FIREBASE_PROJECT_ID: ${{ vars.GCP_PROJECT }}
+          VITE_RECAPTCHA_SITE_KEY: ${{ vars.VITE_RECAPTCHA_SITE_KEY }}
+          VITE_FIREBASE_VAPID_KEY: ${{ vars.VITE_FIREBASE_VAPID_KEY }}  # guardian push; unset -> no notifications
+      - run: rm -rf backend/static && cp -r frontend/dist backend/static
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud auth configure-docker asia-northeast1-docker.pkg.dev --quiet
+
+      - name: Build and push image
+        run: |
+          docker build -t "$IMAGE:${SHA::12}" -t "$IMAGE:latest" backend
+          docker push "$IMAGE:${SHA::12}"
+          docker push "$IMAGE:latest"
+
+      - name: Deploy
+        env:  # optional model overrides (repository or environment variables); unset -> backend/core/model_ids.py defaults
+          GEMINI_MODEL: ${{ vars.GEMINI_MODEL }}
+          GEMINI_VISION_MODEL: ${{ vars.GEMINI_VISION_MODEL }}
+          GEMINI_LIVE_MODEL: ${{ vars.GEMINI_LIVE_MODEL }}
+          GEMINI_CONFIRM_MODEL: ${{ vars.GEMINI_CONFIRM_MODEL }}
+          GEMINI_DEEP_MODEL: ${{ vars.GEMINI_DEEP_MODEL }}
+          STT_BATCH_MODEL: ${{ vars.STT_BATCH_MODEL }}
+          APPCHECK: ${{ vars.APPCHECK }}  # off | monitor | enforce (backend/app/appcheck.py); unset -> off
+          RATE_LIMIT_UNVERIFIED_PER_MIN: ${{ vars.RATE_LIMIT_UNVERIFIED_PER_MIN }}
+          FIRESTORE_DB: ${{ inputs.firestore_db }}
+          BQ_TABLE: ${{ inputs.bq_table }}
+        run: |
+          # one --set-env-vars only (gcloud keeps the last); "^@^" makes @ the separator so CORS_ORIGINS may hold commas
+          ENV="GOOGLE_GENAI_USE_ENTERPRISE=true@GOOGLE_CLOUD_PROJECT=${{ vars.GCP_PROJECT }}@GOOGLE_CLOUD_LOCATION=global"
+          ENV="$ENV@STORE=firestore@FIRESTORE_DB=$FIRESTORE_DB@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=*"
+          # analytics stream (app/analytics.py): only when the caller names a table; the pilot runs without one
+          for job in BQ_TABLE GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL \
+                     APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN; do
+            if [ -n "${!job:-}" ]; then ENV="$ENV@$job=${!job}"; fi
+          done
+          # both secrets exist in this project and are read by the runtime account sagi-api, not by the deployer
+          SECRETS="HASH_KEY=sagi-hash-key:latest,STT_API_KEY=sagi-stt-api-key:latest"
+          gcloud run deploy "$SERVICE" --project "${{ vars.GCP_PROJECT }}" --region "$REGION" \
+            --image "$IMAGE:${SHA::12}" \
+            --service-account "sagi-api@${{ vars.GCP_PROJECT }}.iam.gserviceaccount.com" --allow-unauthenticated \
+            --timeout 3600 --session-affinity --min-instances "${{ inputs.min_instances }}" --max-instances 3 \
+            --concurrency 40 --cpu 1 --memory 1Gi --no-use-http2 \
+            --set-env-vars "^@^$ENV" --set-secrets "$SECRETS" --quiet
+
+      - name: Point the phishing-list job at the new image
+        if: ${{ inputs.update_phish_job }}
+        run: |
+          # the monthly JPCERT/CC reload (infra/setup_phish_job.ps1) runs app/phish_list.py from the production image
+          if gcloud run jobs describe sagi-phish-loader --project "${{ vars.GCP_PROJECT }}" --region "$REGION" >/dev/null 2>&1; then
+            gcloud run jobs update sagi-phish-loader --project "${{ vars.GCP_PROJECT }}" --region "$REGION" \
+              --image "$IMAGE:${SHA::12}" --quiet
+          else
+            echo "sagi-phish-loader not set up (infra/setup_phish_job.ps1) - skipped"
+          fi
+
+      - name: Smoke test
+        run: |
+          URL="$(gcloud run services describe "$SERVICE" --project "${{ vars.GCP_PROJECT }}" --region "$REGION" --format 'value(status.url)')"
+          echo "Deployed: $URL"
+          curl -fsS "$URL/health"
+          curl -fsS -X POST "$URL/check" -H 'Content-Type: application/json' -d '{"lang":"ja","text":"こんにちは"}' >/dev/null
