@@ -41,3 +41,20 @@ def test_dependencies(monkeypatch):
     assert c.get("/a", headers={"Authorization": "Bearer fake:g:phone"}).status_code == 403
     assert c.get("/a", headers={"Authorization": "Bearer fake:g:phone:admin"}).status_code == 200
     assert c.get("/who", headers={"Authorization": "Bearer nonsense"}).status_code == 401
+
+def test_expired_and_foreign_tokens_are_401_never_500(monkeypatch):
+    monkeypatch.setenv("AUTH", "firebase")
+    from firebase_admin import auth as fb
+    def boom(token):
+        raise fb.ExpiredIdTokenError("expired", cause=None)
+    monkeypatch.setattr(auth, "_verify_firebase_raw", boom)
+    with pytest.raises(auth.AuthError) as e:
+        auth.verify("t")
+    assert e.value.status == 401 and "sign in again" in e.value.detail
+    monkeypatch.setattr(auth, "_verify_firebase_raw", lambda t: (_ for _ in ()).throw(ValueError("wrong aud")))
+    assert pytest.raises(auth.AuthError, auth.verify, "t").value.status == 401
+
+def test_anonymous_token_is_a_device_even_with_a_name_claim(monkeypatch):
+    monkeypatch.setenv("AUTH", "firebase")
+    monkeypatch.setattr(auth, "_verify_firebase", lambda t: {"uid": "d", "name": "x", "firebase": {"sign_in_provider": "anonymous"}, "admin": True})
+    assert auth.verify("t") == auth.Principal("d", "device", "x")   # admin claim on an anonymous user is ignored

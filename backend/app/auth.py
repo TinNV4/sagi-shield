@@ -49,10 +49,16 @@ def _verify_fake(token: str) -> Principal:
     return Principal(parts[1], "device" if parts[2] == "anonymous" else "guardian")
 
 
+def _verify_firebase_raw(token: str) -> dict:
+    """The bare SDK call; its exceptions are translated by `_verify_firebase`."""
+    from firebase_admin import auth as fb
+    return fb.verify_id_token(token, app=appcheck._app(), check_revoked=False)
+
+
 def _verify_firebase(token: str) -> dict:
     from firebase_admin import auth as fb
     try:
-        return fb.verify_id_token(token, app=appcheck._app(), check_revoked=False)
+        return _verify_firebase_raw(token)
     except (ValueError, fb.ExpiredIdTokenError, fb.RevokedIdTokenError, fb.InvalidIdTokenError):
         raise AuthError(401, EXPIRED)
     except Exception:
