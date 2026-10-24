@@ -179,6 +179,8 @@ export interface Household {
   devices: number;
   guardians: HouseholdGuardian[];
   created_at: string;
+  /** The newest device heartbeat (a protected device reports every few minutes while Live Guard runs). */
+  device_status?: {last_seen: string | null; listening: boolean};
 }
 
 export interface HouseholdCreated {

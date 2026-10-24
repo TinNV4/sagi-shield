@@ -49,6 +49,10 @@ export interface SagiApi {
   /** Owner only: unpair every device of the household (a lost or replaced phone); resolves to the number removed. */
   resetHouseholdDevices(id: string): Promise<number>;
   deleteHousehold(id: string): Promise<void>;
+  /** Protected device only: Live Guard is running (listening or not). Carries no text. */
+  heartbeat(id: string, listening: boolean): Promise<void>;
+  /** Owner only: names and the Live Guard switch of the protected person's devices. */
+  updateHousehold(id: string, fields: {name?: string; member_name?: string; live_guard_enabled?: boolean}): Promise<Household>;
   handOver(id: string, uid: string): Promise<void>;
   getStats(): Promise<StatsResult>;
   connectLiveSocket(
@@ -369,6 +373,16 @@ export class RealApi implements SagiApi {
 
   async deleteHousehold(id: string): Promise<void> {
     await this.request(`/household/${encodeURIComponent(id)}`, {method: 'DELETE'});
+  }
+
+  async heartbeat(id: string, listening: boolean): Promise<void> {
+    await this.postJson(`/household/${encodeURIComponent(id)}/heartbeat`, {listening});
+  }
+
+  async updateHousehold(id: string, fields: {name?: string; member_name?: string; live_guard_enabled?: boolean}): Promise<Household> {
+    const init = {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(fields)};
+    const data = await this.request<{household: Household}>(`/household/${encodeURIComponent(id)}`, init, 'session');
+    return data.household;
   }
 
   async handOver(id: string, uid: string): Promise<void> {
@@ -1023,6 +1037,16 @@ class MockApi implements SagiApi {
     this.mockHouseholds = this.mockHouseholds.filter((h) => h.household_id !== id);
   }
 
+  async heartbeat(_id: string, _listening: boolean): Promise<void> {}
+
+  async updateHousehold(id: string, fields: {name?: string; member_name?: string; live_guard_enabled?: boolean}): Promise<Household> {
+    const h = this.mockHousehold(id);
+    if (fields.name !== undefined) h.name = fields.name;
+    if (fields.member_name !== undefined) h.member_name = fields.member_name;
+    if (fields.live_guard_enabled !== undefined) h.live_guard_enabled = fields.live_guard_enabled;
+    return this.copyHousehold(h);
+  }
+
   async handOver(id: string, uid: string): Promise<void> {
     const h = this.mockHousehold(id);
     h.guardians = h.guardians.map((g) => ({...g, owner: g.uid === uid}));
@@ -1382,6 +1406,12 @@ export const api: SagiApi = {
   },
   handOver(id: string, uid: string) {
     return getActiveApi().handOver(id, uid);
+  },
+  heartbeat(id: string, listening: boolean) {
+    return getActiveApi().heartbeat(id, listening);
+  },
+  updateHousehold(id: string, fields: {name?: string; member_name?: string; live_guard_enabled?: boolean}) {
+    return getActiveApi().updateHousehold(id, fields);
   },
   getStats() {
     return getActiveApi().getStats();

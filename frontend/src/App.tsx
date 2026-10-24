@@ -6,6 +6,8 @@ import {DemoHelperModal} from './components/DemoHelperModal';
 import {Header} from './components/Header';
 import {OnboardingModal} from './components/OnboardingModal';
 import {I18nProvider, useI18n} from './i18n';
+import {onAuth} from './lib/auth';
+import {deviceHousehold, kioskFromHousehold, kioskUnlockActive, KIOSK_UNLOCK_MS} from './lib/householdState';
 import * as speech from './lib/speak';
 import {HomeScreen} from './pages/HomeScreen';
 import {LiveGuardScreen} from './pages/LiveGuardScreen';
@@ -168,6 +170,45 @@ function AppContent() {
     }
   };
 
+  // Leaving kiosk mode in Settings holds against the household's switch for 24 h (a visit, a repair); turning it on clears it.
+  const handleSettingsKioskMode = (enabled: boolean) => {
+    try {
+      if (enabled) localStorage.removeItem('sagi_kiosk_unlocked_until');
+      else localStorage.setItem('sagi_kiosk_unlocked_until', String(Date.now() + KIOSK_UNLOCK_MS));
+    } catch {}
+    handleSetKioskMode(enabled);
+  };
+
+  // A protected device whose household has Live Guard switched on opens in kiosk mode, the same path as the
+  // onboarding's kiosk choice, unless the person left kiosk mode in Settings during the last 24 h.
+  useEffect(() => {
+    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH) return;
+    let handled = false;
+    let cancelled = false;
+    const off = onAuth((user) => {
+      if (handled || !user?.anonymous) return;
+      handled = true;
+      api
+        .myHouseholds()
+        .then((households) => {
+          if (cancelled || !kioskFromHousehold(deviceHousehold(households))) return;
+          let unlocked = false;
+          try {
+            unlocked = kioskUnlockActive(localStorage.getItem('sagi_kiosk_unlocked_until'), Date.now());
+          } catch {}
+          if (unlocked) return;
+          setIsOnboardingOpen(false);
+          handleSetKioskMode(true);
+        })
+        .catch(() => {});
+    });
+    return () => {
+      cancelled = true;
+      off();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleToggleSpeak = (enabled: boolean) => {
     setSpeakEnabled(enabled);
     try {
@@ -315,7 +356,7 @@ function AppContent() {
         {currentTab === 'settings' && (
           <SettingsScreen
             isKioskMode={isKioskMode}
-            onSetKioskMode={handleSetKioskMode}
+            onSetKioskMode={handleSettingsKioskMode}
             speakEnabled={speakEnabled}
             onToggleSpeak={handleToggleSpeak}
             alertGuardians={alertGuardians}

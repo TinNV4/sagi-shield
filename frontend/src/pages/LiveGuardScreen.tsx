@@ -19,6 +19,7 @@ import {
   Settings2,
 } from 'lucide-react';
 import {KillChainStage, LiveWsServerRiskMessage, RiskLevel} from '../api/types';
+import {api} from '../api/client';
 import {HighRiskTakeover} from '../components/HighRiskTakeover';
 import {KillChainBar} from '../components/KillChainBar';
 import {OnDeviceSpeechSetupModal} from '../components/OnDeviceSpeechSetupModal';
@@ -32,6 +33,9 @@ import {
   SpeechSupportDetails,
   startLiveGuard,
 } from '../lib/liveGuard';
+import {onAuth} from '../lib/auth';
+import {startHeartbeat} from '../lib/heartbeat';
+import {deviceHousehold} from '../lib/householdState';
 import * as speech from '../lib/speak';
 
 interface LiveGuardScreenProps {
@@ -107,6 +111,37 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
   // Wake Lock Ref
   const wakeLockRef = useRef<any>(null);
   const guardControllerRef = useRef<LiveGuardController | null>(null);
+
+  // While the guard runs on a protected device that belongs to a household, tell the household it is alive. The
+  // heartbeat carries no text and can never touch the guard: every failure is swallowed inside startHeartbeat.
+  const statusRef = useRef(status);
+  statusRef.current = status;
+  useEffect(() => {
+    if (!isRunning) return;
+    let stopBeat: (() => void) | null = null;
+    let handled = false;
+    let cancelled = false;
+    const offAuth = onAuth((user) => {
+      if (handled || !user?.anonymous) return;
+      handled = true;
+      api
+        .myHouseholds()
+        .then((households) => {
+          const household = deviceHousehold(households);
+          if (!household || cancelled) return;
+          stopBeat = startHeartbeat(
+            () => ['listening', 'checking', 'connected'].includes(statusRef.current),
+            (listening) => api.heartbeat(household.household_id, listening),
+          );
+        })
+        .catch((err) => console.warn('heartbeat setup failed', err));
+    });
+    return () => {
+      cancelled = true;
+      offAuth();
+      stopBeat?.();
+    };
+  }, [isRunning]);
 
   // Update clock
   useEffect(() => {

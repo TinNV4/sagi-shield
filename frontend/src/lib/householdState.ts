@@ -188,3 +188,20 @@ export function householdRouteFailure(failure: unknown): {reload: true; messageK
   if (status === 404) return {reload: true, messageKey: 'guardian.household_gone'};
   return null;
 }
+
+// ---------------------------------------------------------------- protected device (heartbeat, kiosk)
+
+/** The household a protected device belongs to: for an anonymous user the first one; null while unknown. */
+export const deviceHousehold = (households: Household[] | null): Household | null => households?.[0] ?? null;
+
+/** A household with Live Guard switched on opens its device in kiosk mode. */
+export const kioskFromHousehold = (household: Household | null): boolean => household?.live_guard_enabled ?? false;
+
+/** Leaving kiosk mode in Settings holds against the household for this long (`sagi_kiosk_unlocked_until`). */
+export const KIOSK_UNLOCK_MS = 24 * 3600 * 1000;
+
+/** `raw` is the stored epoch-ms string; a missing or unreadable value is "not unlocked". */
+export function kioskUnlockActive(raw: string | null, now: number): boolean {
+  const until = raw === null ? NaN : Number(raw);
+  return Number.isFinite(until) && until > now;
+}

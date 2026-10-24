@@ -164,6 +164,24 @@ describe('household routes', () => {
     expect(await call((a) => a.handOver('h1', 'u2'))).toMatchObject({url: 'http://api.test/household/h1/owner', method: 'POST', body: {uid: 'u2'}});
   });
 
+  it('heartbeat is POST /household/<id>/heartbeat with only {listening}', async () => {
+    const sent = await call((a) => a.heartbeat('h 1', true));
+    expect(sent).toMatchObject({url: 'http://api.test/household/h%201/heartbeat', method: 'POST', body: {listening: true}});
+    expect(sent.url).not.toContain('?');
+  });
+
+  it('updateHousehold is PATCH /household/<id> and returns the household, not the wrapper', async () => {
+    const fetchMock = vi.fn((..._a: FetchArgs) => reply(200, {household: {household_id: 'h1', live_guard_enabled: true}}));
+    vi.stubGlobal('fetch', fetchMock);
+    const h = await new RealApi('http://api.test').updateHousehold('h1', {live_guard_enabled: true, member_name: 'Mom'});
+    expect(h).toEqual({household_id: 'h1', live_guard_enabled: true});
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('http://api.test/household/h1');
+    expect(init?.method).toBe('PATCH');
+    expect(JSON.parse(String(init?.body))).toEqual({live_guard_enabled: true, member_name: 'Mom'});
+    expect(new Headers(init?.headers).get('Content-Type')).toBe('application/json');
+    expect(bearer(fetchMock, 0)).toBe('Bearer stale');
+  });
   it('reset paired devices is DELETE /household/<id>/devices', async () => {
     expect(await call((a) => a.resetHouseholdDevices('h1'), {ok: true, removed: 2})).toMatchObject({
       url: 'http://api.test/household/h1/devices',

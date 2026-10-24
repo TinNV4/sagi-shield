@@ -3,10 +3,14 @@ import type {Household} from '../api/types';
 import type {AuthUser} from './auth';
 import {
   formatPairCode,
+  deviceHousehold,
   guardianRows,
   guardianScreenState,
   householdLabel,
   householdRouteFailure,
+  kioskFromHousehold,
+  kioskUnlockActive,
+  KIOSK_UNLOCK_MS,
   guardianName,
   manageActions,
   marketForLang,
@@ -270,5 +274,29 @@ describe('householdRouteFailure', () => {
   });
   it('anything else is left to the generic error handling', () => {
     for (const e of [{status: 401}, {status: 429}, {status: 503}, {status: 409}, new Error('x'), null, undefined]) expect(householdRouteFailure(e)).toBeNull();
+  });
+});
+
+describe('device heartbeat and kiosk', () => {
+  it('deviceHousehold is the first household, null when there is none or the list is not loaded', () => {
+    expect(deviceHousehold(null)).toBeNull();
+    expect(deviceHousehold([])).toBeNull();
+    expect(deviceHousehold([household({household_id: 'a'}), household({household_id: 'b'})])?.household_id).toBe('a');
+  });
+
+  it('kioskFromHousehold follows live_guard_enabled and is false without a household', () => {
+    expect(kioskFromHousehold(null)).toBe(false);
+    expect(kioskFromHousehold(household({live_guard_enabled: false}))).toBe(false);
+    expect(kioskFromHousehold(household({live_guard_enabled: true}))).toBe(true);
+  });
+
+  it('an unlock from Settings holds for 24 hours and ignores a missing or broken value', () => {
+    const now = 1_000_000;
+    expect(KIOSK_UNLOCK_MS).toBe(24 * 3600 * 1000);
+    expect(kioskUnlockActive(String(now + 1), now)).toBe(true);
+    expect(kioskUnlockActive(String(now), now)).toBe(false);
+    expect(kioskUnlockActive(String(now - 1), now)).toBe(false);
+    expect(kioskUnlockActive(null, now)).toBe(false);
+    expect(kioskUnlockActive('soon', now)).toBe(false);
   });
 });
