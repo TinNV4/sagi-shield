@@ -557,11 +557,14 @@ class FirestoreStore:
         return removed
 
     def update_household(self, household_id: str, fields: dict) -> dict | None:
-        hh = self.get_household(household_id)
-        if hh:
-            _apply_settings(hh, fields)
-            self.db.collection("households").document(household_id).set(hh)
-        return hh
+        changed: dict = {}
+        _apply_settings(changed, fields)  # the same whitelist and cuts as memory, collected instead of applied
+        ref = self.db.collection("households").document(household_id)
+        if not ref.get().exists:
+            return None
+        if changed:
+            ref.update(changed)  # only these keys: a concurrent heartbeat, token or code refresh is never reverted
+        return self.get_household(household_id)
 
     def record_heartbeat(self, household_id: str, uid: str, listening: bool, at: str | None = None) -> bool:
         ref = self.db.collection("households").document(household_id)

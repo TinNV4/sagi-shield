@@ -1,5 +1,5 @@
 from app.auth import Principal
-from app.storage import MemoryStore
+from app.storage import MemoryStore, device_status
 
 DEV, GUARD, GUARD2 = Principal("dev1", "device"), Principal("g1", "guardian", "Taro"), Principal("g2", "guardian", "Hana")
 
@@ -64,3 +64,13 @@ def test_update_household_whitelists_fields_and_cuts_names():
     out = s.update_household(h["household_id"], {"name": "x" * 50, "live_guard_enabled": True, "market": "vi", "devices": []})
     assert len(out["name"]) == 40 and out["live_guard_enabled"] is True and out["market"] == "ja" and out["devices"] == ["dev1"]
     assert s.update_household("nope", {"name": "a"}) is None
+
+def test_device_status_is_the_newest_heartbeat_across_devices():
+    s = MemoryStore()
+    h = s.create_household("", "Mom", "ja", DEV)
+    hid = h["household_id"]
+    s.record_heartbeat(hid, "dev1", True, at="2026-10-02T00:00:00+00:00")
+    s.record_heartbeat(hid, "dev2", False, at="2026-10-01T00:00:00+00:00")
+    assert device_status(s.get_household(hid)) == {"last_seen": "2026-10-02T00:00:00+00:00", "listening": True}
+    s.record_heartbeat(hid, "dev2", False, at="2026-10-03T00:00:00+00:00")
+    assert device_status(s.get_household(hid)) == {"last_seen": "2026-10-03T00:00:00+00:00", "listening": False}
