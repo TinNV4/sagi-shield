@@ -28,13 +28,15 @@ import re
 import uuid
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 
 from input_layer import build_evidence  # app.main put backend/core on sys.path
 from model_ids import model_id
 from risk_engine import safety_settings
 
+from .auth import Principal, legacy_family_enabled, optional_principal
+from .households import resolve_household
 from .storage import STORE, FamilyId
 
 router = APIRouter()
@@ -131,7 +133,7 @@ CHANNEL_HINTS = {  # scripted fallback only; the agent decides by itself
 
 def new_state() -> dict:
     return {"channel": None, "done": [], "draft": "", "ui_lang": "ja", "market": "ja", "turns": [],
-            "family_id": None, "notified": False}  # turns: [{role, text}], masked (Firestore has no nested arrays)
+            "family_id": None, "household_id": None, "notified": False}  # turns: [{role, text}], masked (Firestore has no nested arrays)
 
 
 def checklist(state: dict, market: str, ui_lang: str) -> list[dict]:
@@ -201,11 +203,14 @@ def notify_guardian(summary: str, tool_context) -> dict:
       summary: one neutral sentence for the family, no names or numbers (e.g. "Paid a fake police caller by bank transfer, needs help calling the bank").
     """
     st = tool_context.state
-    if not st.get("family_id"):
+    if not (st.get("household_id") or st.get("family_id")):
         return {"status": "no_family", "advice": "no guardian is paired with this device; suggest calling a family member instead"}
     if st.get("notified"):
         return {"status": "already_sent"}
-    alert = STORE.add_alert(st["family_id"], "HIGH", "recovery", 5, _mask(summary)[:300])
+    note = _mask(summary)[:300]
+    alert = STORE.add_household_alert(st["household_id"], "HIGH", "recovery", 5, note) if st.get("household_id") else None
+    if not alert and st.get("family_id"):  # legacy pairing, or the household was deleted meanwhile
+        alert = STORE.add_alert(st["family_id"], "HIGH", "recovery", 5, note)
     if not alert:
         return {"status": "no_family"}
     st["notified"] = True
@@ -271,7 +276,7 @@ Tools:
   Ask for missing facts one at a time, but save a first draft early and improve it. Write it in the first person, in the language the local police read ({language_name(st.get('market', 'ja'))}), whatever the chat language.
 - lookup_official_number before you mention any phone number; if it says unknown, point to the official website or the back of the card.
 - deep_check when the user names the organisation or a link the caller used and wants to know whether others reported it; report only what it returns, and say that no report is not proof of safety.
-- notify_guardian when the user agrees that their family should know (offer it once, early; family paired = {bool(st.get('family_id'))}, already notified = {st.get('notified', False)}).
+- notify_guardian when the user agrees that their family should know (offer it once, early; family paired = {bool(st.get('household_id') or st.get('family_id'))}, already notified = {st.get('notified', False)}).
 Hard rules:
 - Never state a phone number, URL or organisation contact from memory; only what lookup_official_number or the checklist gives.
 - Never promise the money will come back. Never ask for PINs, passwords, card numbers or one-time codes.
@@ -357,11 +362,13 @@ class RecoveryIn(BaseModel):
 
 
 @router.post("/agent/recovery")
-async def recovery(body: RecoveryIn):
+async def recovery(body: RecoveryIn, who: Principal | None = Depends(optional_principal)):
     saved = await asyncio.to_thread(STORE.get_recovery, body.session_id) or {}
     state = {k: saved.get(k, v) for k, v in new_state().items()}
     state["ui_lang"], state["market"] = body.ui_lang or body.lang, body.lang
-    state["family_id"] = body.family_id or state.get("family_id")
+    # the sign-in token only names the household; it is never kept in the state
+    state["household_id"] = resolve_household(who) or state.get("household_id")
+    state["family_id"] = (body.family_id or state.get("family_id")) if legacy_family_enabled() else None
     if body.message.strip() == INIT_MESSAGE:
         reply = SCRIPT[state["ui_lang"]]["welcome"]  # instant and free: no model call to open the screen
     else:

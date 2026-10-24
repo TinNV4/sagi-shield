@@ -92,6 +92,11 @@ def principal(request: Request) -> Principal:
         raise HTTPException(e.status, e.detail)
 
 
+def optional_principal(request: Request) -> Principal | None:
+    """Whoever is signed in, or None: an anonymous caller, a bad token and a failing check all read as "nobody"."""
+    return principal_from_query(_bearer(request))
+
+
 def guardian_or_admin(p: Principal = Depends(principal)) -> Principal:
     if p.role == "device":
         raise HTTPException(403, "a signed-in guardian is needed here")

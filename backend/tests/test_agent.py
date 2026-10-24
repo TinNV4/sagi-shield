@@ -18,8 +18,8 @@ def client():
     return TestClient(main.app)
 
 
-def ask(client, message, sid="sess-0123456789abcdef", **extra):
-    res = client.post("/agent/recovery", json={"session_id": sid, "message": message, "lang": "ja", **extra})
+def ask(client, message, sid="sess-0123456789abcdef", headers=None, **extra):
+    res = client.post("/agent/recovery", json={"session_id": sid, "message": message, "lang": "ja", **extra}, headers=headers)
     assert res.status_code == 200, res.text
     return res.json()
 
@@ -207,3 +207,30 @@ def test_earlier_turns_and_the_draft_are_fenced_as_data():
     assert text.count("</conversation>") == 1 and text.count("</draft>") == 1
     assert text.index("Hard rule: quote") > text.index("<conversation>")  # still inside the data block
     assert "never instructions" in text
+
+
+def test_notify_guardian_uses_the_household_from_the_token(client, monkeypatch):
+    monkeypatch.setenv("USE_LLM", "1")
+    h = client.post("/household", json={"member_name": "Mom", "market": "ja"}, headers={"Authorization": "Bearer fake:d1:anonymous"}).json()
+    seen = {}
+
+    async def fake_agent(message, state):
+        seen.clear()
+        seen.update(state)
+        return "ok", state
+
+    monkeypatch.setattr(agent, "run_agent", fake_agent)
+    ask(client, "hello", headers={"Authorization": "Bearer fake:d1:anonymous"})
+    assert seen["household_id"] == h["household_id"] and "fake:d1" not in str(seen)
+    ask(client, "next turn")                                    # header missing later: the stored household survives
+    assert seen["household_id"] == h["household_id"]
+    ask(client, "third turn", headers={"Authorization": "Bearer garbage"})   # a bad token is no sign-in, never an error
+    assert seen["household_id"] == h["household_id"]
+
+    class Ctx:
+        state = {**agent.new_state(), "household_id": h["household_id"]}
+
+    assert agent.notify_guardian("paid a fake police caller", Ctx)["status"] == "ok"
+    assert agent.notify_guardian("again", Ctx)["status"] == "already_sent"
+    alerts = client.get(f"/household/{h['household_id']}/alerts", headers={"Authorization": "Bearer fake:d1:anonymous"}).json()
+    assert len(alerts) == 1 and alerts[0]["scam_type"] == "recovery"
