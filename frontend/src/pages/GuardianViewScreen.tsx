@@ -1,4 +1,4 @@
-import React, {useEffect, useRef, useState} from 'react';
+import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   AlertTriangle,
   ArrowLeft,
@@ -6,17 +6,27 @@ import {
   CheckCircle2,
   Clock,
   PhoneCall,
+  Plus,
   RefreshCw,
-  Shield,
-  ShieldAlert,
+  Settings,
   Users,
 } from 'lucide-react';
-import {api, getFamilyId, PAIR_FROM_LINK} from '../api/client';
-import {FamilyAlertItem} from '../api/types';
+import {api, ApiError, describeApiError, PAIR_FROM_LINK} from '../api/client';
+import {FamilyAlertItem, Household} from '../api/types';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
 import {telHref} from '../components/TrustedContact';
 import {pushPermission, pushToken} from '../lib/push';
+import {AuthUser, confirmPhoneCode, onAuth, RECAPTCHA_CONTAINER_ID, signInGuardian, signOut} from '../lib/auth';
+import {
+  guardianScreenState,
+  householdLabel,
+  manageActions,
+  marketForLang,
+  newHighAlert,
+  selectedHousehold,
+  toE164,
+} from '../lib/householdState';
 
 // The protected person's number, kept on THIS (guardian) device only. The server never stores it,
 // so the call button must not invent one.
@@ -48,6 +58,140 @@ const readMemberTel = () => {
   }
 };
 
+const statusOf = (err: unknown): number | null => (err instanceof ApiError ? err.status : null);
+
+interface SignInCardProps {
+  expired: boolean;
+  onSignedIn: () => void;
+}
+
+/** Google or phone (SMS code). The invisible reCAPTCHA of the phone sign-in attaches to `recaptcha-container`. */
+const SignInCard: React.FC<SignInCardProps> = ({expired, onSignedIn}) => {
+  const {t, lang} = useI18n();
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [codeSent, setCodeSent] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const run = async (work: () => Promise<boolean>) => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      if (!(await work())) setFailed(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const google = () =>
+    run(async () => {
+      const result = await signInGuardian('google');
+      if (result?.state !== 'signed_in') return false;
+      onSignedIn();
+      return true;
+    });
+
+  const sendCode = () =>
+    run(async () => {
+      const number = toE164(phone, marketForLang(lang));
+      if (!number) return false;
+      const result = await signInGuardian('phone', number);
+      if (result?.state !== 'code_sent') return false;
+      setCodeSent(true);
+      return true;
+    });
+
+  const confirmCode = () =>
+    run(async () => {
+      const user = await confirmPhoneCode(code.replace(/\s/g, ''));
+      if (!user) return false;
+      onSignedIn();
+      return true;
+    });
+
+  return (
+    <div id="guardian-signin-card" className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-600/30 space-y-4">
+      {expired && (
+        <p role="alert" className="text-sm font-bold text-amber-800 dark:text-amber-300">
+          {t('guardian.session_expired')}
+        </p>
+      )}
+      <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('guardian.signin_title')}</h2>
+      <button
+        id="guardian-signin-google"
+        onClick={google}
+        disabled={busy}
+        className="w-full min-h-[56px] rounded-xl bg-[#1B4D3E] text-white text-lg font-bold disabled:opacity-40"
+      >
+        {t('guardian.signin_google')}
+      </button>
+
+      <div className="space-y-2">
+        <label htmlFor="guardian-phone-input" className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+          {t('guardian.phone_label')}
+        </label>
+        <input
+          id="guardian-phone-input"
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel"
+          value={phone}
+          onChange={(e) => setPhone(e.target.value)}
+          disabled={codeSent}
+          className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 text-lg"
+        />
+        {!codeSent && (
+          <button
+            id="guardian-signin-phone"
+            onClick={sendCode}
+            disabled={busy || phone.replace(/\D/g, '').length < 8}
+            className="w-full min-h-[52px] rounded-xl border-2 border-[#1B4D3E] text-[#1B4D3E] dark:text-emerald-300 dark:border-emerald-400 text-base font-bold disabled:opacity-40"
+          >
+            {t('guardian.signin_phone')}
+          </button>
+        )}
+      </div>
+
+      {codeSent && (
+        <div className="space-y-2">
+          <label htmlFor="guardian-sms-input" className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+            {t('guardian.code_label')}
+          </label>
+          <input
+            id="guardian-sms-input"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={8}
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 font-mono text-2xl tracking-widest text-center"
+          />
+          <button
+            onClick={confirmCode}
+            disabled={busy || code.replace(/\D/g, '').length < 4}
+            className="w-full min-h-[52px] rounded-xl bg-[#1B4D3E] text-white text-base font-bold disabled:opacity-40"
+          >
+            {t('common.confirm')}
+          </button>
+        </div>
+      )}
+
+      {failed && (
+        <p role="alert" className="text-sm font-bold text-red-700 dark:text-red-400">
+          {t('guardian.signin_failed')}
+        </p>
+      )}
+      <div id={RECAPTCHA_CONTAINER_ID} />
+    </div>
+  );
+};
+
+type PendingAction =
+  | {kind: 'remove' | 'handover'; uid: string; name: string}
+  | {kind: 'leave'; uid: string}
+  | {kind: 'delete'};
+
 interface GuardianViewScreenProps {
   onBack: () => void;
 }
@@ -55,16 +199,61 @@ interface GuardianViewScreenProps {
 export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) => {
   const {t, lang} = useI18n();
 
+  const [authState, setAuthState] = useState<{known: boolean; user: AuthUser | null}>({known: false, user: null});
+  const [households, setHouseholds] = useState<Household[] | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [failure, setFailure] = useState<unknown>(null);
+
   const [alerts, setAlerts] = useState<FamilyAlertItem[]>([]);
+  const [alertsLoaded, setAlertsLoaded] = useState(false);
+  const [alertsError, setAlertsError] = useState<unknown>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const prevAlertCountRef = useRef<number>(0);
-  const [linked, setLinked] = useState<boolean>(!PAIR_FROM_LINK && (api.isMock || !!getFamilyId()));
+  const prevAlertCountRef = useRef<number | null>(null);
+  const polledIdRef = useRef<string | null>(null);
+
+  const [addOpen, setAddOpen] = useState(Boolean(PAIR_FROM_LINK));
   const [codeInput, setCodeInput] = useState(PAIR_FROM_LINK);
   const [linkError, setLinkError] = useState(false);
+  const [joining, setJoining] = useState(false);
+
+  const [manageOpen, setManageOpen] = useState(false);
+  const [detail, setDetail] = useState<Household | null>(null);
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [manageError, setManageError] = useState<string | null>(null);
+  const [managing, setManaging] = useState(false);
+
   const [memberTel, setMemberTel] = useState(readMemberTel);
   const [telInput, setTelInput] = useState('');
   const [push, setPush] = useState<PushState>(readPushState);
   const [pushBusy, setPushBusy] = useState(false);
+
+  useEffect(() => onAuth((user) => setAuthState({known: true, user})), []);
+
+  const signedIn = api.isMock || Boolean(authState.user && !authState.user.anonymous);
+  const state = guardianScreenState({isMock: api.isMock, authKnown: authState.known, user: authState.user, households, failure});
+  const selected = selectedHousehold(households, selectedId);
+  const polledId = state.kind === 'dashboard' ? (selected?.household_id ?? null) : null;
+
+  const noteFailure = (err: unknown) => {
+    if (statusOf(err) === 401) setFailure(err);
+  };
+
+  const loadHouseholds = useCallback(async () => {
+    try {
+      setHouseholds(await api.myHouseholds());
+      setFailure(null);
+    } catch (err) {
+      setFailure(err);
+    }
+  }, []);
+
+  // households of whoever is signed in (a different account starts from nothing)
+  const uid = authState.user?.uid;
+  useEffect(() => {
+    setHouseholds(null);
+    setSelectedId(null);
+    if (signedIn && (api.isMock || authState.known)) void loadHouseholds();
+  }, [signedIn, uid, authState.known, loadHouseholds]);
 
   const saveMemberTel = () => {
     const tel = telInput.trim().slice(0, 30);
@@ -81,19 +270,30 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
     return label.startsWith('types.') ? t('types.unknown') : label;
   };
 
-  const handleLink = async () => {
+  const handleJoin = async () => {
     setLinkError(false);
+    setJoining(true);
     try {
       // the permission prompt rides on this click; a refusal or a slow token never stops the pairing
       const token = await pushToken();
-      await api.linkFamily(codeInput, token ?? undefined);
+      const joined = await api.joinHousehold(codeInput, undefined, token ?? undefined);
       if (token) rememberPush();
       setPush(readPushState());
-      setLinked(true);
-      fetchAlerts();
-    } catch {
+      setCodeInput('');
+      setAddOpen(false);
+      await loadHouseholds();
+      setSelectedId(joined.household_id);
+    } catch (err) {
+      noteFailure(err);
       setLinkError(true);
+    } finally {
+      setJoining(false);
     }
+  };
+
+  const registerPushEverywhere = async (token: string) => {
+    // a guardian is notified per household: the same browser token goes to each of them
+    await Promise.all((households ?? []).map((h) => api.registerHouseholdPush(h.household_id, token)));
   };
 
   const enablePush = async () => {
@@ -101,7 +301,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
     try {
       const token = await pushToken();
       if (token) {
-        await api.registerPush(token);
+        await registerPushEverywhere(token);
         rememberPush();
       }
     } catch {
@@ -113,34 +313,39 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   };
 
   // browsers rotate push tokens: re-register quietly whenever the dashboard opens with notifications on
+  const householdKey = (households ?? []).map((h) => h.household_id).join(',');
   useEffect(() => {
-    if (!linked || readPushState() !== 'on') return;
+    if (state.kind !== 'dashboard' || readPushState() !== 'on') return;
     pushToken()
       .then((token) => {
-        if (token) return api.registerPush(token);
+        if (token) return registerPushEverywhere(token);
       })
       .catch(() => {});
-  }, [linked]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.kind, householdKey]);
 
-  const fetchAlerts = async (silent = false) => {
+  const fetchAlerts = async (id: string, silent = false) => {
     if (!silent) setIsRefreshing(true);
     try {
-      const data = await api.getFamilyAlerts();
-      // Check if new HIGH alert arrived while view was open
-      if (data.length > prevAlertCountRef.current && prevAlertCountRef.current > 0) {
-        const newest = data[0];
-        if (newest && newest.risk_level === 'HIGH') {
-          // Play sound and vibration alert
-          speech.speak(t('guardian.alert_spoken'), lang, 'guardian');
-          if (typeof window !== 'undefined' && 'vibrate' in navigator) {
-            navigator.vibrate([400, 200, 400]);
-          }
+      const data = await api.householdAlerts(id);
+      if (polledIdRef.current !== id) return; // the user switched household while this was on its way
+      if (newHighAlert(prevAlertCountRef.current, data)) {
+        // Play sound and vibration alert
+        speech.speak(t('guardian.alert_spoken'), lang, 'guardian');
+        if (typeof window !== 'undefined' && 'vibrate' in navigator) {
+          navigator.vibrate([400, 200, 400]);
         }
       }
       prevAlertCountRef.current = data.length;
       setAlerts(data);
-      if (!silent) setIsRefreshing(false);
-    } catch (e) {
+      setAlertsLoaded(true);
+      setAlertsError(null);
+    } catch (err) {
+      if (polledIdRef.current !== id) return;
+      // an expired session must show as such, never as "no alerts"
+      if (statusOf(err) === 401) setFailure(err);
+      else setAlertsError(err);
+    } finally {
       if (!silent) setIsRefreshing(false);
     }
   };
@@ -150,14 +355,66 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
     void speech.preload('guardian', lang);
   }, [lang]);
 
-  // Poll every 5 seconds
+  // Poll the selected household every 5 seconds; another household starts from an empty, unannounced list
   useEffect(() => {
-    fetchAlerts();
-    const interval = setInterval(() => {
-      fetchAlerts(true);
-    }, 5000);
+    polledIdRef.current = polledId;
+    prevAlertCountRef.current = null;
+    setAlerts([]);
+    setAlertsLoaded(false);
+    setAlertsError(null);
+    if (!polledId) return;
+    void fetchAlerts(polledId);
+    const interval = setInterval(() => void fetchAlerts(polledId, true), 5000);
     return () => clearInterval(interval);
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [polledId]);
+
+  // ---- manage sheet ----
+  useEffect(() => {
+    setPending(null);
+    setManageError(null);
+    setDetail(null);
+    if (!manageOpen || !polledId) return;
+    let cancelled = false;
+    api
+      .householdDetail(polledId)
+      .then((d) => !cancelled && setDetail(d))
+      .catch((err) => {
+        if (cancelled) return;
+        noteFailure(err);
+        setManageError(describeApiError(err, t));
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manageOpen, polledId]);
+
+  const runPending = async () => {
+    if (!pending || !polledId) return;
+    setManaging(true);
+    setManageError(null);
+    try {
+      if (pending.kind === 'remove' || pending.kind === 'leave') await api.removeGuardian(polledId, pending.uid);
+      else if (pending.kind === 'handover') await api.handOver(polledId, pending.uid);
+      else await api.deleteHousehold(polledId);
+      setPending(null);
+      await loadHouseholds();
+      if (pending.kind === 'leave' || pending.kind === 'delete') setManageOpen(false);
+      else setDetail(await api.householdDetail(polledId));
+    } catch (err) {
+      noteFailure(err);
+      setPending(null);
+      setManageError(statusOf(err) === 409 ? t('guardian.owner_cannot_leave') : describeApiError(err, t));
+    } finally {
+      setManaging(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setManageOpen(false);
+    await signOut();
+  };
 
   const formatRelativeTime = (isoString: string) => {
     try {
@@ -173,6 +430,42 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
     }
   };
 
+  const label = (h: Household) => householdLabel(h, t('guardian.member_fallback'));
+  const actions = detail ? manageActions(detail) : null;
+  const pendingText = !pending
+    ? ''
+    : pending.kind === 'delete'
+      ? t('guardian.delete_confirm', {name: selected ? label(selected) : ''})
+      : `${t(pending.kind === 'handover' ? 'guardian.hand_over' : pending.kind === 'remove' ? 'guardian.remove' : 'guardian.leave')}${
+          pending.kind === 'leave' ? '' : `: ${pending.name}`
+        }`;
+
+  const addCard = (
+    <div id="guardian-link-card" className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-600/30 space-y-3">
+      <label htmlFor="guardian-code-input" className="block text-base font-bold text-gray-900 dark:text-white">
+        {t('guardian.link_title')}
+      </label>
+      <input
+        id="guardian-code-input"
+        inputMode="numeric"
+        autoComplete="one-time-code"
+        maxLength={7}
+        value={codeInput}
+        onChange={(e) => setCodeInput(e.target.value)}
+        placeholder="123-456"
+        className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 font-mono text-2xl tracking-widest text-center"
+      />
+      <button
+        onClick={handleJoin}
+        disabled={joining || codeInput.replace(/\D/g, '').length !== 6}
+        className="w-full min-h-[56px] rounded-xl bg-[#1B4D3E] text-white text-lg font-bold disabled:opacity-40"
+      >
+        {t('guardian.link_btn')}
+      </button>
+      {linkError && <p role="alert" className="text-sm font-bold text-red-700 dark:text-red-400">{t('guardian.link_fail')}</p>}
+    </div>
+  );
+
   return (
     <div id="guardian-view-screen" className="max-w-2xl mx-auto px-4 py-6 space-y-5 animate-fade-in">
       {/* Top Bar */}
@@ -185,25 +478,27 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
           <span>{t('guardian.back_btn')}</span>
         </button>
 
-        <div className="flex items-center gap-2">
-          <span className="flex h-2.5 w-2.5 relative">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-          </span>
-          <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
-            {t('guardian.polling_desc')}
-          </span>
-          <button
-            onClick={() => fetchAlerts()}
-            className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500"
-            title={t('guardian.manual_refresh')}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
+        {polledId && (
+          <div className="flex items-center gap-2">
+            <span className="flex h-2.5 w-2.5 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+            </span>
+            <span className="text-xs font-mono text-gray-500 dark:text-gray-400">
+              {t('guardian.polling_desc')}
+            </span>
+            <button
+              onClick={() => void fetchAlerts(polledId)}
+              className="p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-500"
+              title={t('guardian.manual_refresh')}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        )}
       </div>
 
-      {linked && push !== 'unsupported' && (
+      {(state.kind === 'dashboard' || state.kind === 'empty') && push !== 'unsupported' && (
         <div id="guardian-push-card" className="flex items-center gap-3 p-3 rounded-xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700">
           <BellRing className={`w-5 h-5 shrink-0 ${push === 'on' ? 'text-emerald-600' : 'text-gray-400'}`} />
           {push === 'off' ? (
@@ -220,32 +515,6 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
         </div>
       )}
 
-      {!linked && (
-        <div id="guardian-link-card" className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-600/30 space-y-3">
-          <label htmlFor="guardian-code-input" className="block text-base font-bold text-gray-900 dark:text-white">
-            {t('guardian.link_title')}
-          </label>
-          <input
-            id="guardian-code-input"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={7}
-            value={codeInput}
-            onChange={(e) => setCodeInput(e.target.value)}
-            placeholder="123-456"
-            className="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 font-mono text-2xl tracking-widest text-center"
-          />
-          <button
-            onClick={handleLink}
-            disabled={codeInput.replace(/\D/g, '').length !== 6}
-            className="w-full min-h-[56px] rounded-xl bg-[#1B4D3E] text-white text-lg font-bold disabled:opacity-40"
-          >
-            {t('guardian.link_btn')}
-          </button>
-          {linkError && <p role="alert" className="text-sm font-bold text-red-700 dark:text-red-400">{t('guardian.link_fail')}</p>}
-        </div>
-      )}
-
       <div>
         <h1 className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white flex items-center gap-2.5">
           <Users className="w-7 h-7 text-[#1B4D3E] dark:text-emerald-400" />
@@ -256,19 +525,203 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
         </p>
       </div>
 
-      {/* Alert List */}
-      <div className="space-y-3.5">
-        {alerts.length === 0 ? (
-          <div className="p-8 text-center rounded-3xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 text-gray-500">
-            <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500 mb-2" />
-            <p className="font-bold text-base text-gray-800 dark:text-gray-200">
-              {t('guardian.empty_title')}
-            </p>
-            <p className="text-xs mt-1">
-              {t('guardian.empty_desc')}
-            </p>
+      {state.kind === 'loading' && (
+        <p role="status" className="text-sm font-bold text-gray-500 dark:text-gray-400">
+          {t('common.loading')}
+        </p>
+      )}
+
+      {state.kind === 'signin' && (
+        <SignInCard
+          expired={state.expired}
+          onSignedIn={() => {
+            setFailure(null);
+            void loadHouseholds();
+          }}
+        />
+      )}
+
+      {state.kind === 'error' && (
+        <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-red-300 space-y-3">
+          <p role="alert" className="text-sm font-bold text-red-700 dark:text-red-400">{describeApiError(failure, t)}</p>
+          <button
+            onClick={() => {
+              setFailure(null);
+              void loadHouseholds();
+            }}
+            className="min-h-[48px] px-5 rounded-xl bg-[#1B4D3E] text-white text-base font-bold"
+          >
+            {t('common.retry')}
+          </button>
+        </div>
+      )}
+
+      {state.kind === 'empty' && (
+        <>
+          {addCard}
+          {!api.isMock && (
+            <button onClick={handleSignOut} className="text-sm font-bold text-gray-600 dark:text-gray-300 underline">
+              {t('guardian.sign_out')}
+            </button>
+          )}
+        </>
+      )}
+
+      {state.kind === 'dashboard' && households && selected && (
+        <>
+          {/* household switcher + actions */}
+          <div className="space-y-3">
+            {households.length > 1 && (
+              <div id="guardian-household-chips" role="tablist" className="flex flex-wrap gap-2">
+                {households.map((h) => (
+                  <button
+                    key={h.household_id}
+                    role="tab"
+                    aria-selected={h.household_id === selected.household_id}
+                    onClick={() => setSelectedId(h.household_id)}
+                    className={`min-h-[40px] px-4 rounded-full text-sm font-bold border-2 transition ${
+                      h.household_id === selected.household_id
+                        ? 'bg-[#1B4D3E] border-[#1B4D3E] text-white'
+                        : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200'
+                    }`}
+                  >
+                    {label(h)}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              <button
+                id="guardian-add-household"
+                onClick={() => setAddOpen((open) => !open)}
+                className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-full text-sm font-bold border-2 border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200"
+              >
+                <Plus className="w-4 h-4" />
+                <span>{t('guardian.add_household')}</span>
+              </button>
+              <button
+                id="guardian-manage"
+                onClick={() => setManageOpen((open) => !open)}
+                aria-expanded={manageOpen}
+                className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-full text-sm font-bold border-2 border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200"
+              >
+                <Settings className="w-4 h-4" />
+                <span>{t('guardian.manage')}</span>
+              </button>
+            </div>
           </div>
-        ) : (
+
+          {addOpen && addCard}
+
+          {manageOpen && (
+            <div id="guardian-manage-sheet" className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-gray-300 dark:border-gray-700 space-y-4">
+              <h2 className="text-base font-bold text-gray-900 dark:text-white">
+                {t('guardian.manage')}: {label(selected)}
+              </h2>
+
+              {!detail && !manageError && <p role="status" className="text-sm text-gray-500">{t('common.loading')}</p>}
+
+              {detail && actions && (
+                <>
+                  <ul className="space-y-2">
+                    {detail.guardians.map((g, i) => (
+                      <li key={g.uid ?? i} className="flex items-center justify-between gap-2 text-sm">
+                        <span className="font-bold text-gray-900 dark:text-white">
+                          {g.name || t('family.role_primary')}
+                          {g.owner && (
+                            <span className="ml-2 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300">
+                              {t('family.owner_badge')}
+                            </span>
+                          )}
+                        </span>
+                        {actions.others.some((o) => o.uid === g.uid) && g.uid && (
+                          <span className="flex gap-2">
+                            <button
+                              onClick={() => setPending({kind: 'handover', uid: g.uid!, name: g.name})}
+                              className="min-h-[40px] px-3 rounded-lg border border-gray-300 dark:border-gray-700 font-bold"
+                            >
+                              {t('guardian.hand_over')}
+                            </button>
+                            <button
+                              onClick={() => setPending({kind: 'remove', uid: g.uid!, name: g.name})}
+                              className="min-h-[40px] px-3 rounded-lg border border-red-300 text-red-700 dark:text-red-400 font-bold"
+                            >
+                              {t('guardian.remove')}
+                            </button>
+                          </span>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+
+                  {actions.ownerCannotLeave && <p className="text-xs text-gray-600 dark:text-gray-400">{t('guardian.owner_cannot_leave')}</p>}
+
+                  {actions.leaveUid && (
+                    <button
+                      onClick={() => setPending({kind: 'leave', uid: actions.leaveUid!})}
+                      className="w-full min-h-[48px] rounded-xl border-2 border-red-300 text-red-700 dark:text-red-400 font-bold"
+                    >
+                      {t('guardian.leave')}
+                    </button>
+                  )}
+
+                  {actions.canDelete && (
+                    <button
+                      onClick={() => setPending({kind: 'delete'})}
+                      className="w-full min-h-[48px] rounded-xl bg-red-700 text-white font-bold"
+                    >
+                      {t('guardian.delete_household')}
+                    </button>
+                  )}
+                </>
+              )}
+
+              {pending && (
+                <div role="alertdialog" className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-300 space-y-3">
+                  <p className="text-sm font-bold text-red-900 dark:text-red-200">{pendingText}</p>
+                  <div className="flex gap-2">
+                    <button onClick={() => setPending(null)} disabled={managing} className="flex-1 min-h-[44px] rounded-lg border border-gray-300 dark:border-gray-600 font-bold">
+                      {t('common.cancel')}
+                    </button>
+                    <button onClick={runPending} disabled={managing} className="flex-1 min-h-[44px] rounded-lg bg-red-700 text-white font-bold disabled:opacity-50">
+                      {t('common.confirm')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {manageError && <p role="alert" className="text-sm font-bold text-red-700 dark:text-red-400">{manageError}</p>}
+
+              {!api.isMock && (
+                <button onClick={handleSignOut} className="text-sm font-bold text-gray-600 dark:text-gray-300 underline">
+                  {t('guardian.sign_out')}
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Alert List */}
+          <div className="space-y-3.5">
+            {alerts.length === 0 ? (
+              alertsError ? (
+                <div className="p-6 rounded-3xl bg-white dark:bg-slate-900 border border-red-300 text-center space-y-3">
+                  <AlertTriangle className="w-10 h-10 mx-auto text-red-500" />
+                  <p role="alert" className="text-sm font-bold text-red-700 dark:text-red-400">{describeApiError(alertsError, t)}</p>
+                </div>
+              ) : !alertsLoaded ? (
+                <p role="status" className="text-sm font-bold text-gray-500 dark:text-gray-400 text-center">{t('common.loading')}</p>
+              ) : (
+                <div className="p-8 text-center rounded-3xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 text-gray-500">
+                  <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500 mb-2" />
+                  <p className="font-bold text-base text-gray-800 dark:text-gray-200">
+                    {t('guardian.empty_title')}
+                  </p>
+                  <p className="text-xs mt-1">
+                    {t('guardian.empty_desc')}
+                  </p>
+                </div>
+              )
+            ) : (
           alerts.map((alert) => {
             const isHigh = alert.risk_level === 'HIGH';
             return (
@@ -346,8 +799,10 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
               </div>
             );
           })
-        )}
-      </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 };

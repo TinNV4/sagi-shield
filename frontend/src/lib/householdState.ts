@@ -2,7 +2,8 @@
  * Decisions of the two household screens, kept apart from React so they can be tested without a renderer:
  * which state the member screen is in, and (guardian side, below) what to poll and which actions a role sees.
  */
-import type {Household} from '../api/types';
+import type {FamilyAlertItem, Household} from '../api/types';
+import type {AuthUser} from './auth';
 
 // ---------------------------------------------------------------- member side (FamilyScreen)
 
@@ -41,3 +42,87 @@ export interface GuardianRow {
 
 export const guardianRows = (household: Household): GuardianRow[] =>
   household.guardians.map((g, i) => ({key: `g-${i}`, name: g.name, owner: g.owner}));
+
+// ---------------------------------------------------------------- guardian side (GuardianViewScreen)
+
+export type GuardianScreenState =
+  | {kind: 'loading'}
+  | {kind: 'signin'; expired: boolean}
+  | {kind: 'error'}
+  | {kind: 'empty'}
+  | {kind: 'dashboard'};
+
+/** An ApiError is not imported here on purpose: any thrown value with `status: 401` counts. */
+const isUnauthorized = (failure: unknown): boolean =>
+  typeof failure === 'object' && failure !== null && (failure as {status?: unknown}).status === 401;
+
+/**
+ * Which screen a guardian sees. The demo API (`isMock`) needs no sign-in. A 401 that survived the client's one
+ * retry means the session is gone: the sign-in card with a sentence saying so, never an empty "no alerts" list.
+ */
+export function guardianScreenState(input: {
+  isMock: boolean;
+  authKnown: boolean;
+  user: AuthUser | null;
+  households: Household[] | null;
+  failure: unknown;
+}): GuardianScreenState {
+  if (!input.isMock) {
+    if (!input.authKnown) return {kind: 'loading'};
+    if (!input.user || input.user.anonymous) return {kind: 'signin', expired: false};
+    if (isUnauthorized(input.failure)) return {kind: 'signin', expired: true};
+  }
+  if (input.failure !== null && input.failure !== undefined) return {kind: 'error'};
+  if (input.households === null) return {kind: 'loading'};
+  return input.households.length === 0 ? {kind: 'empty'} : {kind: 'dashboard'};
+}
+
+/** The household whose alerts are polled: the chosen one while it still exists, otherwise the first. */
+export function selectedHousehold(households: Household[] | null, selectedId: string | null): Household | null {
+  if (!households || households.length === 0) return null;
+  return households.find((h) => h.household_id === selectedId) ?? households[0];
+}
+
+/**
+ * Speak and vibrate only for a HIGH alert that arrived on top of a list already shown. `previousCount` is null on
+ * the first load of a household (switching households resets it: another family's history is not "new").
+ */
+export function newHighAlert(previousCount: number | null, alerts: Pick<FamilyAlertItem, 'risk_level'>[]): boolean {
+  return previousCount !== null && previousCount > 0 && alerts.length > previousCount && alerts[0]?.risk_level === 'HIGH';
+}
+
+export interface ManageActions {
+  isOwner: boolean;
+  canDelete: boolean;
+  /** The caller's own uid when they may leave (a non-owner); null for an owner, who hands over or deletes. */
+  leaveUid: string | null;
+  ownerCannotLeave: boolean;
+  /** The other guardians that can be removed or made owner (needs the detail view: the list carries no uids). */
+  others: {uid: string; name: string}[];
+}
+
+export function manageActions(household: Household): ManageActions {
+  const me = household.guardians.find((g) => g.me);
+  const isOwner = Boolean(me?.owner);
+  return {
+    isOwner,
+    canDelete: isOwner,
+    leaveUid: !isOwner && me?.uid ? me.uid : null,
+    ownerCannotLeave: isOwner,
+    others: isOwner ? household.guardians.filter((g) => !g.me && g.uid).map((g) => ({uid: g.uid!, name: g.name})) : [],
+  };
+}
+
+/** What a household is called on a chip and in the delete confirmation: the protected person first. */
+export const householdLabel = (household: Household, fallback: string): string => household.member_name || household.name || fallback;
+
+const COUNTRY_CODE: Record<'ja' | 'vi', string> = {ja: '81', vi: '84'};
+
+/** Firebase wants E.164. "+81 90-..." stays international; a national number loses its trunk 0 and gets the market's code. */
+export function toE164(input: string, market: 'ja' | 'vi'): string | null {
+  const trimmed = input.trim();
+  const digits = trimmed.replace(/\D/g, '');
+  if (digits.length < 8) return null;
+  if (trimmed.startsWith('+')) return `+${digits}`;
+  return `+${COUNTRY_CODE[market]}${digits.replace(/^0+/, '')}`;
+}
