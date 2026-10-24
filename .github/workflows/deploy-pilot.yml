@@ -1,0 +1,68 @@
+name: Deploy pilot
+
+# Every push to the pilot branch that passes the tests is rolled to the second Cloud Run service, sagi-shield-pilot
+# (own URL, own Firestore database "pilot", no analytics stream, PILOT badge). The judged service sagi-shield-api is
+# deployed from main by deploy.yml only and is not touched here. One-time setup: infra/setup_pilot.ps1.
+on:
+  push:
+    branches: [pilot]
+  workflow_dispatch:
+
+concurrency:
+  group: pilot-${{ github.ref }}
+  cancel-in-progress: false   # cancelling the caller would abort a roll half-way; a newer push waits its turn
+
+permissions:
+  contents: read
+  id-token: write   # the reusable workflow authenticates to Google Cloud with OIDC
+
+jobs:
+  backend:
+    name: Backend tests (rules only, no network)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt pytest httpx  # test-only deps stay out of the image
+      - run: python -m pytest tests -q
+        env:
+          USE_LLM: "0"
+          STORE: memory
+
+  frontend:
+    name: Frontend type-check and tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  deploy:
+    name: Roll sagi-shield-pilot
+    needs: [backend, frontend]
+    uses: ./.github/workflows/_deploy-service.yml
+    with:
+      service: sagi-shield-pilot
+      image_name: sagi-shield-pilot
+      ref: ${{ github.sha }}
+      environment: pilot
+      firestore_db: pilot
+      bq_table: ""
+      env_label: PILOT
+      update_phish_job: false

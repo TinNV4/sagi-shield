@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, pilot]
     paths-ignore: ["**.md", "docs/**", ".env.example", "LICENSE"]
   pull_request:
     paths-ignore: ["**.md", "docs/**", ".env.example", "LICENSE"]
