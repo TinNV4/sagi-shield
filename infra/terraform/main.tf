@@ -362,3 +362,101 @@ resource "google_firebase_app_check_recaptcha_enterprise_config" "pwa" {
   site_key  = google_recaptcha_enterprise_key.app_check.name
   token_ttl = "14400s" # 4 h: the SDK refreshes at half the TTL, one reCAPTCHA assessment each
 }
+
+# ---------------------------------------------------------------- pilot environment (docs/ROADMAP.md, phase 0)
+# A second service for the family pilot, deployed from the pilot branch by .github/workflows/deploy-pilot.yml while the
+# judged service above stays frozen. Same runtime account, secrets and models; its own Firestore database, so pilot
+# reports, stats and households never reach the judged service; no analytics stream; PILOT badge in the PWA.
+resource "google_firestore_database" "pilot" {
+  count       = var.pilot_enabled ? 1 : 0
+  name        = "pilot"
+  location_id = var.region
+  type        = "FIRESTORE_NATIVE"
+  depends_on  = [google_project_service.apis]
+}
+
+resource "google_firestore_field" "pilot_recovery_ttl" {
+  count      = var.pilot_enabled ? 1 : 0
+  database   = google_firestore_database.pilot[0].name
+  collection = "recovery_sessions"
+  field      = "expires_at"
+  ttl_config {}
+}
+
+resource "google_cloud_run_v2_service" "pilot" {
+  count    = var.pilot_enabled ? 1 : 0
+  name     = "sagi-shield-pilot"
+  location = var.region
+  ingress  = "INGRESS_TRAFFIC_ALL"
+
+  template {
+    service_account  = google_service_account.api.email
+    timeout          = "3600s"
+    session_affinity = true
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 3
+    }
+    max_instance_request_concurrency = 40
+    containers {
+      image = var.pilot_image != "" ? var.pilot_image : var.image
+      resources {
+        limits = { cpu = "1", memory = "1Gi" }
+      }
+      dynamic "env" {
+        for_each = {
+          GOOGLE_GENAI_USE_ENTERPRISE = "true"
+          GOOGLE_CLOUD_PROJECT        = var.project
+          GOOGLE_CLOUD_LOCATION       = "global"
+          GEMINI_MODEL                = var.gemini_model
+          GEMINI_VISION_MODEL         = var.gemini_vision_model
+          STORE                       = "firestore"
+          FIRESTORE_DB                = google_firestore_database.pilot[0].name
+          USE_WEBRISK                 = "1"
+          USE_LLM                     = "1"
+          CORS_ORIGINS                = var.cors_origins
+          APPCHECK                    = var.app_check_mode
+        }
+        content {
+          name  = env.key
+          value = env.value
+        }
+      }
+      env {
+        name = "HASH_KEY"
+        value_source {
+          secret_key_ref {
+            secret  = google_secret_manager_secret.hash_key.secret_id
+            version = "latest"
+          }
+        }
+      }
+      dynamic "env" {
+        for_each = var.stt_api_key_secret ? [1] : []
+        content {
+          name = "STT_API_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.stt_key[0].secret_id
+              version = "latest"
+            }
+          }
+        }
+      }
+    }
+  }
+
+  depends_on = [
+    google_project_iam_member.api_roles,
+    google_secret_manager_secret_iam_member.hash_key_reader,
+    google_secret_manager_secret_version.hash_key,
+  ]
+}
+
+resource "google_cloud_run_v2_service_iam_member" "pilot_public" {
+  count    = var.pilot_enabled ? 1 : 0
+  name     = google_cloud_run_v2_service.pilot[0].name
+  location = google_cloud_run_v2_service.pilot[0].location
+  role     = "roles/run.invoker"
+  member   = "allUsers"
+}

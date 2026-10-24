@@ -175,6 +175,7 @@ flowchart TD
 | `backend/app/live.py` + `frontend/spike/live_text.html` | ✅ `WS /ws/live` verified from a script and by replaying real recordings (`tools/replay_live.py`); the spike page and the Live Guard screen have **not been driven by a microphone in a real Chrome yet** (field-test protocol: `docs/REAL_CALL_TEST.md`; `live_call` / `live_alarm` records count calls and the alarm sentence) | Live Guard text mode (periodic / rules gate, pinned opening, `<call_state>`) + on-device STT test page |
 | `backend/app/agent.py` | ✅ six tools, verified on Cloud Run; `tools/eval_agent.py` | F6 recovery agent (ADK 2.x) |
 | `frontend/` (AI Studio Build export, fixed) | ✅ typechecks and builds; Quick Check, result, Home, Recovery, Family pairing verified in a browser against Cloud Run; served by the API from `backend/static/`; static SPA, no secrets. Error states (offline / 429 / 503) translated since 2026-10-10 | PWA |
+| `.github/workflows/deploy-pilot.yml`, `_deploy-service.yml`, `infra/setup_pilot.ps1` | ✅ 2026-10-24: second Cloud Run service `sagi-shield-pilot` from branch `pilot`, own Firestore database; `main` and the judged URL frozen during evaluation (CLAUDE.md, Environments) | Pilot environment (`docs/ROADMAP.md`) |
 | `docs/AI_STUDIO_UI_PROMPT.md` | historical (v3 screens); the UI is maintained in this repo, never round-tripped through AI Studio | Prompt that generated the first UI |
 
 ## 8. Reuse: libraries & data

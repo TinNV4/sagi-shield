@@ -70,6 +70,10 @@ Outcome B, no pack or unusable on the Fire: borrow a stock Android phone from a 
 
 Either way the result is written into CLAUDE.md and PLAN section 14, replacing "never executed".
 
+### Step 0b - pilot environment (done 2026-10-24)
+
+The submission is being scored from 2026-10-19 to 2026-11-07 and the judged URL auto-deploys from `main`, so `main` is frozen and every phase 0 change ships to a second Cloud Run service, `sagi-shield-pilot`, from the `pilot` branch (`.github/workflows/deploy-pilot.yml`). Own Firestore database `pilot`, no analytics stream, `PILOT` badge; setup by `infra/setup_pilot.ps1`. The three pilot households of the exit criteria run on the pilot URL. Plan: `docs/superpowers/plans/2026-10-24-pilot-environment.md`.
+
 ### Step 1 - accounts and roles
 
 **Model [decided in shape, details my call]**
@@ -115,7 +119,7 @@ The guardian's phone becomes the control panel; the grandparent's device shows o
 
 ### Phase 0 exit criteria
 
-- Three households (two ja, one vi, all relatives) installed by a guardian without the owner touching the grandparent's device.
+- Three households (two ja, one vi, all relatives) installed by a guardian without the owner touching the grandparent's device, on the pilot URL.
 - Step 0 answer recorded.
 - Admin page shows the three households' verdicts within a minute of them happening.
 - `python -m pytest`, `npm test`, CI and auto-deploy green; no `family_id` in any URL.

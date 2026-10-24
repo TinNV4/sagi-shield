@@ -71,3 +71,15 @@ variable "app_check_domains" {
   type        = list(string)
   default     = []
 }
+
+variable "pilot_enabled" {
+  description = "Create the second service sagi-shield-pilot (own Firestore database, no analytics), deployed from the pilot branch"
+  type        = bool
+  default     = false
+}
+
+variable "pilot_image" {
+  description = "Image for the pilot service (deploy-pilot.yml pushes .../sagi/sagi-shield-pilot:<sha>)"
+  type        = string
+  default     = ""
+}

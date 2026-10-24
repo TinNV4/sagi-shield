@@ -19,3 +19,8 @@ output "pwa_build_env" {
     VITE_RECAPTCHA_SITE_KEY = google_recaptcha_enterprise_key.app_check.name
   }
 }
+
+output "pilot_url" {
+  description = "The pilot service URL (empty unless pilot_enabled)"
+  value       = var.pilot_enabled ? google_cloud_run_v2_service.pilot[0].uri : ""
+}
