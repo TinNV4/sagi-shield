@@ -115,17 +115,18 @@ async def live(ws: WebSocket):
         return tracker.call_state((time.monotonic() - state["started"]) / 60, state["scam_type"])
 
     async def authenticate(token: object):
-        # who is calling: the sign-in token arrives as the first message (never in the URL, which Cloud Run logs) and is
-        # checked once per connection. Missing / bad token, a device in no household or a store fault leave household_id
-        # None: the warning is still spoken, only the family alert is skipped. A caller must never be silenced by this.
+        # who is calling: the sign-in token arrives as the first message (never in the URL, which Cloud Run logs).
+        # Missing / bad token, a device in no household or a store fault leave household_id None: the warning is still
+        # spoken, only the family alert is skipped. A caller must never be silenced by this. Settled once a lookup
+        # answered (a household or "none"); a timeout or a store fault leaves it open, so the client's retry counts.
         if state["authed"] or not isinstance(token, str) or not token:
             return
-        state["authed"] = True
         try:
             state["household_id"] = await asyncio.wait_for(
                 asyncio.to_thread(lambda: resolve_household(principal_from_query(token))), timeout=5)
+            state["authed"] = True
         except Exception:
-            log.exception("live guard: household lookup failed; continuing without one")
+            log.exception("live guard: household lookup failed; continuing without one until the next auth message")
 
     async def send(score: float, trigger: str = ""):
         # HIGH is only announced once latched (2 consecutive windows) - no one-window red flashes
@@ -153,10 +154,13 @@ async def live(ws: WebSocket):
         if first_high and (state["household_id"] or family_id):
             reasons = state["reasons"] or engine.rule_reasons(tracker.hits, lang)
             body = {**msg, "scam_type": state["scam_type"], "reasons": reasons}
-            if state["household_id"]:
-                await asyncio.to_thread(alert_household, state["household_id"], body, lang)
-            else:
-                await asyncio.to_thread(alert_family, family_id, body, lang)
+            try:  # a store fault must not close the socket after the warning: the next lines still need judging
+                if state["household_id"]:
+                    await asyncio.to_thread(alert_household, state["household_id"], body, lang)
+                else:
+                    await asyncio.to_thread(alert_family, family_id, body, lang)
+            except Exception:
+                log.exception("live guard: family alert failed; the caller was warned")
 
     async def ask_llm(text: str, session: str, trigger: str):
         # during a call every second counts: flash-lite scored 15/15 on tools/compare_llm.py at ~2.3 s median,

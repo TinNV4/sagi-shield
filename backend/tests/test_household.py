@@ -284,6 +284,75 @@ def test_removing_a_token_never_touches_another_guardians_identical_token(client
     assert sent[-1]["tokens"] == ["same"]
 
 
+def test_alerts_are_guardian_only(client):
+    hid = _two_guardians(client)
+    _notify(client, hid)
+    assert client.get(f"/household/{hid}/alerts", headers=H(DEV)).status_code == 403   # the device raises, never reads
+    assert len(client.get(f"/household/{hid}/alerts", headers=H(G2)).json()) == 1
+
+
+def test_owner_resets_paired_devices(client):
+    from app.auth import Principal
+    from app.households import resolve_household
+    hid = _two_guardians(client)
+    assert client.delete(f"/household/{hid}/devices", headers=H(DEV)).status_code == 403   # a device cannot unpair
+    assert client.delete(f"/household/{hid}/devices", headers=H(G2)).status_code == 403    # only the owner
+    assert client.delete(f"/household/{hid}/devices").status_code == 401
+    r = client.delete(f"/household/{hid}/devices", headers=H(G1))
+    assert r.status_code == 200 and r.json() == {"ok": True, "removed": 1}
+    assert client.get(f"/household/{hid}", headers=H(G1)).json()["devices"] == 0
+    assert _notify(client, hid).status_code == 403                                           # the lost phone is out
+    assert client.get(f"/household/{hid}", headers=H(DEV)).status_code == 403
+    assert client.post(f"/household/{hid}/code", json={}, headers=H(DEV)).status_code == 403
+    assert resolve_household(Principal("d1", "device")) is None
+    assert client.delete("/household/nope/devices", headers=H(G1)).status_code == 404
+
+
+def test_live_auth_after_a_failed_lookup_is_honoured(client, monkeypatch):
+    from app import households, live
+    h = client.post("/household", json={"member_name": "Mom", "market": "ja"}, headers=H(DEV)).json()
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
+    calls = []
+
+    def flaky(principal):
+        calls.append(principal)
+        if len(calls) == 1:
+            raise RuntimeError("firestore blip")
+        return households.resolve_household(principal)
+
+    monkeypatch.setattr(live, "resolve_household", flaky)
+    with client.websocket_connect("/ws/live?lang=ja") as ws:
+        auth(ws)              # lookup fails: the socket stays unauthenticated
+        say(ws, "繧ゅ＠繧ゅ＠")
+        ws.receive_json()
+        auth(ws)              # the client's retry: honoured this time
+        for line in SCAM_LINES:
+            say(ws, line)
+            ws.receive_json()
+        auth(ws, "g1:google.com")   # once a lookup answered, later auth messages are ignored
+    assert len(calls) == 2
+    assert len(client.get(f"/household/{h['household_id']}/alerts", headers=H(G1)).json()) == 1
+
+
+def test_live_a_failing_family_alert_never_closes_the_socket(client, monkeypatch):
+    from app import live
+    h = client.post("/household", json={"member_name": "Mom", "market": "ja"}, headers=H(DEV)).json()
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
+
+    def boom(*a, **kw):
+        raise RuntimeError("firestore down")
+
+    monkeypatch.setattr(live, "alert_household", boom)
+    with client.websocket_connect("/ws/live?lang=ja") as ws:
+        auth(ws)
+        for line in SCAM_LINES:
+            say(ws, line)
+            last = ws.receive_json()
+        assert last["risk_level"] == "HIGH"
+        say(ws, "繧ゅ＠繧ゅ＠")                        # the socket is still open after the failed alert
+        assert "risk_level" in ws.receive_json()
+
+
 def test_push_removal_is_guardian_only(client):
     hid = _two_guardians(client)
     body = {"fcm_token": "x"}

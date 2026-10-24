@@ -232,7 +232,9 @@ def test_notify_guardian_uses_the_household_from_the_token(client, monkeypatch):
 
     assert agent.notify_guardian("paid a fake police caller", Ctx)["status"] == "ok"
     assert agent.notify_guardian("again", Ctx)["status"] == "already_sent"
-    alerts = client.get(f"/household/{h['household_id']}/alerts", headers={"Authorization": "Bearer fake:d1:anonymous"}).json()
+    # alerts are read by guardians only: the device that raised one cannot list them
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers={"Authorization": "Bearer fake:g1:google.com"})
+    alerts = client.get(f"/household/{h['household_id']}/alerts", headers={"Authorization": "Bearer fake:g1:google.com"}).json()
     assert len(alerts) == 1 and alerts[0]["scam_type"] == "recovery"
 
 

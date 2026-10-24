@@ -137,8 +137,16 @@ def household_detail(hid: str, p: Principal = Depends(auth.principal)):
 
 @router.get("/household/{hid}/alerts")
 def household_alerts(hid: str, p: Principal = Depends(auth.principal)):
-    _member(hid, p)
+    """Guardians only: the device raises alerts but never lists them (a borrowed or stolen phone shows no history)."""
+    _member(hid, p, guardian_only=True)
     return STORE.list_household_alerts(hid)
+
+
+@router.delete("/household/{hid}/devices")
+def household_reset_devices(hid: str, p: Principal = Depends(auth.principal)):
+    """Owner only: unpair every device (a lost or replaced phone). The protected person pairs again with a new code."""
+    _owner(hid, p)
+    return {"ok": True, "removed": STORE.clear_household_devices(hid)}
 
 
 @router.post("/household/{hid}/push")

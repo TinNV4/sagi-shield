@@ -35,3 +35,13 @@ def test_delete_removes_alerts_too():
     s.add_household_alert(h["household_id"], "HIGH", "fake_police", 4, "summary")
     assert s.delete_household(h["household_id"]) and s.get_household(h["household_id"]) is None
     assert s.list_household_alerts(h["household_id"]) == [] and s.delete_household(h["household_id"]) is False
+
+def test_clear_devices_unpairs_every_device_and_keeps_the_guardians():
+    s = MemoryStore()
+    h = s.create_household("", "Mom", "ja", DEV)
+    s.join_household(h["pair_code"], GUARD, None)
+    s.join_household(s.refresh_household_code(h["household_id"])["pair_code"], Principal("dev2", "device"), None)
+    assert s.clear_household_devices(h["household_id"]) == 2
+    kept = s.get_household(h["household_id"])
+    assert kept["devices"] == [] and [g["uid"] for g in kept["guardians"]] == ["g1"]
+    assert s.households_for("dev1") == [] and s.clear_household_devices("nope") == 0

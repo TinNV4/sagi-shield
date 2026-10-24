@@ -288,6 +288,14 @@ class MemoryStore:
         hh = self.households.get(household_id)
         return bool(hh) and _make_owner(hh, uid)
 
+    def clear_household_devices(self, household_id: str) -> int:
+        """Unpair every device; the number removed (0 for an unknown household)."""
+        hh = self.households.get(household_id)
+        if not hh:
+            return 0
+        removed, hh["devices"] = len(hh["devices"]), []
+        return removed
+
     def delete_household(self, household_id: str) -> bool:
         self.household_alerts.pop(household_id, None)
         return self.households.pop(household_id, None) is not None
@@ -504,6 +512,15 @@ class FirestoreStore:
             return False
         self.db.collection("households").document(household_id).set(hh)
         return True
+
+    def clear_household_devices(self, household_id: str) -> int:
+        hh = self.get_household(household_id)
+        if not hh:
+            return 0
+        removed = len(hh.get("devices", []))
+        # `devices` is the array households_for() queries with array_contains: emptying it is the whole unpairing
+        self.db.collection("households").document(household_id).update({"devices": []})
+        return removed
 
     def delete_household(self, household_id: str) -> bool:
         ref = self.db.collection("households").document(household_id)
