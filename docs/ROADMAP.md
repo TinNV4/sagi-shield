@@ -93,7 +93,7 @@ The submission is being scored from 2026-10-19 to 2026-11-07 and the judged URL 
 
 **Why now:** the pilot cannot start without it. Today anybody who shoulder-surfs a `family_id` can read a family's alerts, and there is no way to remove a guardian or wipe a household.
 
-### Step 2 - the guardian sets up the grandparent (done 2026-10-25)
+### Step 2 - the guardian sets up the grandparent (built 2026-10-25, guardian side verified on the pilot: pending)
 
 The guardian's phone becomes the control panel; the grandparent's device shows one screen.
 
