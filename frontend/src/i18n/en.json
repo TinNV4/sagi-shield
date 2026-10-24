@@ -379,6 +379,7 @@
     "join_btn": "Link",
     "join_wrong_code": "The code is wrong or has expired. Ask your family for a new one.",
     "join_back": "Back",
+    "ios_home_screen_hint": "iPhone: first add this app to your Home Screen (Share → Add to Home Screen), open it from there, then enter the code.",
     "member_name_label": "Your first name (optional)",
     "owner_badge": "Owner",
     "signed_in_as_guardian": "This browser is signed in as a guardian. Open the family link on the protected person's own phone.",
@@ -444,7 +445,7 @@
     "resend_code": "Send again",
     "resend_wait": "Send again in {{s}} s",
     "change_number": "Change number",
-    "protect_parent": "Protect a parent",
+    "protect_parent": "Start protecting a parent",
     "parent_name": "Parent's first name (optional)",
     "market": "Where your parent lives",
     "market_ja": "Japan",
@@ -457,6 +458,9 @@
     "settings_saved": "Saved.",
     "status_listening": "Live Guard is listening (updated {{time}})",
     "status_seen": "Last seen {{time}}",
+    "status_offline": "Offline since {{time}}",
+    "status_paired": "Device paired, Live Guard not running yet",
+    "alert_device_offline": "The protected device is not responding",
     "status_none": "No device yet",
     "show_card": "Show setup card"
   },
@@ -466,11 +470,11 @@
     "code_expired": "This code has expired. Make a new one.",
     "new_code": "New code",
     "open_link": "Link to open",
-    "step_open": "Open the link above on the device, or scan the code.",
-    "step_code": "On the Family screen, enter the 6-digit code.",
+    "step_open": "Open the link above on the device, or scan the QR code.",
+    "step_code": "Open Family Link (tap “…” More at the bottom), choose “I have a code from my family”, enter the 6-digit code and tap Link. Opened from the QR code, the code is already filled in.",
     "step_mic": "Allow the microphone when asked.",
     "step_charger": "Leave the device on its charger.",
-    "iphone_note": "iPhone: in Safari, tap Share, then Add to Home Screen. Open the app from the home screen and turn notifications on there.",
+    "iphone_note": "iPhone: follow this order. 1) In Safari, open the link, tap Share, then Add to Home Screen. 2) Open the app from its home-screen icon, not from Safari. 3) Tap “…” More → Family Link → “I have a code from my family” and type the code. A code used in Safari first will not link the home-screen app.",
     "print": "Print",
     "live_guard_not_saved": "Live Guard could not be turned on. Turn it on later in the household settings."
   },
@@ -566,7 +570,8 @@
     "refund": "ATM Refund Scam",
     "investment": "Social Media Investment Scam",
     "safe": "No scam pattern found",
-    "unknown": "Unclassified Communication"
+    "unknown": "Unclassified Communication",
+    "device_offline": "Device offline"
   },
   "speech_setup": {
     "tab_privacy": "1. Privacy & Status",

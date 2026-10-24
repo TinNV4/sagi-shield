@@ -379,6 +379,7 @@
     "join_btn": "Kết nối",
     "join_wrong_code": "Mã không đúng hoặc đã hết hạn. Hãy nhờ người thân tạo mã mới.",
     "join_back": "Quay lại",
+    "ios_home_screen_hint": "iPhone: hãy thêm ứng dụng vào Màn hình chính trước (Chia sẻ → Thêm vào Màn hình chính), mở từ đó rồi mới nhập mã.",
     "member_name_label": "Tên của bạn (không bắt buộc)",
     "owner_badge": "Người quản lý",
     "signed_in_as_guardian": "Trình duyệt này đang đăng nhập với tư cách người giám hộ. Hãy mở phần kết nối trên điện thoại của người được bảo vệ.",
@@ -444,7 +445,7 @@
     "resend_code": "Gửi lại",
     "resend_wait": "Gửi lại sau {{s}} giây",
     "change_number": "Đổi số",
-    "protect_parent": "Bảo vệ cha mẹ",
+    "protect_parent": "Bắt đầu bảo vệ cha mẹ",
     "parent_name": "Tên cha/mẹ của bạn (không bắt buộc)",
     "market": "Cha mẹ bạn sống ở đâu",
     "market_ja": "Nhật Bản",
@@ -456,7 +457,10 @@
     "settings_save": "Lưu",
     "settings_saved": "Đã lưu.",
     "status_listening": "Live Guard đang lắng nghe (cập nhật {{time}})",
-    "status_seen": "Lần cuối thấy {{time}}",
+    "status_seen": "Thấy lần cuối {{time}}",
+    "status_offline": "Mất kết nối từ {{time}}",
+    "status_paired": "Đã liên kết thiết bị, Live Guard chưa chạy",
+    "alert_device_offline": "Thiết bị bảo vệ không phản hồi",
     "status_none": "Chưa có thiết bị",
     "show_card": "Xem thẻ cài đặt"
   },
@@ -466,11 +470,11 @@
     "code_expired": "Mã đã hết hạn. Hãy tạo mã mới.",
     "new_code": "Mã mới",
     "open_link": "Liên kết để mở",
-    "step_open": "Mở liên kết ở trên bằng thiết bị, hoặc quét mã.",
-    "step_code": "Ở màn hình Gia đình, nhập mã gồm 6 chữ số.",
+    "step_open": "Mở liên kết ở trên bằng thiết bị, hoặc quét mã QR.",
+    "step_code": "Mở Kết nối người thân (bấm “…” Thêm ở cuối màn hình), chọn “Tôi có mã từ người thân”, nhập mã gồm 6 chữ số rồi bấm Kết nối. Nếu mở từ mã QR, mã đã được điền sẵn.",
     "step_mic": "Cho phép micro khi được hỏi.",
     "step_charger": "Để thiết bị cắm sạc.",
-    "iphone_note": "iPhone: trong Safari, chọn Chia sẻ rồi Thêm vào Màn hình chính. Mở ứng dụng từ màn hình chính và bật thông báo tại đó.",
+    "iphone_note": "iPhone: hãy làm đúng thứ tự. 1) Trong Safari, mở liên kết, chọn Chia sẻ rồi Thêm vào Màn hình chính. 2) Mở ứng dụng từ biểu tượng trên màn hình chính, không mở trong Safari. 3) Bấm “…” Thêm → Kết nối người thân → “Tôi có mã từ người thân” rồi nhập mã. Nếu đã dùng mã trong Safari trước, ứng dụng trên màn hình chính sẽ không được kết nối.",
     "print": "In",
     "live_guard_not_saved": "Không thể bật Live Guard. Hãy bật sau trong phần cài đặt hộ gia đình."
   },
@@ -566,7 +570,8 @@
     "refund": "Lừa hoàn tiền qua ATM",
     "investment": "Đầu tư tài chính / Việc làm online",
     "safe": "Chưa thấy dấu hiệu lừa đảo",
-    "unknown": "Liên lạc chưa phân loại"
+    "unknown": "Liên lạc chưa phân loại",
+    "device_offline": "Thiết bị mất kết nối"
   },
   "speech_setup": {
     "tab_privacy": "1. Riêng tư & Trạng thái",

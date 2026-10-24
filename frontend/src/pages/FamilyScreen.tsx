@@ -21,12 +21,25 @@ import * as speech from '../lib/speak';
 
 interface FamilyScreenProps {
   onOpenGuardianView: () => void;
+  /** This device just joined a household by code: App applies the household's Live Guard switch at once. */
+  onJoined?: (household: Household) => void;
   alertOnHigh: boolean;
   onToggleAlertOnHigh: (val: boolean) => void;
 }
 
+/** iPhone / iPad Safari, not yet opened from the home screen: a code used here would not link the home-screen app. */
+const iosOutsideHomeScreen = (): boolean => {
+  try {
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    return ios && !window.matchMedia('(display-mode: standalone)').matches;
+  } catch {
+    return false;
+  }
+};
+
 export const FamilyScreen: React.FC<FamilyScreenProps> = ({
   onOpenGuardianView,
+  onJoined,
   alertOnHigh,
   onToggleAlertOnHigh,
 }) => {
@@ -97,7 +110,8 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
     setJoining(true);
     setJoinError(null);
     try {
-      await api.joinHousehold(joinCode);
+      const joined = await api.joinHousehold(joinCode);
+      onJoined?.(joined);
       setHouseholds(null);
       setReloadKey((k) => k + 1);
     } catch (err) {
@@ -257,6 +271,11 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
             <label htmlFor="family-join-code" className="block text-sm font-bold text-gray-700 dark:text-gray-300">
               {t('family.join_code_label')}
             </label>
+            {iosOutsideHomeScreen() && (
+              <p id="family-ios-home-hint" className="text-sm font-bold text-amber-800 dark:text-amber-300">
+                {t('family.ios_home_screen_hint')}
+              </p>
+            )}
             <input
               id="family-join-code"
               inputMode="numeric"

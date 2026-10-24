@@ -211,6 +211,27 @@ export function kioskUnlockActive(raw: string | null, now: number): boolean {
   const until = raw === null ? NaN : Number(raw);
   return Number.isFinite(until) && until > now;
 }
+
+/**
+ * What the household's Live Guard switch does to this device's kiosk mode, at start-up, after joining and whenever
+ * the app comes back to the foreground. Only an anonymous user (a protected device) is ever switched; a kiosk left
+ * in Settings during the last 24 h is kept. Household on + kiosk off -> 'on'. Household off (or no household any
+ * more) -> 'off' only for a kiosk the household turned on (`fromHousehold`, `sagi_kiosk_from_household`); a kiosk
+ * the person chose in onboarding or Settings is never touched. 'keep' otherwise, so the screen does not move.
+ */
+export function kioskDecision(input: {
+  user: AuthUser | null;
+  household: Household | null;
+  kioskOn: boolean;
+  fromHousehold: boolean;
+  unlockedUntil: string | null;
+  now: number;
+}): 'on' | 'off' | 'keep' {
+  if (!input.user?.anonymous) return 'keep';
+  if (kioskUnlockActive(input.unlockedUntil, input.now)) return 'keep';
+  if (kioskFromHousehold(input.household)) return input.kioskOn ? 'keep' : 'on';
+  return input.kioskOn && input.fromHousehold ? 'off' : 'keep';
+}
 // ---------------------------------------------------------------- guardian dashboard: device status, setup card
 
 /** A listening heartbeat older than this (three missed beats of `HEARTBEAT_EVERY_S` = 180) no longer says "listening". */
@@ -219,25 +240,37 @@ export const LISTENING_FRESH_MS = 10 * 60 * 1000;
 export const DEVICE_SEEN_MS = 24 * 3600 * 1000;
 
 export interface DeviceStatusLabel {
-  kind: 'listening' | 'seen' | 'none';
-  /** The heartbeat time (ISO), for `listening` and `seen`. */
+  kind: 'listening' | 'offline' | 'seen' | 'paired' | 'none';
+  /** The heartbeat time (ISO), for `listening`, `offline` and `seen`. */
   at?: string;
 }
 
 /**
- * What the dashboard header says about the protected device. `listening`: Live Guard reported listening within
- * `LISTENING_FRESH_MS`. `seen`: any heartbeat up to and including 24 h old. `none`: no heartbeat, an unreadable
- * time, or older than 24 h ("No device yet" with the setup card link). The text itself is the screen's job.
+ * What the dashboard header says about the protected device. `none`: no device paired (`devices` = 0; "No device
+ * yet" with the setup card link). `paired`: a device joined but has not sent a (readable) heartbeat yet.
+ * `listening`: Live Guard reported listening within `LISTENING_FRESH_MS`. `seen`: a heartbeat up to and including
+ * 24 h old. `offline`: Live Guard is on and the newest heartbeat is older than 24 h (the server's sweep has the same
+ * rule); with Live Guard off an old heartbeat is not an outage, so it stays `seen` with its time. The text itself
+ * is the screen's job.
  */
-export function deviceStatusLabel(status: Household['device_status'], now: number): DeviceStatusLabel {
+export function deviceStatusLabel(
+  status: Household['device_status'],
+  now: number,
+  devices: number,
+  liveGuardEnabled: boolean,
+): DeviceStatusLabel {
+  if (devices <= 0) return {kind: 'none'};
   const at = status?.last_seen ?? null;
   const time = at === null ? NaN : Date.parse(at);
-  if (at === null || !Number.isFinite(time)) return {kind: 'none'};
+  if (at === null || !Number.isFinite(time)) return {kind: 'paired'};
   const age = now - time;
-  if (age > DEVICE_SEEN_MS) return {kind: 'none'};
+  if (age > DEVICE_SEEN_MS) return liveGuardEnabled ? {kind: 'offline', at} : {kind: 'seen', at};
   if (status?.listening && age <= LISTENING_FRESH_MS) return {kind: 'listening', at};
   return {kind: 'seen', at};
 }
+
+/** The offline sweep's "device offline" notice is a system notice in the alert list, not a scam alert. */
+export const isSystemAlert = (alert: {scam_type: string}): boolean => alert.scam_type === 'device_offline';
 
 /** The grandparent's setup steps in order (i18n keys); the microphone step only when Live Guard is on. */
 export const cardSteps = (liveGuard: boolean): string[] => [

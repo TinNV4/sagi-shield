@@ -10,6 +10,8 @@ import {
   guardianScreenState,
   householdLabel,
   householdRouteFailure,
+  isSystemAlert,
+  kioskDecision,
   kioskFromHousehold,
   normalizePairCode,
   kioskUnlockActive,
@@ -309,31 +311,88 @@ describe('deviceStatusLabel', () => {
   const MIN = 60 * 1000;
   const HOUR = 60 * MIN;
 
-  it('is none without a status or without a heartbeat', () => {
-    expect(deviceStatusLabel(undefined, now)).toEqual({kind: 'none'});
-    expect(deviceStatusLabel({last_seen: null, listening: false}, now)).toEqual({kind: 'none'});
+  it('is none when no device is paired, whatever the status says', () => {
+    expect(deviceStatusLabel(undefined, now, 0, true)).toEqual({kind: 'none'});
+    expect(deviceStatusLabel({last_seen: null, listening: false}, now, 0, false)).toEqual({kind: 'none'});
+  });
+
+  it('is paired when a device joined but never sent a heartbeat (or an unreadable one)', () => {
+    expect(deviceStatusLabel(undefined, now, 1, true)).toEqual({kind: 'paired'});
+    expect(deviceStatusLabel({last_seen: null, listening: false}, now, 2, false)).toEqual({kind: 'paired'});
+    expect(deviceStatusLabel({last_seen: 'garbage', listening: true}, now, 1, true)).toEqual({kind: 'paired'});
   });
 
   it('is listening while a listening heartbeat is fresh (a few missed beats are tolerated)', () => {
     const at = ago(2 * MIN);
-    expect(deviceStatusLabel({last_seen: at, listening: true}, now)).toEqual({kind: 'listening', at});
-    expect(deviceStatusLabel({last_seen: ago(10 * MIN), listening: true}, now).kind).toBe('listening');
+    expect(deviceStatusLabel({last_seen: at, listening: true}, now, 1, true)).toEqual({kind: 'listening', at});
+    expect(deviceStatusLabel({last_seen: ago(10 * MIN), listening: true}, now, 1, true).kind).toBe('listening');
   });
 
   it('a stale listening heartbeat is only "seen"', () => {
     const at = ago(11 * MIN);
-    expect(deviceStatusLabel({last_seen: at, listening: true}, now)).toEqual({kind: 'seen', at});
+    expect(deviceStatusLabel({last_seen: at, listening: true}, now, 1, true)).toEqual({kind: 'seen', at});
   });
 
-  it('is seen when the device is not listening but reported within 24 h, none beyond', () => {
-    expect(deviceStatusLabel({last_seen: ago(5 * HOUR), listening: false}, now).kind).toBe('seen');
-    expect(deviceStatusLabel({last_seen: ago(24 * HOUR), listening: false}, now).kind).toBe('seen');
-    expect(deviceStatusLabel({last_seen: ago(24 * HOUR + 1), listening: false}, now)).toEqual({kind: 'none'});
+  it('is seen up to and including 24 h, offline beyond', () => {
+    expect(deviceStatusLabel({last_seen: ago(5 * HOUR), listening: false}, now, 1, true).kind).toBe('seen');
+    expect(deviceStatusLabel({last_seen: ago(24 * HOUR), listening: false}, now, 1, true).kind).toBe('seen');
+    const at = ago(24 * HOUR + 1);
+    expect(deviceStatusLabel({last_seen: at, listening: false}, now, 1, true)).toEqual({kind: 'offline', at});
+    expect(deviceStatusLabel({last_seen: ago(3 * 24 * HOUR), listening: true}, now, 1, true).kind).toBe('offline');
   });
 
-  it('an unreadable or future timestamp is none / still fresh, never a crash', () => {
-    expect(deviceStatusLabel({last_seen: 'garbage', listening: true}, now)).toEqual({kind: 'none'});
-    expect(deviceStatusLabel({last_seen: ago(-MIN), listening: false}, now).kind).toBe('seen');
+  it('with Live Guard off an old heartbeat is not an outage: it stays "seen" with its time', () => {
+    const at = ago(3 * 24 * HOUR);
+    expect(deviceStatusLabel({last_seen: at, listening: false}, now, 1, false)).toEqual({kind: 'seen', at});
+  });
+
+  it('a heartbeat from a device that was since unpaired is none (devices is the truth)', () => {
+    expect(deviceStatusLabel({last_seen: ago(MIN), listening: true}, now, 0, true)).toEqual({kind: 'none'});
+  });
+
+  it('a future timestamp counts as fresh, never a crash', () => {
+    expect(deviceStatusLabel({last_seen: ago(-MIN), listening: false}, now, 1, true).kind).toBe('seen');
+  });
+});
+
+describe('isSystemAlert', () => {
+  it('the offline sweep notice is a system notice, scam alerts are not', () => {
+    expect(isSystemAlert({scam_type: 'device_offline'})).toBe(true);
+    for (const t of ['fake_police', 'unknown', 'safe', '']) expect(isSystemAlert({scam_type: t})).toBe(false);
+  });
+});
+
+describe('kioskDecision', () => {
+  const now = 1_000_000;
+  const device = user({anonymous: true});
+  const on = household({live_guard_enabled: true});
+  const off = household({live_guard_enabled: false});
+  const base = {user: device, household: on as Household | null, kioskOn: false, fromHousehold: false, unlockedUntil: null as string | null, now};
+
+  it('a guardian browser (or no user) is never switched', () => {
+    expect(kioskDecision({...base, user: user()})).toBe('keep');
+    expect(kioskDecision({...base, user: null})).toBe('keep');
+    expect(kioskDecision({...base, user: user(), household: off, kioskOn: true, fromHousehold: true})).toBe('keep');
+  });
+
+  it('a kiosk left in Settings during the last 24 h is kept as it is', () => {
+    expect(kioskDecision({...base, unlockedUntil: String(now + 1)})).toBe('keep');
+  });
+
+  it('household on + kiosk off turns kiosk on; already on is kept', () => {
+    expect(kioskDecision(base)).toBe('on');
+    expect(kioskDecision({...base, unlockedUntil: String(now - 1)})).toBe('on');
+    expect(kioskDecision({...base, kioskOn: true})).toBe('keep');
+  });
+
+  it('household off turns off only a kiosk the household turned on (also when the device left its household)', () => {
+    expect(kioskDecision({...base, household: off, kioskOn: true, fromHousehold: true})).toBe('off');
+    expect(kioskDecision({...base, household: null, kioskOn: true, fromHousehold: true})).toBe('off');
+  });
+
+  it('household off never touches a kiosk the person chose themselves', () => {
+    expect(kioskDecision({...base, household: off, kioskOn: true, fromHousehold: false})).toBe('keep');
+    expect(kioskDecision({...base, household: off, kioskOn: false, fromHousehold: false})).toBe('keep');
   });
 });
 

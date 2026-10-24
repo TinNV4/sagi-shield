@@ -26,6 +26,7 @@ import {
   guardianScreenState,
   householdLabel,
   householdRouteFailure,
+  isSystemAlert,
   manageActions,
   marketForLang,
   newHighAlert,
@@ -606,7 +607,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, o
   const label = (h: Household) => householdLabel(h, t('guardian.member_fallback'));
   const shownName = (g: {name: string}, i: number) => guardianName(g, i, (n) => t('family.guardian_fallback', {n}));
   const actions = detail ? manageActions(detail) : null;
-  const device = selected ? deviceStatusLabel(selected.device_status, Date.now()) : null;
+  const device = selected ? deviceStatusLabel(selected.device_status, Date.now(), selected.devices, selected.live_guard_enabled) : null;
   const fieldClass = 'w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 text-base';
   const pendingText = !pending
     ? ''
@@ -871,11 +872,17 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, o
             <p id="guardian-device-status" role="status" className="flex flex-wrap items-center gap-x-3 text-sm font-bold">
               <span
                 className={
-                  device.kind === 'listening' ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-gray-400'
+                  device.kind === 'listening'
+                    ? 'text-emerald-700 dark:text-emerald-400'
+                    : device.kind === 'offline'
+                      ? 'text-amber-800 dark:text-amber-300'
+                      : 'text-gray-600 dark:text-gray-400'
                 }
               >
                 {device.kind === 'listening' && t('guardian.status_listening', {time: hhmm(device.at!)})}
+                {device.kind === 'offline' && t('guardian.status_offline', {time: ddmmhhmm(device.at!)})}
                 {device.kind === 'seen' && t('guardian.status_seen', {time: ddmmhhmm(device.at!)})}
+                {device.kind === 'paired' && t('guardian.status_paired')}
                 {device.kind === 'none' && t('guardian.status_none')}
               </span>
               <button id="guardian-show-card" onClick={() => onOpenCard(selected)} className="underline text-[#1B4D3E] dark:text-emerald-300">
@@ -1064,6 +1071,24 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, o
               )
             ) : (
           alerts.map((alert) => {
+            // the offline sweep's notice: a neutral row, no risk badge, no stage, no call button
+            if (isSystemAlert(alert)) {
+              return (
+                <div
+                  key={alert.id}
+                  className="rounded-3xl p-5 border-2 space-y-2 bg-gray-50 dark:bg-slate-900 border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-base">{t('guardian.alert_device_offline')}</span>
+                    <div className="flex items-center gap-1 text-xs opacity-75 font-mono shrink-0">
+                      <Clock className="w-3.5 h-3.5" />
+                      <span>{formatRelativeTime(alert.created_at)}</span>
+                    </div>
+                  </div>
+                  <p className="text-sm leading-snug">{alert.summary}</p>
+                </div>
+              );
+            }
             const isHigh = alert.risk_level === 'HIGH';
             return (
               <div

@@ -1,4 +1,4 @@
-import React, {Suspense, lazy, useEffect, useState} from 'react';
+import React, {Suspense, lazy, useEffect, useRef, useState} from 'react';
 import {api, GUARDIAN_FROM_PUSH, JOIN_FROM_LINK, mockApiInstance, PAIR_FROM_LINK, SHARE_FROM_LINK} from './api/client';
 import {readShareInbox, toCheckInput, type ShareCheckInput} from './lib/shareInbox';
 import {CheckResult} from './api/types';
@@ -7,8 +7,8 @@ import {DemoHelperModal} from './components/DemoHelperModal';
 import {Header} from './components/Header';
 import {OnboardingModal} from './components/OnboardingModal';
 import {I18nProvider, useI18n} from './i18n';
-import {onAuth} from './lib/auth';
-import {deviceHousehold, kioskFromHousehold, kioskUnlockActive, KIOSK_UNLOCK_MS} from './lib/householdState';
+import {currentUser, onAuth, type AuthUser} from './lib/auth';
+import {deviceHousehold, kioskDecision, KIOSK_UNLOCK_MS} from './lib/householdState';
 import * as speech from './lib/speak';
 import {HomeScreen} from './pages/HomeScreen';
 import {LiveGuardScreen} from './pages/LiveGuardScreen';
@@ -187,43 +187,88 @@ function AppContent() {
     }
   };
 
+  // A kiosk the person chose (onboarding, Settings) is theirs: the household's switch may never turn it off.
+  const handleUserKioskMode = (enabled: boolean) => {
+    try {
+      localStorage.removeItem('sagi_kiosk_from_household');
+    } catch {}
+    handleSetKioskMode(enabled);
+  };
+
   // Leaving kiosk mode in Settings holds against the household's switch for 24 h (a visit, a repair); turning it on clears it.
   const handleSettingsKioskMode = (enabled: boolean) => {
     try {
       if (enabled) localStorage.removeItem('sagi_kiosk_unlocked_until');
       else localStorage.setItem('sagi_kiosk_unlocked_until', String(Date.now() + KIOSK_UNLOCK_MS));
     } catch {}
-    handleSetKioskMode(enabled);
+    handleUserKioskMode(enabled);
   };
 
-  // A protected device whose household has Live Guard switched on opens in kiosk mode, the same path as the
-  // onboarding's kiosk choice, unless the person left kiosk mode in Settings during the last 24 h.
+  // The household's Live Guard switch drives this device's kiosk mode (kioskDecision): at start-up, right after
+  // joining, and whenever the app comes back to the foreground. 'on' is the onboarding's kiosk path and records that
+  // the household turned it on (`sagi_kiosk_from_household`), so switching Live Guard off later can undo exactly that.
+  // The screen moves only when kiosk actually turns on from off.
+  const authUserRef = useRef<AuthUser | null>(null);
+  const applyHouseholdKiosk = (household: Household | null) => {
+    let kioskOn = false;
+    let fromHousehold = false;
+    let unlockedUntil: string | null = null;
+    try {
+      kioskOn = localStorage.getItem('sagi_kiosk_mode') === 'true';
+      fromHousehold = localStorage.getItem('sagi_kiosk_from_household') === '1';
+      unlockedUntil = localStorage.getItem('sagi_kiosk_unlocked_until');
+    } catch {}
+    const decision = kioskDecision({user: authUserRef.current ?? currentUser(), household, kioskOn, fromHousehold, unlockedUntil, now: Date.now()});
+    if (decision === 'on') {
+      setIsOnboardingOpen(false);
+      handleSetKioskMode(true);
+      try {
+        localStorage.setItem('sagi_kiosk_from_household', '1');
+      } catch {}
+    } else if (decision === 'off') {
+      setIsKioskMode(false);
+      try {
+        localStorage.setItem('sagi_kiosk_mode', 'false');
+        localStorage.removeItem('sagi_kiosk_from_household');
+      } catch {}
+    }
+  };
+  const applyHouseholdKioskRef = useRef(applyHouseholdKiosk);
+  applyHouseholdKioskRef.current = applyHouseholdKiosk;
+
   useEffect(() => {
-    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK) return;
-    let handled = false;
     let cancelled = false;
-    const off = onAuth((user) => {
-      if (handled || !user?.anonymous) return;
-      handled = true;
+    let inFlight = false;
+    const recheck = () => {
+      if (inFlight || !(authUserRef.current ?? currentUser())?.anonymous) return;
+      inFlight = true;
       api
         .myHouseholds()
         .then((households) => {
-          if (cancelled || !kioskFromHousehold(deviceHousehold(households))) return;
-          let unlocked = false;
-          try {
-            unlocked = kioskUnlockActive(localStorage.getItem('sagi_kiosk_unlocked_until'), Date.now());
-          } catch {}
-          if (unlocked) return;
-          setIsOnboardingOpen(false);
-          handleSetKioskMode(true);
+          if (!cancelled) applyHouseholdKioskRef.current(deviceHousehold(households));
         })
-        .catch(() => {});
+        .catch(() => {}) // a failed check changes nothing; the next foregrounding tries again
+        .finally(() => {
+          inFlight = false;
+        });
+    };
+    // a guardian who came to pair or to read an alert, or a share, does not set up a kiosk on the first look
+    let firstCheckDone = Boolean(PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK);
+    const off = onAuth((user) => {
+      authUserRef.current = user;
+      if (firstCheckDone || !user?.anonymous) return;
+      firstCheckDone = true;
+      recheck();
     });
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') recheck();
+    };
+    document.addEventListener('visibilitychange', onVisible);
     return () => {
       cancelled = true;
       off();
+      document.removeEventListener('visibilitychange', onVisible);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleToggleSpeak = (enabled: boolean) => {
@@ -277,9 +322,9 @@ function AppContent() {
   const handleOnboardingComplete = (mode: 'kiosk' | 'individual') => {
     setIsOnboardingOpen(false);
     if (mode === 'kiosk') {
-      handleSetKioskMode(true);
+      handleUserKioskMode(true);
     } else {
-      handleSetKioskMode(false);
+      handleUserKioskMode(false);
       navigateTo('home');
     }
   };
@@ -354,6 +399,7 @@ function AppContent() {
         {currentTab === 'family' && (
           <FamilyScreen
             onOpenGuardianView={() => navigateTo('guardian_view')}
+            onJoined={(household) => applyHouseholdKiosk(household)}
             alertOnHigh={alertGuardians}
             onToggleAlertOnHigh={handleToggleAlertGuardians}
           />

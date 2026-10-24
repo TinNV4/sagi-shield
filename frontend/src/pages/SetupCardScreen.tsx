@@ -112,7 +112,7 @@ export const SetupCardScreen: React.FC<SetupCardScreenProps> = ({household, init
           </p>
         )}
         {initialCode?.liveGuardFailed && (
-          <p role="alert" className="text-sm font-bold text-amber-800 dark:text-amber-300">
+          <p role="alert" className="no-print text-sm font-bold text-amber-800 dark:text-amber-300">
             {t('card.live_guard_not_saved')}
           </p>
         )}
