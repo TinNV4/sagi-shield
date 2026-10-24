@@ -9,6 +9,7 @@ import {
   Plus,
   RefreshCw,
   Settings,
+  ShieldPlus,
   Users,
 } from 'lucide-react';
 import {api, ApiError, describeApiError, PAIR_FROM_LINK} from '../api/client';
@@ -16,9 +17,11 @@ import {FamilyAlertItem, Household} from '../api/types';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
 import {telHref} from '../components/TrustedContact';
+import type {CardCode} from './SetupCardScreen';
 import {pushPermission, pushToken} from '../lib/push';
 import {AuthUser, cancelPhoneSignIn, confirmPhoneCode, onAuth, RECAPTCHA_CONTAINER_ID, signInGuardian, signOut} from '../lib/auth';
 import {
+  deviceStatusLabel,
   guardianName,
   guardianScreenState,
   householdLabel,
@@ -64,6 +67,16 @@ const readMemberTel = () => {
 };
 
 const statusOf = (err: unknown): number | null => (err instanceof ApiError ? err.status : null);
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const hhmm = (iso: string) => {
+  const d = new Date(iso);
+  return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+};
+const ddmmhhmm = (iso: string) => {
+  const d = new Date(iso);
+  return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)} ${hhmm(iso)}`;
+};
 
 interface SignInCardProps {
   expired: boolean;
@@ -242,14 +255,19 @@ type PendingAction =
 
 interface GuardianViewScreenProps {
   onBack: () => void;
+  /** Open the printable setup card of a household; `code` is the one just issued (omitted: the card asks for one). */
+  onOpenCard: (household: Household, code?: CardCode) => void;
+  /** The household to show first (coming back from its setup card). */
+  initialSelectedId?: string | null;
 }
 
-export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) => {
+export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, onOpenCard, initialSelectedId = null}) => {
   const {t, lang} = useI18n();
 
   const [authState, setAuthState] = useState<{known: boolean; user: AuthUser | null}>({known: false, user: null});
   const [households, setHouseholds] = useState<Household[] | null>(null);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
+  const initialSelectedRef = useRef(initialSelectedId);
   const [failure, setFailure] = useState<unknown>(null);
   // "you are no longer a guardian of this household" / "it is gone": said once, in words, after the list was resynced
   const [notice, setNotice] = useState<string | null>(null);
@@ -272,6 +290,18 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   const [pending, setPending] = useState<PendingAction | null>(null);
   const [manageError, setManageError] = useState<string | null>(null);
   const [managing, setManaging] = useState(false);
+
+  // "Protect a parent": the new household is created here, then its setup card opens
+  const [protectOpen, setProtectOpen] = useState(false);
+  const [protectName, setProtectName] = useState('');
+  const [protectMarket, setProtectMarket] = useState<'ja' | 'vi'>(() => marketForLang(lang));
+  const [protectLive, setProtectLive] = useState(false);
+  const [protecting, setProtecting] = useState(false);
+  const [protectError, setProtectError] = useState<string | null>(null);
+  // settings in the manage sheet (editable by the owner only)
+  const [settingsForm, setSettingsForm] = useState({member_name: '', name: '', live: false});
+  const [settingsBusy, setSettingsBusy] = useState(false);
+  const [settingsMsg, setSettingsMsg] = useState<{ok: boolean; text: string} | null>(null);
 
   const [memberTel, setMemberTel] = useState(readMemberTel);
   const [telInput, setTelInput] = useState('');
@@ -318,9 +348,20 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   const uid = authState.user?.uid;
   useEffect(() => {
     setHouseholds(null);
-    setSelectedId(null);
-    if (hasUser && (api.isMock || authState.known)) void loadHouseholds();
+    const ready = hasUser && (api.isMock || authState.known);
+    setSelectedId(ready ? initialSelectedRef.current : null); // only the first load keeps the household we came back to
+    if (ready) {
+      initialSelectedRef.current = null;
+      void loadHouseholds();
+    }
   }, [hasUser, uid, authState.known, loadHouseholds]);
+
+  // the device status line follows the household list: refresh it quietly (a blip is not an error screen)
+  useEffect(() => {
+    if (state.kind !== 'dashboard') return;
+    const timer = setInterval(() => api.myHouseholds().then(setHouseholds).catch(() => {}), 30000);
+    return () => clearInterval(timer);
+  }, [state.kind]);
 
   const saveMemberTel = () => {
     const tel = telInput.trim().slice(0, 30);
@@ -478,6 +519,59 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
     }
   };
 
+  const handleProtect = async () => {
+    setProtecting(true);
+    setProtectError(null);
+    try {
+      const created = await api.createHousehold({member_name: protectName.trim() || undefined, market: protectMarket});
+      let household = created.household;
+      if (protectLive) {
+        try {
+          household = await api.updateHousehold(created.household_id, {live_guard_enabled: true});
+        } catch (err) {
+          setNotice(describeApiError(err, t)); // the household exists: the toggle can be set again in Settings
+        }
+      }
+      setProtectOpen(false);
+      setProtectName('');
+      setProtectLive(false);
+      await loadHouseholds();
+      setSelectedId(created.household_id);
+      onOpenCard(household, {pair_code: created.pair_code, expiresAt: Date.now() + created.expires_in * 1000});
+    } catch (err) {
+      if (statusOf(err) === 401) setFailure(err);
+      else setProtectError(describeApiError(err, t));
+    } finally {
+      setProtecting(false);
+    }
+  };
+
+  useEffect(() => {
+    setSettingsMsg(null);
+    if (detail) setSettingsForm({member_name: detail.member_name, name: detail.name, live: detail.live_guard_enabled});
+  }, [detail]);
+
+  const saveSettings = async () => {
+    if (!polledId || !detail) return;
+    const fields: {member_name?: string; name?: string; live_guard_enabled?: boolean} = {};
+    if (settingsForm.member_name.trim() !== detail.member_name) fields.member_name = settingsForm.member_name.trim();
+    if (settingsForm.name.trim() !== detail.name) fields.name = settingsForm.name.trim();
+    if (settingsForm.live !== detail.live_guard_enabled) fields.live_guard_enabled = settingsForm.live;
+    if (Object.keys(fields).length === 0) return;
+    setSettingsBusy(true);
+    setSettingsMsg(null);
+    try {
+      await api.updateHousehold(polledId, fields);
+      await loadHouseholds();
+      setDetail(await api.householdDetail(polledId));
+      setSettingsMsg({ok: true, text: t('guardian.settings_saved')});
+    } catch (err) {
+      if (!handleRouteError(err)) setSettingsMsg({ok: false, text: describeApiError(err, t)});
+    } finally {
+      setSettingsBusy(false);
+    }
+  };
+
   const handleSignOut = async () => {
     setManageOpen(false);
     // this browser's push token must not keep receiving the households' alerts after sign-out (best effort)
@@ -510,6 +604,8 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   const label = (h: Household) => householdLabel(h, t('guardian.member_fallback'));
   const shownName = (g: {name: string}, i: number) => guardianName(g, i, (n) => t('family.guardian_fallback', {n}));
   const actions = detail ? manageActions(detail) : null;
+  const device = selected ? deviceStatusLabel(selected.device_status, Date.now()) : null;
+  const fieldClass = 'w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 bg-white dark:bg-slate-800 text-base';
   const pendingText = !pending
     ? ''
     : pending.kind === 'delete'
@@ -519,6 +615,42 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
         : `${t(pending.kind === 'handover' ? 'guardian.hand_over' : pending.kind === 'remove' ? 'guardian.remove' : 'guardian.leave')}${
             pending.kind === 'leave' ? '' : `: ${pending.name}`
           }`;
+
+  const protectForm = (
+    <div id="guardian-protect-card" className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-600/30 space-y-3">
+      <h2 className="text-base font-bold text-gray-900 dark:text-white">{t('guardian.protect_parent')}</h2>
+      <label htmlFor="protect-name-input" className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+        {t('guardian.parent_name')}
+      </label>
+      <input id="protect-name-input" maxLength={40} value={protectName} onChange={(e) => setProtectName(e.target.value)} className={fieldClass} />
+      <label htmlFor="protect-market-select" className="block text-sm font-bold text-gray-700 dark:text-gray-300">
+        {t('guardian.market')}
+      </label>
+      <select
+        id="protect-market-select"
+        value={protectMarket}
+        onChange={(e) => setProtectMarket(e.target.value === 'vi' ? 'vi' : 'ja')}
+        className={fieldClass}
+      >
+        <option value="ja">{t('guardian.market_ja')}</option>
+        <option value="vi">{t('guardian.market_vi')}</option>
+      </select>
+      <label className="flex items-start gap-3 text-sm font-bold text-gray-800 dark:text-gray-200">
+        <input type="checkbox" checked={protectLive} onChange={(e) => setProtectLive(e.target.checked)} className="mt-0.5 h-6 w-6 shrink-0" />
+        <span>{t('guardian.live_guard_toggle')}</span>
+      </label>
+      <p className="text-xs text-gray-600 dark:text-gray-400">{t('guardian.live_guard_help')}</p>
+      <button
+        id="protect-submit"
+        onClick={handleProtect}
+        disabled={protecting}
+        className="w-full min-h-[56px] rounded-xl bg-[#1B4D3E] text-white text-lg font-bold disabled:opacity-40"
+      >
+        {t('guardian.protect_parent')}
+      </button>
+      {protectError && <p role="alert" className="text-sm font-bold text-red-700 dark:text-red-400">{protectError}</p>}
+    </div>
+  );
 
   const addCard = (
     <div id="guardian-link-card" className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-600/30 space-y-3">
@@ -661,6 +793,14 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
 
       {state.kind === 'empty' && (
         <>
+          <button
+            id="guardian-protect-parent-empty"
+            onClick={() => setProtectOpen((open) => !open)}
+            className="w-full min-h-[56px] rounded-xl bg-[#1B4D3E] text-white text-lg font-bold"
+          >
+            {t('guardian.protect_parent')}
+          </button>
+          {protectOpen && protectForm}
           {addCard}
           {!api.isMock && (
             <button onClick={handleSignOut} className="text-sm font-bold text-gray-600 dark:text-gray-300 underline">
@@ -698,6 +838,14 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
             )}
             <div className="flex flex-wrap gap-2">
               <button
+                id="guardian-protect-parent"
+                onClick={() => setProtectOpen((open) => !open)}
+                className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-full text-sm font-bold bg-[#1B4D3E] border-2 border-[#1B4D3E] text-white"
+              >
+                <ShieldPlus className="w-4 h-4" />
+                <span>{t('guardian.protect_parent')}</span>
+              </button>
+              <button
                 id="guardian-add-household"
                 onClick={() => setAddOpen((open) => !open)}
                 className="inline-flex items-center gap-1.5 min-h-[40px] px-4 rounded-full text-sm font-bold border-2 border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200"
@@ -717,6 +865,24 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
             </div>
           </div>
 
+          {device && (
+            <p id="guardian-device-status" role="status" className="flex flex-wrap items-center gap-x-3 text-sm font-bold">
+              <span
+                className={
+                  device.kind === 'listening' ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-gray-400'
+                }
+              >
+                {device.kind === 'listening' && t('guardian.status_listening', {time: hhmm(device.at!)})}
+                {device.kind === 'seen' && t('guardian.status_seen', {time: ddmmhhmm(device.at!)})}
+                {device.kind === 'none' && t('guardian.status_none')}
+              </span>
+              <button id="guardian-show-card" onClick={() => onOpenCard(selected)} className="underline text-[#1B4D3E] dark:text-emerald-300">
+                {t('guardian.show_card')}
+              </button>
+            </p>
+          )}
+
+          {protectOpen && protectForm}
           {addOpen && addCard}
 
           {manageOpen && (
@@ -760,6 +926,58 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
                       </li>
                     ))}
                   </ul>
+
+                  <div id="guardian-settings" className="space-y-2">
+                    <h3 className="text-sm font-bold text-gray-900 dark:text-white">{t('guardian.settings')}</h3>
+                    <label htmlFor="settings-member-name" className="block text-sm text-gray-700 dark:text-gray-300">
+                      {t('guardian.parent_name')}
+                    </label>
+                    <input
+                      id="settings-member-name"
+                      maxLength={40}
+                      value={settingsForm.member_name}
+                      disabled={!actions.isOwner}
+                      onChange={(e) => setSettingsForm((f) => ({...f, member_name: e.target.value}))}
+                      className={fieldClass}
+                    />
+                    <label htmlFor="settings-household-name" className="block text-sm text-gray-700 dark:text-gray-300">
+                      {t('guardian.household_name')}
+                    </label>
+                    <input
+                      id="settings-household-name"
+                      maxLength={40}
+                      value={settingsForm.name}
+                      disabled={!actions.isOwner}
+                      onChange={(e) => setSettingsForm((f) => ({...f, name: e.target.value}))}
+                      className={fieldClass}
+                    />
+                    <label className="flex items-start gap-3 text-sm font-bold text-gray-800 dark:text-gray-200">
+                      <input
+                        id="settings-live-guard"
+                        type="checkbox"
+                        checked={settingsForm.live}
+                        disabled={!actions.isOwner}
+                        onChange={(e) => setSettingsForm((f) => ({...f, live: e.target.checked}))}
+                        className="mt-0.5 h-6 w-6 shrink-0"
+                      />
+                      <span>{t('guardian.live_guard_toggle')}</span>
+                    </label>
+                    {actions.isOwner && (
+                      <button
+                        id="settings-save"
+                        onClick={saveSettings}
+                        disabled={settingsBusy}
+                        className="w-full min-h-[48px] rounded-xl bg-[#1B4D3E] text-white font-bold disabled:opacity-40"
+                      >
+                        {t('guardian.settings_save')}
+                      </button>
+                    )}
+                    {settingsMsg && (
+                      <p role={settingsMsg.ok ? 'status' : 'alert'} className={`text-sm font-bold ${settingsMsg.ok ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'}`}>
+                        {settingsMsg.text}
+                      </p>
+                    )}
+                  </div>
 
                   <p id="guardian-devices-count" className="text-sm text-gray-700 dark:text-gray-300">
                     {t('guardian.devices_count', {n: detail.devices})}

@@ -26,6 +26,7 @@ export type TabType =
   | 'how_it_works'
   | 'settings'
   | 'guardian_view'
+  | 'setup_card'
   | 'demo';
 
 interface BottomNavProps {

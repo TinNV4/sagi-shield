@@ -12,6 +12,8 @@ import * as speech from './lib/speak';
 import {HomeScreen} from './pages/HomeScreen';
 import {LiveGuardScreen} from './pages/LiveGuardScreen';
 import type {CheckInput} from './pages/QuickCheckScreen';
+import type {CardCode} from './pages/SetupCardScreen';
+import type {Household} from './api/types';
 
 // Home and Live Guard load with the shell (a kiosk tablet opens straight into the guard); every other screen is its
 // own chunk, fetched on first visit and precached by the service worker, so the first paint on an old tablet is
@@ -24,6 +26,7 @@ const HowItWorksScreen = lazy(() => import('./pages/HowItWorksScreen').then((m) 
 const QuickCheckScreen = lazy(() => import('./pages/QuickCheckScreen').then((m) => ({default: m.QuickCheckScreen})));
 const RecoveryScreen = lazy(() => import('./pages/RecoveryScreen').then((m) => ({default: m.RecoveryScreen})));
 const ResultScreen = lazy(() => import('./pages/ResultScreen').then((m) => ({default: m.ResultScreen})));
+const SetupCardScreen = lazy(() => import('./pages/SetupCardScreen').then((m) => ({default: m.SetupCardScreen})));
 const SettingsScreen = lazy(() => import('./pages/SettingsScreen').then((m) => ({default: m.SettingsScreen})));
 
 type FullTabType = TabType | 'result';
@@ -90,6 +93,8 @@ function AppContent() {
   });
 
   const [navHistory, setNavHistory] = useState<FullTabType[]>([]);
+  // the household whose setup card is open (and the code just issued for it, if any)
+  const [cardTarget, setCardTarget] = useState<{household: Household; code?: CardCode} | null>(null);
   const [activeCheckResult, setActiveCheckResult] = useState<CheckResult | null>(null);
   const [activeCheckInput, setActiveCheckInput] = useState<CheckInput>({});
   const [isDemoHelperOpen, setIsDemoHelperOpen] = useState<boolean>(() => {
@@ -342,7 +347,18 @@ function AppContent() {
         )}
 
         {currentTab === 'guardian_view' && (
-          <GuardianViewScreen onBack={() => navigateTo('family')} />
+          <GuardianViewScreen
+            onBack={() => navigateTo('family')}
+            initialSelectedId={cardTarget?.household.household_id ?? null}
+            onOpenCard={(household, code) => {
+              setCardTarget({household, code});
+              navigateTo('setup_card');
+            }}
+          />
+        )}
+
+        {currentTab === 'setup_card' && cardTarget && (
+          <SetupCardScreen household={cardTarget.household} initialCode={cardTarget.code} onBack={handleGoBack} />
         )}
 
         {currentTab === 'community' && (

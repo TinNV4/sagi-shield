@@ -4,6 +4,8 @@ import type {AuthUser} from './auth';
 import {
   formatPairCode,
   deviceHousehold,
+  cardSteps,
+  deviceStatusLabel,
   guardianRows,
   guardianScreenState,
   householdLabel,
@@ -298,5 +300,48 @@ describe('device heartbeat and kiosk', () => {
     expect(kioskUnlockActive(String(now - 1), now)).toBe(false);
     expect(kioskUnlockActive(null, now)).toBe(false);
     expect(kioskUnlockActive('soon', now)).toBe(false);
+  });
+});
+describe('deviceStatusLabel', () => {
+  const now = Date.parse('2026-10-25T12:00:00Z');
+  const ago = (ms: number) => new Date(now - ms).toISOString();
+  const MIN = 60 * 1000;
+  const HOUR = 60 * MIN;
+
+  it('is none without a status or without a heartbeat', () => {
+    expect(deviceStatusLabel(undefined, now)).toEqual({kind: 'none'});
+    expect(deviceStatusLabel({last_seen: null, listening: false}, now)).toEqual({kind: 'none'});
+  });
+
+  it('is listening while a listening heartbeat is fresh (a few missed beats are tolerated)', () => {
+    const at = ago(2 * MIN);
+    expect(deviceStatusLabel({last_seen: at, listening: true}, now)).toEqual({kind: 'listening', at});
+    expect(deviceStatusLabel({last_seen: ago(10 * MIN), listening: true}, now).kind).toBe('listening');
+  });
+
+  it('a stale listening heartbeat is only "seen"', () => {
+    const at = ago(11 * MIN);
+    expect(deviceStatusLabel({last_seen: at, listening: true}, now)).toEqual({kind: 'seen', at});
+  });
+
+  it('is seen when the device is not listening but reported within 24 h, none beyond', () => {
+    expect(deviceStatusLabel({last_seen: ago(5 * HOUR), listening: false}, now).kind).toBe('seen');
+    expect(deviceStatusLabel({last_seen: ago(24 * HOUR), listening: false}, now).kind).toBe('seen');
+    expect(deviceStatusLabel({last_seen: ago(24 * HOUR + 1), listening: false}, now)).toEqual({kind: 'none'});
+  });
+
+  it('an unreadable or future timestamp is none / still fresh, never a crash', () => {
+    expect(deviceStatusLabel({last_seen: 'garbage', listening: true}, now)).toEqual({kind: 'none'});
+    expect(deviceStatusLabel({last_seen: ago(-MIN), listening: false}, now).kind).toBe('seen');
+  });
+});
+
+describe('cardSteps', () => {
+  it('lists open, code, charger without Live Guard', () => {
+    expect(cardSteps(false)).toEqual(['card.step_open', 'card.step_code', 'card.step_charger']);
+  });
+
+  it('adds the microphone step before the charger with Live Guard', () => {
+    expect(cardSteps(true)).toEqual(['card.step_open', 'card.step_code', 'card.step_mic', 'card.step_charger']);
   });
 });

@@ -205,3 +205,38 @@ export function kioskUnlockActive(raw: string | null, now: number): boolean {
   const until = raw === null ? NaN : Number(raw);
   return Number.isFinite(until) && until > now;
 }
+// ---------------------------------------------------------------- guardian dashboard: device status, setup card
+
+/** A listening heartbeat older than this (three missed beats of `HEARTBEAT_EVERY_S` = 180) no longer says "listening". */
+export const LISTENING_FRESH_MS = 10 * 60 * 1000;
+/** Beyond this the device counts as never seen / gone (the server's offline sweep uses the same 24 h). */
+export const DEVICE_SEEN_MS = 24 * 3600 * 1000;
+
+export interface DeviceStatusLabel {
+  kind: 'listening' | 'seen' | 'none';
+  /** The heartbeat time (ISO), for `listening` and `seen`. */
+  at?: string;
+}
+
+/**
+ * What the dashboard header says about the protected device. `listening`: Live Guard reported listening within
+ * `LISTENING_FRESH_MS`. `seen`: any heartbeat up to and including 24 h old. `none`: no heartbeat, an unreadable
+ * time, or older than 24 h ("No device yet" with the setup card link). The text itself is the screen's job.
+ */
+export function deviceStatusLabel(status: Household['device_status'], now: number): DeviceStatusLabel {
+  const at = status?.last_seen ?? null;
+  const time = at === null ? NaN : Date.parse(at);
+  if (at === null || !Number.isFinite(time)) return {kind: 'none'};
+  const age = now - time;
+  if (age > DEVICE_SEEN_MS) return {kind: 'none'};
+  if (status?.listening && age <= LISTENING_FRESH_MS) return {kind: 'listening', at};
+  return {kind: 'seen', at};
+}
+
+/** The grandparent's setup steps in order (i18n keys); the microphone step only when Live Guard is on. */
+export const cardSteps = (liveGuard: boolean): string[] => [
+  'card.step_open',
+  'card.step_code',
+  ...(liveGuard ? ['card.step_mic'] : []),
+  'card.step_charger',
+];

@@ -96,3 +96,16 @@ html.dark {
 .animate-fade-in {
   animation: fadeIn 0.25s ease-out forwards;
 }
+
+/* The setup card is meant for paper: no app chrome and no buttons in print. */
+@media print {
+  #app-header,
+  #bottom-navigation-bar,
+  .no-print {
+    display: none !important;
+  }
+  body,
+  #app-root-container {
+    background: #fff !important;
+  }
+}

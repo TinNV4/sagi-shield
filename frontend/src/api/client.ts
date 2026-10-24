@@ -955,8 +955,8 @@ class MockApi implements SagiApi {
       member_name: input.member_name ?? '',
       market: input.market,
       live_guard_enabled: false,
-      devices: 1,
-      guardians: [],
+      devices: 0,
+      guardians: [{name: '', owner: true, me: true, uid: 'mock-g1'}],
       created_at: new Date().toISOString(),
     };
     this.mockHouseholds.push(household);
