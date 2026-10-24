@@ -34,6 +34,17 @@ function Api($method, $uri, $body = $null) {
     Invoke-RestMethod @req
 }
 
+# 0. Identity Platform must be initialized once per project, or every config call answers 404 CONFIGURATION_NOT_FOUND
+try {
+    Api POST "https://identitytoolkit.googleapis.com/v2/projects/$Project/identityPlatform:initializeAuth" @{} | Out-Null
+    Write-Host "Identity Platform: initialized"
+} catch {
+    $code = $_.Exception.Response.StatusCode.value__
+    $msg = "$($_.ErrorDetails.Message)"
+    if ($code -in 400, 409 -and $msg -match "(?i)already") { Write-Host "Identity Platform: already initialized" }
+    else { throw }
+}
+
 # 1. anonymous (the protected device) and phone (guardians without a Google account)
 Api PATCH "$idt/config?updateMask=signIn.anonymous.enabled,signIn.phoneNumber.enabled" @{
     signIn = @{ anonymous = @{ enabled = $true }; phoneNumber = @{ enabled = $true } }
@@ -46,7 +57,9 @@ if ($GoogleClientId -and $GoogleClientSecret) {
     $exists = $true
     try { Api GET "$idt/defaultSupportedIdpConfigs/google.com" | Out-Null }
     catch {
-        if ($_.Exception.Response.StatusCode.value__ -ne 404) { throw }
+        # not there yet: 404, or 400 CONFIGURATION_NOT_FOUND
+        $code = $_.Exception.Response.StatusCode.value__
+        if ($code -ne 404 -and -not ($code -eq 400 -and "$($_.ErrorDetails.Message)" -match "CONFIGURATION_NOT_FOUND")) { throw }
         $exists = $false
     }
     if ($exists) {
