@@ -16,7 +16,7 @@ import {
   StatsResult,
 } from './types';
 import {APP_CHECK_HEADER, appCheckToken} from '../lib/appCheck';
-import {currentUser, idToken} from '../lib/auth';
+import {authSettled, currentUser, idToken} from '../lib/auth';
 
 export interface SagiApi {
   isMock: boolean;
@@ -427,17 +427,19 @@ export class RealApi implements SagiApi {
         socket.send(JSON.stringify(auth));
         return true;
       };
+      // a user is signed in, or the SDK has not loaded yet (then currentUser() says nothing either way)
+      const maySignIn = () => currentUser() !== null || !authSettled();
       const retryAuth = () => {
         authTimer = setTimeout(async () => {
           authTimer = null;
           if (!live()) return;
-          if (!(await sendAuth()) && live()) retryAuth();
+          if (!(await sendAuth()) && live() && maySignIn()) retryAuth();
         }, AUTH_RETRY_MS);
       };
       socket.onopen = async () => {
         const sent = await sendAuth();
         if (isClosed || ws !== socket) return;
-        if (!sent && currentUser()) retryAuth();
+        if (!sent && maySignIn()) retryAuth();
         reconnectDelay = 1000;
         callbacks.onStatus('connected');
         callbacks.onStatus('listening');

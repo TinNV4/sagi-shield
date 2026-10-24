@@ -168,6 +168,12 @@ export async function signOut(): Promise<void> {
   }
 }
 
+/** True once the SDK has loaded and read the stored session, or when it never will (no Firebase on this build).
+ *  Until then currentUser() is null even for a signed-in user. */
+export function authSettled(): boolean {
+  return !authEnabled || authRef !== null;
+}
+
 /** Synchronous snapshot; null until the SDK has loaded (use onAuth to wait for the real answer). */
 export function currentUser(): AuthUser | null {
   return authRef?.currentUser ? toUser(authRef.currentUser) : null;

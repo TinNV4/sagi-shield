@@ -195,6 +195,14 @@ describe('auth state', () => {
     expect(auth.currentUser()).toBeNull();
   });
 
+  it('authSettled: false until the SDK read the stored session, true without Firebase', async () => {
+    const auth = await load(true);
+    expect(auth.authSettled()).toBe(false);
+    await auth.idToken();
+    expect(auth.authSettled()).toBe(true);
+    expect((await load(false)).authSettled()).toBe(true);
+  });
+
   it('onAuth reports null once when Firebase is not configured', async () => {
     const auth = await load(false);
     const cb = vi.fn();

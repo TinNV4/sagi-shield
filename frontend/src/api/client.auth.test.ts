@@ -1,11 +1,12 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
 // The token source is replaced: these tests are about when the client sends a token and when it asks for a new one.
-const {idToken, currentUser} = vi.hoisted(() => ({
+const {idToken, currentUser, authSettled} = vi.hoisted(() => ({
   idToken: vi.fn(async (force?: boolean): Promise<string | null> => (force ? 'fresh' : 'stale')),
   currentUser: vi.fn((): {uid: string; anonymous: boolean; name: string} | null => ({uid: 'u1', anonymous: false, name: ''})),
+  authSettled: vi.fn((): boolean => true),
 }));
-vi.mock('../lib/auth', () => ({idToken, currentUser}));
+vi.mock('../lib/auth', () => ({idToken, currentUser, authSettled}));
 
 import {ApiError, AUTH_RETRY_MS, RealApi} from './client';
 
@@ -20,6 +21,8 @@ afterEach(() => {
   idToken.mockImplementation(async (force?: boolean) => (force ? 'fresh' : 'stale'));
   currentUser.mockReset();
   currentUser.mockReturnValue({uid: 'u1', anonymous: false, name: ''});
+  authSettled.mockReset();
+  authSettled.mockReturnValue(true);
 });
 
 describe('Authorization header', () => {
@@ -290,6 +293,46 @@ describe('Live Guard socket', () => {
       expect(socket.sent.map((s) => JSON.parse(s))).toEqual([{type: 'auth', token: 'late'}]);
       await vi.advanceTimersByTimeAsync(AUTH_RETRY_MS * 3);
       expect(socket.sent.length).toBe(1);       // once signed in, the retries stop
+      conn.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the auth SDK had not even loaded at open (no user known yet): keeps trying until it answers', async () => {
+    vi.useFakeTimers();
+    try {
+      idToken.mockResolvedValue(null);
+      currentUser.mockReturnValue(null);
+      authSettled.mockReturnValue(false);
+      const {conn, socket} = await open();
+      socket.onopen?.();
+      await vi.advanceTimersByTimeAsync(AUTH_RETRY_MS);
+      expect(socket.sent).toEqual([]);
+      idToken.mockResolvedValue('late');
+      await vi.advanceTimersByTimeAsync(AUTH_RETRY_MS);
+      expect(socket.sent.map((s) => JSON.parse(s))).toEqual([{type: 'auth', token: 'late'}]);
+      conn.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the SDK answered "nobody signed in": the retries stop', async () => {
+    vi.useFakeTimers();
+    try {
+      idToken.mockResolvedValue(null);
+      currentUser.mockReturnValue(null);
+      authSettled.mockReturnValue(false);
+      const {conn, socket} = await open();
+      socket.onopen?.();
+      await vi.advanceTimersByTimeAsync(0);
+      authSettled.mockReturnValue(true); // loaded: there is no user
+      await vi.advanceTimersByTimeAsync(AUTH_RETRY_MS);
+      const calls = idToken.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(AUTH_RETRY_MS * 3);
+      expect(idToken.mock.calls.length).toBe(calls);
+      expect(socket.sent).toEqual([]);
       conn.close();
     } finally {
       vi.useRealTimers();
