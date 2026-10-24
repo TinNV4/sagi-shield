@@ -17,8 +17,11 @@ from urllib.parse import urlsplit
 
 from pydantic import Field
 
+from app.auth import Principal
+
 
 PAIR_CODE_TTL_S, MAX_ALERTS = 15 * 60, 50
+MAX_HOUSEHOLD_GUARDIANS, MAX_HOUSEHOLD_DEVICES = 10, 5
 RECOVERY_TTL_S, MAX_RECOVERY = 24 * 3600, 500  # a recovery chat is useful for a day, not for ever
 
 
@@ -34,6 +37,61 @@ def _new_family(member_name: str) -> dict:
     # family_id is the shared secret of one family (unguessable); the 6-digit code only lives 15 min
     return {"family_id": secrets.token_urlsafe(16), "pair_code": f"{secrets.randbelow(10**6):06d}",
             "code_expires": time.time() + PAIR_CODE_TTL_S, "member_name": member_name[:40], "guardians": []}
+
+
+# Same shape for household_id; it is a REST path segment behind an Authorization header, never a credential.
+HouseholdId = Annotated[str, Field(max_length=40, pattern=r"^[A-Za-z0-9_-]+$")]
+
+
+def _new_household(name: str, member_name: str, market: str, creator: Principal | None) -> dict:
+    """A household id is not a secret: access comes from the uids in `devices` / `guardians`, the code only joins."""
+    hh = {"household_id": secrets.token_urlsafe(16), "name": name[:40], "member_name": member_name[:40],
+          "market": market, "devices": [], "guardians": [], "guardian_uids": [], "push_tokens": [],
+          "pair_code": f"{secrets.randbelow(10**6):06d}", "code_expires": time.time() + PAIR_CODE_TTL_S,
+          "live_guard_enabled": False, "created_at": _now_iso()}
+    if creator is not None:
+        _add_member(hh, creator, None)
+    return hh
+
+
+def _add_member(hh: dict, principal: Principal, fcm_token: str | None) -> bool:
+    """Put a principal into a household (a device or a guardian); False when that side is full."""
+    if principal.role == "device":
+        if principal.uid not in hh["devices"]:
+            if len(hh["devices"]) >= MAX_HOUSEHOLD_DEVICES:
+                return False
+            hh["devices"].append(principal.uid)
+        return True
+    known = next((g for g in hh["guardians"] if g["uid"] == principal.uid), None)
+    if known:  # the same guardian joining again refreshes the token instead of adding a second entry
+        known.update(name=principal.name[:40] or known["name"], fcm_token=fcm_token or known["fcm_token"])
+        return True
+    if len(hh["guardians"]) >= MAX_HOUSEHOLD_GUARDIANS:
+        return False
+    hh["guardians"].append({"uid": principal.uid, "name": principal.name[:40],
+                            "owner": not any(g["owner"] for g in hh["guardians"]), "fcm_token": fcm_token})
+    hh["guardian_uids"] = [g["uid"] for g in hh["guardians"]]
+    return True
+
+
+def _drop_guardian(hh: dict, uid: str) -> bool:
+    kept = [g for g in hh["guardians"] if g["uid"] != uid]
+    if len(kept) == len(hh["guardians"]):
+        return False
+    hh["guardians"], hh["guardian_uids"] = kept, [g["uid"] for g in kept]
+    return True
+
+
+def _make_owner(hh: dict, uid: str) -> bool:
+    if not any(g["uid"] == uid for g in hh["guardians"]):
+        return False
+    for g in hh["guardians"]:
+        g["owner"] = g["uid"] == uid
+    return True
+
+
+def _join_open(hh: dict, pair_code: str) -> bool:
+    return hh.get("pair_code") == pair_code and hh.get("code_expires", 0) > time.time()
 
 
 MAX_PUSH_TOKENS = 10
@@ -91,6 +149,8 @@ class MemoryStore:
         self.checks: Counter = Counter()
         self.families: dict[str, dict] = {}
         self.alerts: dict[str, list[dict]] = {}
+        self.households: dict[str, dict] = {}
+        self.household_alerts: dict[str, list[dict]] = {}
         self.recovery: dict[str, dict] = {}  # insertion-ordered: oldest first
         self.phish_urls: dict[str, dict] = {}   # url_key -> {brand, date, source}
         self.phish_hosts: dict[str, dict] = {}  # host_key -> {count, latest}
@@ -176,6 +236,63 @@ class MemoryStore:
 
     def list_alerts(self, family_id: str) -> list[dict]:
         return list(self.alerts.get(family_id, []))
+
+    def create_household(self, name: str, member_name: str, market: str, creator: Principal | None) -> dict:
+        hh = _new_household(name, member_name, market, creator)
+        self.households[hh["household_id"]] = hh
+        return hh
+
+    def get_household(self, household_id: str) -> dict | None:
+        return self.households.get(household_id)
+
+    def households_for(self, uid: str) -> list[dict]:
+        return [h for h in self.households.values() if uid in h["devices"] or uid in h["guardian_uids"]]
+
+    def refresh_household_code(self, household_id: str) -> dict | None:
+        hh = self.households.get(household_id)
+        if hh:
+            hh.update(pair_code=f"{secrets.randbelow(10**6):06d}", code_expires=time.time() + PAIR_CODE_TTL_S)
+        return hh
+
+    def join_household(self, pair_code: str, principal: Principal, fcm_token: str | None) -> dict | None:
+        for hh in self.households.values():
+            if _join_open(hh, pair_code):
+                if not _add_member(hh, principal, fcm_token):
+                    return None
+                hh["code_expires"] = 0  # single use
+                return hh
+        return None
+
+    def remove_guardian(self, household_id: str, uid: str) -> bool:
+        hh = self.households.get(household_id)
+        return bool(hh) and _drop_guardian(hh, uid)
+
+    def set_owner(self, household_id: str, uid: str) -> bool:
+        hh = self.households.get(household_id)
+        return bool(hh) and _make_owner(hh, uid)
+
+    def delete_household(self, household_id: str) -> bool:
+        self.household_alerts.pop(household_id, None)
+        return self.households.pop(household_id, None) is not None
+
+    def add_household_push_token(self, household_id: str, token: str) -> bool:
+        hh = self.households.get(household_id)
+        if not hh:
+            return False
+        _with_token(hh, token)
+        return True
+
+    def add_household_alert(self, household_id: str, risk_level: str, scam_type: str, stage: int,
+                            summary: str) -> dict | None:
+        hh = self.households.get(household_id)
+        if not hh:
+            return None
+        alert = _alert(risk_level, scam_type, stage, summary, hh["member_name"])
+        self.household_alerts[household_id] = ([alert] + self.household_alerts.get(household_id, []))[:MAX_ALERTS]
+        return alert
+
+    def list_household_alerts(self, household_id: str) -> list[dict]:
+        return list(self.household_alerts.get(household_id, []))
 
     def get_recovery(self, session_id: str) -> dict | None:
         doc = self.recovery.get(session_id)
@@ -310,6 +427,93 @@ class FirestoreStore:
 
     def list_alerts(self, family_id: str) -> list[dict]:
         col = self.db.collection("families").document(family_id).collection("alerts")
+        docs = col.order_by("created_at", direction=self.fs.Query.DESCENDING).limit(MAX_ALERTS).stream()
+        return [d.to_dict() for d in docs]
+
+    # households/{household_id} + households/{household_id}/alerts/{id}; `guardian_uids` mirrors guardians[].uid
+    # because Firestore cannot array_contains on a field of a map inside an array
+    def create_household(self, name: str, member_name: str, market: str, creator: Principal | None) -> dict:
+        hh = _new_household(name, member_name, market, creator)
+        self.db.collection("households").document(hh["household_id"]).set(hh)
+        return hh
+
+    def get_household(self, household_id: str) -> dict | None:
+        doc = self.db.collection("households").document(household_id).get()
+        return doc.to_dict() if doc.exists else None
+
+    def households_for(self, uid: str) -> list[dict]:
+        col, found = self.db.collection("households"), {}
+        for field in ("devices", "guardian_uids"):
+            for doc in col.where(filter=self.fs.FieldFilter(field, "array_contains", uid)).limit(50).stream():
+                found[doc.id] = doc.to_dict()
+        return list(found.values())
+
+    def refresh_household_code(self, household_id: str) -> dict | None:
+        hh = self.get_household(household_id)
+        if hh:
+            hh.update(pair_code=f"{secrets.randbelow(10**6):06d}", code_expires=time.time() + PAIR_CODE_TTL_S)
+            self.db.collection("households").document(household_id).set(hh)
+        return hh
+
+    def join_household(self, pair_code: str, principal: Principal, fcm_token: str | None) -> dict | None:
+        q = self.db.collection("households").where(filter=self.fs.FieldFilter("pair_code", "==", pair_code)).limit(5)
+        for doc in q.stream():
+            hh = doc.to_dict()
+            if _join_open(hh, pair_code):
+                if not _add_member(hh, principal, fcm_token):
+                    return None
+                hh["code_expires"] = 0  # single use
+                doc.reference.set(hh)
+                return hh
+        return None
+
+    def remove_guardian(self, household_id: str, uid: str) -> bool:
+        hh = self.get_household(household_id)
+        if not hh or not _drop_guardian(hh, uid):
+            return False
+        self.db.collection("households").document(household_id).set(hh)
+        return True
+
+    def set_owner(self, household_id: str, uid: str) -> bool:
+        hh = self.get_household(household_id)
+        if not hh or not _make_owner(hh, uid):
+            return False
+        self.db.collection("households").document(household_id).set(hh)
+        return True
+
+    def delete_household(self, household_id: str) -> bool:
+        ref = self.db.collection("households").document(household_id)
+        if not ref.get().exists:
+            return False
+        while True:  # a subcollection outlives its parent; batches stay under the 500-write limit
+            docs = list(ref.collection("alerts").limit(400).stream())
+            if not docs:
+                break
+            batch = self.db.batch()
+            for d in docs:
+                batch.delete(d.reference)
+            batch.commit()
+        ref.delete()
+        return True
+
+    def add_household_push_token(self, household_id: str, token: str) -> bool:
+        hh = self.get_household(household_id)
+        if not hh:
+            return False
+        self.db.collection("households").document(household_id).set(_with_token(hh, token))
+        return True
+
+    def add_household_alert(self, household_id: str, risk_level: str, scam_type: str, stage: int,
+                            summary: str) -> dict | None:
+        hh = self.get_household(household_id)
+        if not hh:
+            return None
+        alert = _alert(risk_level, scam_type, stage, summary, hh["member_name"])
+        self.db.collection("households").document(household_id).collection("alerts").document(alert["id"]).set(alert)
+        return alert
+
+    def list_household_alerts(self, household_id: str) -> list[dict]:
+        col = self.db.collection("households").document(household_id).collection("alerts")
         docs = col.order_by("created_at", direction=self.fs.Query.DESCENDING).limit(MAX_ALERTS).stream()
         return [d.to_dict() for d in docs]
 
