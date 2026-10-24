@@ -86,7 +86,7 @@ export const Header: React.FC<HeaderProps> = ({
               ) : label ? (
                 <span
                   id="engine-badge-btn"
-                  className="hidden min-[420px]:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-100 dark:bg-sky-950/60 border border-sky-400 text-sky-900 dark:text-sky-200 text-[10px] sm:text-xs font-black tracking-wider uppercase shadow-xs"
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-100 dark:bg-sky-950/60 border border-sky-400 text-sky-900 dark:text-sky-200 text-[10px] sm:text-xs font-black tracking-wider uppercase shadow-xs"
                   title="Pilot environment"
                 >
                   <Wrench className="w-3 h-3 text-sky-600 dark:text-sky-400" />

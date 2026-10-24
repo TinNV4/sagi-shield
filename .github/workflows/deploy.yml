@@ -29,7 +29,10 @@ env:
 jobs:
   deploy:
     name: Build image and roll Cloud Run
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # a tag or a manual run executes this file at its own ref: only main may roll the judged service
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      || (github.event_name != 'workflow_run' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     environment: production
     steps:

@@ -67,6 +67,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
     steps:
+      - name: Refuse to roll the judged service from anything but main
+        run: |
+          # sagi-shield-api is deployed from main only (and frozen during contest evaluation); a tag, a manual run
+          # or a mistyped service input must never roll another branch's code onto it
+          if [ "$SERVICE" = "sagi-shield-api" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "refusing: $SERVICE is deployed from refs/heads/main only, this run is on ${{ github.ref }}" >&2
+            exit 1
+          fi
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.ref }}
@@ -147,8 +155,12 @@ jobs:
           fi
 
       - name: Smoke test
+        env:
+          FIRESTORE_DB: ${{ inputs.firestore_db }}
         run: |
           URL="$(gcloud run services describe "$SERVICE" --project "${{ vars.GCP_PROJECT }}" --region "$REGION" --format 'value(status.url)')"
           echo "Deployed: $URL"
-          curl -fsS "$URL/health"
+          HEALTH="$(curl -fsS "$URL/health")"; echo "$HEALTH"
+          # the database is what keeps pilot data away from the judged service: a roll on the wrong one is a failure
+          echo "$HEALTH" | grep -q "\"database\":\"$FIRESTORE_DB\"" || { echo "wrong database (expected $FIRESTORE_DB)" >&2; exit 1; }
           curl -fsS -X POST "$URL/check" -H 'Content-Type: application/json' -d '{"lang":"ja","text":"こんにちは"}' >/dev/null

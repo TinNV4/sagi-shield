@@ -15,6 +15,7 @@ param(
     [string]$Service = "sagi-shield-pilot",
     [string]$Database = "pilot",
     [int]$PhishMonths = 2,
+    [string]$KeyName = "sagi-shield-appcheck",   # the App Check key of infra/setup_appcheck.ps1
     [switch]$SkipPhishList
 )
 $ErrorActionPreference = "Stop"
@@ -57,7 +58,15 @@ if ($LASTEXITCODE -eq 0 -and $svc) {
     $pilotHosts = @($urls | ForEach-Object { ([Uri]$_).Host } | Select-Object -Unique)
     $url = $svc.status.url
     Write-Host "Pilot URL: $url  (hosts: $($pilotHosts -join ', '))"
-    & (Join-Path $PSScriptRoot "setup_appcheck.ps1") -Project $Project -Region $Region -Domains $pilotHosts
+    # merge into the shared reCAPTCHA key's domain list (never create a key here: the judged PWA is built with this one)
+    $key = gcloud recaptcha keys list --project $Project --format json | ConvertFrom-Json |
+        Where-Object { $_.displayName -eq $KeyName } | Select-Object -First 1
+    if (-not $key) { throw "reCAPTCHA key '$KeyName' not found: run infra/setup_appcheck.ps1 first" }
+    $siteKey = ($key.name -split "/")[-1]
+    $domains = @($key.webSettings.allowedDomains) + $pilotHosts | Select-Object -Unique
+    gcloud recaptcha keys update $siteKey --project $Project --web --domains ($domains -join ",") --quiet | Out-Null
+    Check "update reCAPTCHA key domains"
+    Write-Host "reCAPTCHA key ${siteKey}: $($domains -join ', ')"
     Write-Host ""
     Write-Host "Done. By hand: bookmark $url as the pilot URL; install it on the pilot phones from this address."
 } else {
