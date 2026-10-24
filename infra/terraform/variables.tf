@@ -62,6 +62,12 @@ variable "heartbeat_sweep_schedule" {
   default     = "0 * * * *"
 }
 
+variable "heartbeat_sweep_prod_enabled" {
+  description = "main's image has no app.heartbeat_sweep until the 2026-11-07 merge"
+  type        = bool
+  default     = false
+}
+
 variable "app_check_mode" {
   description = "off | monitor | enforce (backend/app/appcheck.py): start with monitor, enforce once real traffic shows ac=valid"
   type        = string

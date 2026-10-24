@@ -329,9 +329,11 @@ resource "google_cloud_scheduler_job" "phish_loader" {
 
 # ---------------------------------------------------------------- hourly sweep for silent Live Guard devices
 # Mirrors infra/setup_heartbeat_job.ps1. A job reads one Firestore database, so production and the pilot each get one;
-# the pilot's keeps the script's name (deploy-pilot.yml moves it to each new image).
+# the pilot's keeps the script's name (deploy-pilot.yml moves it to each new image). The production job waits behind
+# heartbeat_sweep_prod_enabled: main's image has no app.heartbeat_sweep until the pilot branch is merged.
 
 resource "google_cloud_run_v2_job" "heartbeat_sweep_prod" {
+  count               = var.heartbeat_sweep_prod_enabled ? 1 : 0
   name                = "sagi-heartbeat-sweep-prod"
   location            = var.region
   deletion_protection = false
@@ -378,13 +380,15 @@ resource "google_cloud_run_v2_job" "heartbeat_sweep_prod" {
 }
 
 resource "google_cloud_run_v2_job_iam_member" "heartbeat_sweep_prod_invoker" {
-  name     = google_cloud_run_v2_job.heartbeat_sweep_prod.name
-  location = google_cloud_run_v2_job.heartbeat_sweep_prod.location
+  count    = var.heartbeat_sweep_prod_enabled ? 1 : 0
+  name     = google_cloud_run_v2_job.heartbeat_sweep_prod[0].name
+  location = google_cloud_run_v2_job.heartbeat_sweep_prod[0].location
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_service_account.scheduler.email}"
 }
 
 resource "google_cloud_scheduler_job" "heartbeat_sweep_prod" {
+  count       = var.heartbeat_sweep_prod_enabled ? 1 : 0
   name        = "sagi-heartbeat-sweep-prod"
   region      = var.region
   description = "Hourly check for Live Guard devices that stopped sending heartbeats"
@@ -393,7 +397,7 @@ resource "google_cloud_scheduler_job" "heartbeat_sweep_prod" {
 
   http_target {
     http_method = "POST"
-    uri         = "https://run.googleapis.com/v2/projects/${var.project}/locations/${var.region}/jobs/${google_cloud_run_v2_job.heartbeat_sweep_prod.name}:run"
+    uri         = "https://run.googleapis.com/v2/projects/${var.project}/locations/${var.region}/jobs/${google_cloud_run_v2_job.heartbeat_sweep_prod[0].name}:run"
     oauth_token {
       service_account_email = google_service_account.scheduler.email
     }
