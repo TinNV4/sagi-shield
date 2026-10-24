@@ -70,3 +70,15 @@ def test_push_is_guardian_only_and_delete_is_owner_only(client):
     assert client.delete(f"/household/{hid}", headers=H(DEV)).status_code == 403
     assert client.delete(f"/household/{hid}", headers=H(G1)).status_code == 200
     assert client.get(f"/household/{hid}/alerts", headers=H(G1)).status_code == 404
+
+
+def test_a_guardian_watches_two_households(client):
+    a = client.post("/household", json={"member_name": "Mom", "market": "ja"}, headers=H("da:anonymous")).json()
+    b = client.post("/household", json={"member_name": "Dad", "market": "ja"}, headers=H("db:anonymous")).json()
+    for h in (a, b):
+        assert client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1)).status_code == 200
+    mine = client.get("/household", headers=H(G1)).json()
+    assert sorted(x["member_name"] for x in mine) == ["Dad", "Mom"]
+    client.post(f"/household/{b['household_id']}/notify", json={"risk_level": "HIGH", "lang": "ja"}, headers=H("db:anonymous"))
+    assert client.get(f"/household/{a['household_id']}/alerts", headers=H(G1)).json() == []
+    assert len(client.get(f"/household/{b['household_id']}/alerts", headers=H(G1)).json()) == 1
