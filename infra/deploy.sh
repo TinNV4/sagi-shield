@@ -2,10 +2,14 @@
 # Deploy the API to Cloud Run from source (Cloud Build builds backend/Dockerfile).
 #   PROJECT=my-project ./infra/deploy.sh            one-time project setup first: infra/setup.ps1
 #   MIN_INSTANCES=1 for the demo (no cold start, WebSocket stays warm); 0 the rest of the time (no idle cost)
+#   The pilot service, by hand (deploy-pilot.yml does the same on every push to the pilot branch):
+#   SERVICE=sagi-shield-pilot FIRESTORE_DB=pilot NO_ANALYTICS=1 VITE_ENV_LABEL=PILOT PROJECT=... ./infra/deploy.sh
 set -euo pipefail
 : "${PROJECT:?set PROJECT to your GCP project id}"
 REGION="${REGION:-asia-northeast1}"
 SERVICE="${SERVICE:-sagi-shield-api}"
+FIRESTORE_DB="${FIRESTORE_DB:-(default)}"   # one Firestore database per environment (app/storage.py)
+export VITE_ENV_LABEL="${VITE_ENV_LABEL:-}"  # PILOT: badge + distinct PWA name (frontend/src/lib/envLabel.ts)
 cd "$(dirname "$0")/../frontend"
 if [ -z "${SKIP_FRONTEND:-}" ]; then               # SKIP_FRONTEND=1: backend-only change, keep backend/static as built
   # the PWA is served by the API itself (one URL, same origin); App Check values (infra/setup_appcheck.ps1), if
@@ -19,8 +23,10 @@ cd ../backend
 # one --set-env-vars only: gcloud keeps the last one when the flag is repeated. "^@^" = use @ as the separator,
 # so CORS_ORIGINS may contain commas.
 ENV="GOOGLE_GENAI_USE_ENTERPRISE=true@GOOGLE_CLOUD_PROJECT=$PROJECT@GOOGLE_CLOUD_LOCATION=global"
-ENV="$ENV@STORE=firestore@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=${CORS_ORIGINS:-*}"
-ENV="$ENV@BQ_TABLE=$PROJECT.sagi.events"  # analytics stream (app/analytics.py); omitting it turns analytics off
+ENV="$ENV@STORE=firestore@FIRESTORE_DB=$FIRESTORE_DB@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=${CORS_ORIGINS:-*}"
+if [ -z "${NO_ANALYTICS:-}" ]; then                 # analytics stream (app/analytics.py); the pilot runs without one
+  ENV="$ENV@BQ_TABLE=$PROJECT.sagi.events"
+fi
 # Models: backend/core/model_ids.py holds the defaults Cloud Run runs; a job's env var set in this shell overrides it
 # APPCHECK (off | monitor | enforce) and RATE_LIMIT_UNVERIFIED_PER_MIN travel the same way
 for job in GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL            APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN; do
@@ -42,8 +48,8 @@ gcloud run deploy "$SERVICE" --project "$PROJECT" --region "$REGION" --source . 
   --concurrency 40 --cpu 1 --memory 1Gi --no-use-http2 \
   --set-env-vars "^@^$ENV" --set-secrets "$SECRETS"
 
-# the monthly phishing-list reload (infra/setup_phish_job.ps1) runs from the same image: keep it current
-if gcloud run jobs describe sagi-phish-loader --project "$PROJECT" --region "$REGION" >/dev/null 2>&1; then
+# the monthly phishing-list reload (infra/setup_phish_job.ps1) runs from the production image: keep it current
+if [ "$SERVICE" = "sagi-shield-api" ] && gcloud run jobs describe sagi-phish-loader --project "$PROJECT" --region "$REGION" >/dev/null 2>&1; then
   IMAGE="$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(spec.template.spec.containers[0].image)')"
   gcloud run jobs update sagi-phish-loader --project "$PROJECT" --region "$REGION" --image "$IMAGE" --quiet
 fi

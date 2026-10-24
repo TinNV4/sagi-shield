@@ -50,7 +50,10 @@ def main() -> None:
         from app.storage import FirestoreStore
         token = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True, shell=True, check=True).stdout.strip()
         store = FirestoreStore.__new__(FirestoreStore)
-        store.fs, store.db = firestore, firestore.Client(project=a.project or os.environ["GOOGLE_CLOUD_PROJECT"], credentials=Credentials(token))
+        store.database = os.getenv("FIRESTORE_DB", "(default)")  # FIRESTORE_DB=pilot loads the pilot service's database
+        store.fs = firestore
+        store.db = firestore.Client(project=a.project or os.environ["GOOGLE_CLOUD_PROJECT"], credentials=Credentials(token),
+                                    database=store.database)
     else:
         from app.storage import STORE as store  # STORE=firestore for the real thing, memory for a dry test
     load(store, entries)
