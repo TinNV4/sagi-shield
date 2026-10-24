@@ -1,6 +1,7 @@
 import React, {useEffect, useState} from 'react';
 import {Globe, Moon, Shield, Sparkles, Sun, Wrench} from 'lucide-react';
 import {api, isMockModeActive} from '../api/client';
+import {envLabel} from '../lib/envLabel';
 import {Language, useI18n} from '../i18n';
 import * as speech from '../lib/speak';
 
@@ -19,6 +20,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const {lang, setLang, t} = useI18n();
   const [mockActive, setMockActive] = useState<boolean>(isMockModeActive());
+  const label = envLabel(import.meta.env.VITE_ENV_LABEL); // PILOT on the pilot build, empty in production
 
   useEffect(() => {
     const handleModeChange = (e: any) => {
@@ -81,6 +83,15 @@ export const Header: React.FC<HeaderProps> = ({
                   <Wrench className="w-3 h-3 text-amber-600" />
                   <span>{t('header.demo_badge')}</span>
                 </button>
+              ) : label ? (
+                <span
+                  id="engine-badge-btn"
+                  className="hidden min-[420px]:inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-100 dark:bg-sky-950/60 border border-sky-400 text-sky-900 dark:text-sky-200 text-[10px] sm:text-xs font-black tracking-wider uppercase shadow-xs"
+                  title="Pilot environment"
+                >
+                  <Wrench className="w-3 h-3 text-sky-600 dark:text-sky-400" />
+                  <span>{label}</span>
+                </span>
               ) : (
                 <button
                   id="engine-badge-btn"

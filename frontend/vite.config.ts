@@ -3,8 +3,11 @@ import react from '@vitejs/plugin-react';
 import path from 'path';
 import {defineConfig} from 'vite';
 import {VitePWA} from 'vite-plugin-pwa';
+import {envLabel, pwaNames} from './src/lib/envLabel';
 
 export default defineConfig(() => {
+  // the pilot build (VITE_ENV_LABEL=PILOT) installs under its own name next to the production PWA
+  const names = pwaNames(envLabel(process.env.VITE_ENV_LABEL));
   return {
     plugins: [
       react(),
@@ -14,8 +17,8 @@ export default defineConfig(() => {
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'icon.svg'],
         manifest: {
           id: '/',
-          name: 'Sagi Shield',
-          short_name: 'SagiShield',
+          name: names.name,
+          short_name: names.short_name,
           description: 'Fraud prevention PWA against phone scams and fake police impersonation.',
           theme_color: '#1B4D3E',
           background_color: '#F8FAF8',
