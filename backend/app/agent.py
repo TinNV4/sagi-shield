@@ -367,7 +367,13 @@ async def recovery(body: RecoveryIn, who: Principal | None = Depends(optional_pr
     state = {k: saved.get(k, v) for k, v in new_state().items()}
     state["ui_lang"], state["market"] = body.ui_lang or body.lang, body.lang
     # the sign-in token only names the household; it is never kept in the state
-    state["household_id"] = resolve_household(who) or state.get("household_id")
+    # a valid token decides, even when it resolves to nothing (a device removed from its household stops alerting it);
+    # no or an invalid header keeps the stored value, and a store fault must not turn into a 500
+    if who is not None:
+        try:
+            state["household_id"] = await asyncio.to_thread(resolve_household, who)
+        except Exception:
+            pass
     state["family_id"] = (body.family_id or state.get("family_id")) if legacy_family_enabled() else None
     if body.message.strip() == INIT_MESSAGE:
         reply = SCRIPT[state["ui_lang"]]["welcome"]  # instant and free: no model call to open the screen

@@ -193,34 +193,70 @@ def say(ws, text):
     ws.send_json({"type": "transcript", "text": text, "final": True})
 
 
+def auth(ws, tok=DEV.split(":")[0] + ":anonymous"):
+    ws.send_json({"type": "auth", "token": f"fake:{tok}"})
+
+
 def test_live_high_alerts_the_household_once_and_survives_deletion(client):
     h = client.post("/household", json={"member_name": "Mom", "market": "ja"}, headers=H(DEV)).json()
     hid = h["household_id"]
     client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
-    with client.websocket_connect("/ws/live?lang=ja&token=fake:d1:anonymous") as ws:
+    with client.websocket_connect("/ws/live?lang=ja") as ws:
+        auth(ws)
         for line in SCAM_LINES:
             say(ws, line)
             ws.receive_json()
+        auth(ws, "g1:google.com")   # a second auth message is ignored
     alerts = client.get(f"/household/{hid}/alerts", headers=H(G1)).json()
     assert len(alerts) == 1 and alerts[0]["risk_level"] == "HIGH" and SCAM_LINES[0] not in str(alerts)
     client.delete(f"/household/{hid}", headers=H(G1))
-    with client.websocket_connect("/ws/live?lang=ja&token=fake:d1:anonymous") as ws:   # orphaned device: still warns
+    with client.websocket_connect("/ws/live?lang=ja") as ws:   # orphaned device: still warns
+        auth(ws)
         for line in SCAM_LINES:
             say(ws, line)
             last = ws.receive_json()
     assert last["risk_level"] == "HIGH"
 
 
+def test_live_lines_before_auth_are_scored_without_a_household(client):
+    h = client.post("/household", json={"member_name": "Mom", "market": "ja"}, headers=H(DEV)).json()
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
+    with client.websocket_connect("/ws/live?lang=ja") as ws:
+        for line in SCAM_LINES:
+            say(ws, line)
+            last = ws.receive_json()
+        auth(ws)
+        say(ws, "もしもし")
+        ws.receive_json()
+    assert last["risk_level"] == "HIGH"
+    assert client.get(f"/household/{h['household_id']}/alerts", headers=H(G1)).json() == []
+
+
 def test_live_with_a_bad_token_still_runs(client):
-    with client.websocket_connect("/ws/live?lang=ja&token=garbage") as ws:
+    with client.websocket_connect("/ws/live?lang=ja") as ws:
+        ws.send_json({"type": "auth", "token": "garbage"})
         say(ws, "もしもし")
         assert ws.receive_json()["risk_level"] == "LOW"
 
 
-def test_live_legacy_family_id_is_refused_when_the_flag_is_off(client, monkeypatch):
+def test_live_store_failure_never_silences_the_warning(client, monkeypatch):
+    client.post("/household", json={"member_name": "Mom", "market": "ja"}, headers=H(DEV))
+
+    def boom(uid):
+        raise RuntimeError("firestore down")
+
+    monkeypatch.setattr(main.STORE, "households_for", boom)
+    with client.websocket_connect("/ws/live?lang=ja") as ws:
+        auth(ws)
+        for line in SCAM_LINES:
+            say(ws, line)
+            last = ws.receive_json()
+    assert last["risk_level"] == "HIGH"
+
+
+def test_live_legacy_family_id_is_told_to_update_when_the_flag_is_off(client, monkeypatch):
     monkeypatch.setenv("LEGACY_FAMILY", "0")
-    from starlette.websockets import WebSocketDisconnect
-    with pytest.raises(WebSocketDisconnect) as e:
-        with client.websocket_connect("/ws/live?lang=ja&family_id=x") as ws:
-            ws.receive_json()
-    assert e.value.code == 1008
+    with client.websocket_connect("/ws/live?lang=ja&family_id=x") as ws:
+        assert ws.receive_json() == {"event": "outdated"}
+        say(ws, "もしもし")
+        assert ws.receive_json()["risk_level"] == "LOW"

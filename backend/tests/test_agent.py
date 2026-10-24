@@ -234,3 +234,28 @@ def test_notify_guardian_uses_the_household_from_the_token(client, monkeypatch):
     assert agent.notify_guardian("again", Ctx)["status"] == "already_sent"
     alerts = client.get(f"/household/{h['household_id']}/alerts", headers={"Authorization": "Bearer fake:d1:anonymous"}).json()
     assert len(alerts) == 1 and alerts[0]["scam_type"] == "recovery"
+
+
+def test_a_valid_token_with_no_household_clears_the_stored_one(client, monkeypatch):
+    monkeypatch.setenv("USE_LLM", "1")
+    seen = {}
+
+    async def fake_agent(message, state):
+        seen.clear()
+        seen.update(state)
+        return "ok", state
+
+    monkeypatch.setattr(agent, "run_agent", fake_agent)
+    h = client.post("/household", json={"member_name": "Mom", "market": "ja"}, headers={"Authorization": "Bearer fake:d1:anonymous"}).json()
+    ask(client, "hello", headers={"Authorization": "Bearer fake:d1:anonymous"})
+    assert seen["household_id"] == h["household_id"]
+    ask(client, "again", headers={"Authorization": "Bearer fake:d2:anonymous"})   # a device in no household
+    assert seen["household_id"] is None
+
+
+def test_a_store_failure_while_resolving_the_household_is_not_a_500(client, monkeypatch):
+    def boom(uid):
+        raise RuntimeError("firestore down")
+
+    monkeypatch.setattr(main.STORE, "households_for", boom)
+    assert ask(client, "hello", headers={"Authorization": "Bearer fake:d1:anonymous"})["reply"]

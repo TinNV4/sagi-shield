@@ -29,6 +29,7 @@ Nothing is stored; the window lives in this coroutine's memory and dies with the
 """
 from __future__ import annotations
 import asyncio
+import logging
 import os
 import time
 import uuid
@@ -46,6 +47,7 @@ from .households import resolve_household
 from .notifier import alert_family, alert_household
 from .verdict_log import log_verdict
 
+log = logging.getLogger(__name__)
 router = APIRouter()
 WINDOW_LINES, MAX_LINE = 12, 500   # ~30 s of speech
 PIN_LINES, OPENING_GAP = 3, "[...]"  # the opening of the call stays in every window: "this is the police" is said once
@@ -62,14 +64,12 @@ async def live(ws: WebSocket):
         await ws.close(code=1008)  # audio input (server-side STT) is not implemented
         return
     family_id = ws.query_params.get("family_id")
-    if family_id and not legacy_family_enabled():
-        await ws.close(code=1008)  # the shared-secret query is retired: the app reloads and signs in instead
-        return
+    outdated = bool(family_id) and not legacy_family_enabled()
+    if outdated:
+        family_id = None  # retired shared secret: keep warning the caller, skip the alert, tell the app to update
     await ws.accept()
-    # who is calling: the sign-in token is checked once here (it may reach the network), never per line. No token, a bad
-    # one, or a device in no household leaves household_id None: the warning is still spoken, only the family alert is skipped
-    token = ws.query_params.get("token")
-    household_id = await asyncio.to_thread(lambda: resolve_household(principal_from_query(token))) if token else None
+    if outdated:
+        await ws.send_json({"event": "outdated"})
     silence_s = float(os.getenv("LIVE_SILENCE_S", "45"))
     llm_every_s = float(os.getenv("LIVE_LLM_EVERY_S", "5"))
     periodic_s = float(os.getenv("LIVE_PERIODIC_S", "20"))
@@ -80,7 +80,7 @@ async def live(ws: WebSocket):
     pack = engine.LANG_PACKS[lang]
     tracker, window = engine.LiveTracker(), deque(maxlen=WINDOW_LINES)
     tracker.prior_precursor = ws.query_params.get("prior") == "precursor"
-    state = {"household_id": household_id, "session": uuid.uuid4().hex[:12], "spoken": False, "last_llm": float("-inf"), "task": None,  # -inf = never: monotonic() is small on a freshly booted machine
+    state = {"household_id": None, "authed": False, "session": uuid.uuid4().hex[:12], "spoken": False, "last_llm": float("-inf"), "task": None,  # -inf = never: monotonic() is small on a freshly booted machine
              "scam_type": "unknown", "reasons": [], "unseen": 0, "started": time.monotonic(), "opening": [], "lines": 0, "looks": 0,
              "max_score": 0, "max_level": "LOW", "alarm_line": None}
 
@@ -113,6 +113,19 @@ async def live(ws: WebSocket):
         if not with_context:
             return None
         return tracker.call_state((time.monotonic() - state["started"]) / 60, state["scam_type"])
+
+    async def authenticate(token: object):
+        # who is calling: the sign-in token arrives as the first message (never in the URL, which Cloud Run logs) and is
+        # checked once per connection. Missing / bad token, a device in no household or a store fault leave household_id
+        # None: the warning is still spoken, only the family alert is skipped. A caller must never be silenced by this.
+        if state["authed"] or not isinstance(token, str) or not token:
+            return
+        state["authed"] = True
+        try:
+            state["household_id"] = await asyncio.wait_for(
+                asyncio.to_thread(lambda: resolve_household(principal_from_query(token))), timeout=5)
+        except Exception:
+            log.exception("live guard: household lookup failed; continuing without one")
 
     async def send(score: float, trigger: str = ""):
         # HIGH is only announced once latched (2 consecutive windows) - no one-window red flashes
@@ -198,6 +211,9 @@ async def live(ws: WebSocket):
             except ValueError:
                 continue  # not JSON: ignore, keep the socket
             if not isinstance(msg, dict):
+                continue
+            if msg.get("type") == "auth":
+                await authenticate(msg.get("token"))
                 continue
             if msg.get("type") == "reset":
                 reset()
