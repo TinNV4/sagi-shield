@@ -26,7 +26,7 @@ from input_layer import URL_RE, analyze_phone, build_evidence, normalize_text, p
 from model_ids import model_id  # noqa: E402
 from risk_engine import LANG_PACKS, analyze, level, precursor_hits as engine_precursor  # noqa: E402
 
-from . import appcheck, auth, households, services  # noqa: E402
+from . import appcheck, auth, households, services, share  # noqa: E402
 from .agent import router as agent_router  # noqa: E402
 from .analytics import log_event  # noqa: E402
 from .guard import GuardMiddleware  # noqa: E402
@@ -76,6 +76,7 @@ store = STORE
 app.include_router(live_router)
 app.include_router(agent_router)
 app.include_router(households.router)
+app.include_router(share.router)
 
 
 @app.exception_handler(auth.AuthError)

@@ -1,5 +1,6 @@
 import React, {Suspense, lazy, useEffect, useState} from 'react';
-import {api, GUARDIAN_FROM_PUSH, JOIN_FROM_LINK, mockApiInstance, PAIR_FROM_LINK} from './api/client';
+import {api, GUARDIAN_FROM_PUSH, JOIN_FROM_LINK, mockApiInstance, PAIR_FROM_LINK, SHARE_FROM_LINK} from './api/client';
+import {readShareInbox, toCheckInput, type ShareCheckInput} from './lib/shareInbox';
 import {CheckResult} from './api/types';
 import {BottomNav, TabType} from './components/BottomNav';
 import {DemoHelperModal} from './components/DemoHelperModal';
@@ -80,6 +81,7 @@ function AppContent() {
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<FullTabType>(() => {
     if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH) return 'guardian_view'; // a family member's QR code, or an alert notification
+    if (SHARE_FROM_LINK) return 'quick'; // the OS share sheet handed a screenshot or text over
     if (JOIN_FROM_LINK) return 'family'; // the setup card's QR, scanned on the protected person's own device
     // If kiosk mode is active, opening goes straight to Live Guard!
     try {
@@ -96,13 +98,21 @@ function AppContent() {
   const [navHistory, setNavHistory] = useState<FullTabType[]>([]);
   // the household whose setup card is open (and the code just issued for it, if any)
   const [cardTarget, setCardTarget] = useState<{household: Household; code?: CardCode} | null>(null);
+  // shared from another app: read once from the share inbox, then handed to Quick Check
+  const [sharedInput, setSharedInput] = useState<ShareCheckInput | null>(null);
+  useEffect(() => {
+    if (!SHARE_FROM_LINK) return;
+    readShareInbox().then((shared) => {
+      if (shared) setSharedInput(toCheckInput(shared));
+    });
+  }, []);
   const [activeCheckResult, setActiveCheckResult] = useState<CheckResult | null>(null);
   const [activeCheckInput, setActiveCheckInput] = useState<CheckInput>({});
   const [isDemoHelperOpen, setIsDemoHelperOpen] = useState<boolean>(() => {
     return window.location.pathname.includes('demo') || window.location.hash.includes('demo');
   });
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() => {
-    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK) return false; // a guardian came to pair or to read an alert, not to set up a kiosk
+    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK) return false; // a guardian came to pair or to read an alert, not to set up a kiosk
     try {
       return localStorage.getItem('sagi_onboarding_completed') !== 'true';
     } catch {
@@ -188,7 +198,7 @@ function AppContent() {
   // A protected device whose household has Live Guard switched on opens in kiosk mode, the same path as the
   // onboarding's kiosk choice, unless the person left kiosk mode in Settings during the last 24 h.
   useEffect(() => {
-    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK) return;
+    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK) return;
     let handled = false;
     let cancelled = false;
     const off = onAuth((user) => {
@@ -303,6 +313,7 @@ function AppContent() {
 
         {currentTab === 'quick' && (
           <QuickCheckScreen
+            initialInput={sharedInput}
             onCheckCompleted={(result, input) => {
               setActiveCheckResult(result);
               setActiveCheckInput(input);

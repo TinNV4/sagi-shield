@@ -321,3 +321,9 @@ def test_deep_check_searches_domains_and_names_but_never_numbers(client, monkeyp
     assert client.post("/deepcheck", json={"lang": "ja", "text": "090-1234-5678 に電話した"}).status_code == 422  # nothing searchable
     monkeypatch.setattr(services, "deep_check", lambda subjects, lang: None)
     assert client.post("/deepcheck", json={"lang": "ja", "url": "https://example.com"}).status_code == 503
+
+
+def test_share_target_without_a_worker_redirects_to_the_app(client):
+    # no service worker took the share: nothing is read or kept, the app just opens
+    r = client.post("/share-target", data={"text": "x"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/#share"

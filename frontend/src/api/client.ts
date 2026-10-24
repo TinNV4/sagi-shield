@@ -110,6 +110,18 @@ export const GUARDIAN_FROM_PUSH: boolean = (() => {
   }
 })();
 
+/** Opened after the OS share sheet handed content to the PWA (public/share-sw.js redirects to /#share): go to Quick Check
+ *  with the shared content. Read once. */
+export const SHARE_FROM_LINK: boolean = (() => {
+  try {
+    const hit = window.location.hash === '#share';
+    if (hit) window.history.replaceState(null, '', window.location.pathname);
+    return hit;
+  } catch {
+    return false;
+  }
+})();
+
 // VITE_API_BASE: empty = MockApi (DEMO badge) · 'same-origin' = the API that serves this page (Cloud Run) · or a full URL
 const RAW_API_BASE = (import.meta.env.VITE_API_BASE || '').trim();
 export const API_BASE = (RAW_API_BASE === 'same-origin' ? window.location.origin : RAW_API_BASE).replace(/\/+$/, '');

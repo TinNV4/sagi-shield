@@ -25,6 +25,13 @@ export default defineConfig(() => {
           display: 'standalone',
           start_url: '/',
           scope: '/',
+          // the OS share sheet offers the app for text and screenshots; public/share-sw.js catches the POST
+          share_target: {
+            action: '/share-target',
+            method: 'POST',
+            enctype: 'multipart/form-data',
+            params: {title: 'title', text: 'text', url: 'url', files: [{name: 'images', accept: ['image/*']}]},
+          },
           icons: [
             {
               src: '/pwa-192x192.png',
@@ -50,9 +57,9 @@ export default defineConfig(() => {
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
           cleanupOutdatedCaches: true,
           // guardian alerts by FCM web push (public/push-sw.js): one worker for the app shell and the notifications
-          importScripts: ['push-sw.js'],
+          importScripts: ['push-sw.js', 'share-sw.js'],
           // the API lives on the same origin: never answer its routes with the cached app shell
-          navigateFallbackDenylist: [/^\/(check|precheck|report|stats|health|healthz|family|agent|ws|spike|docs|openapi\.json)/],
+          navigateFallbackDenylist: [/^\/(check|precheck|report|stats|health|healthz|share-target|family|agent|ws|spike|docs|openapi\.json)/],
           // recorded alert voices (public/voice): not precached (3 languages x 3 clips), cached on first fetch so an
           // alarm still speaks offline; speak.ts fetches them whole, so no Range requests reach this cache
           runtimeCaching: [

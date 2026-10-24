@@ -199,6 +199,8 @@
     "error_general": "An error occurred during the fraud check.",
     "images_hint": "{n} of {max} images. Pages of one conversation are read together.",
     "images_limit": "Up to 5 images per check. The first 5 were kept.",
+    "share_rejected_size": "Some shared files were not checked: images over 8 MB are skipped.",
+    "share_rejected_type": "Some shared files were not checked: only images can be checked.",
     "remove_image": "Remove image"
   },
   "pay": {

@@ -14,6 +14,7 @@ import {
 import {api, describeApiError} from '../api/client';
 import {CheckResult} from '../api/types';
 import {useI18n} from '../i18n';
+import {type ShareCheckInput} from '../lib/shareInbox';
 import * as speech from '../lib/speak';
 
 export type QuickCheckTab = 'text' | 'screenshot' | 'recording' | 'phone' | 'link';
@@ -27,9 +28,11 @@ export interface CheckInput {
 
 interface QuickCheckScreenProps {
   onCheckCompleted: (result: CheckResult, input: CheckInput) => void;
+  /** Content handed over by the OS share sheet (src/lib/shareInbox.ts): pre-fills the text and the screenshots. */
+  initialInput?: ShareCheckInput | null;
 }
 
-export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckCompleted}) => {
+export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckCompleted, initialInput}) => {
   const {t, lang} = useI18n();
 
   const [activeTab, setActiveTab] = useState<QuickCheckTab>('text');
@@ -43,6 +46,27 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
 
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const [shareNotice, setShareNotice] = useState('');
+
+  // shared from another app: images go to the screenshot tab, otherwise the text tab holds the shared text
+  useEffect(() => {
+    if (!initialInput) return;
+    if (initialInput.text) setInputText(initialInput.text);
+    if (initialInput.images.length) {
+      setScreenshots(initialInput.images);
+      setActiveTab('screenshot');
+    } else {
+      setActiveTab('text');
+    }
+    const reasons = new Set(initialInput.rejected.map((r) => r.reason));
+    setShareNotice(
+      [reasons.has('size') ? t('quick.share_rejected_size') : '', reasons.has('type') ? t('quick.share_rejected_type') : '']
+        .filter(Boolean)
+        .join(' ')
+    );
+    // t changes with the language; the shared content is applied once
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialInput]);
 
   // Sample presets for demo
   const samplePresets = [
@@ -406,6 +430,12 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
         )}
 
         {/* Error message if any */}
+        {shareNotice && (
+          <p id="share-notice" className="text-sm text-amber-800 dark:text-amber-300" role="status">
+            {shareNotice}
+          </p>
+        )}
+
         {errorMsg && (
           <div className="p-3.5 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-300 dark:border-red-800 text-red-800 dark:text-red-200 text-sm flex items-center gap-2">
             <AlertCircle className="w-5 h-5 flex-shrink-0" />
