@@ -93,7 +93,7 @@ The submission is being scored from 2026-10-19 to 2026-11-07 and the judged URL 
 
 **Why now:** the pilot cannot start without it. Today anybody who shoulder-surfs a `family_id` can read a family's alerts, and there is no way to remove a guardian or wipe a household.
 
-### Step 2 - the guardian sets up the grandparent
+### Step 2 - the guardian sets up the grandparent (done 2026-10-25)
 
 The guardian's phone becomes the control panel; the grandparent's device shows one screen.
 
@@ -120,6 +120,7 @@ The guardian's phone becomes the control panel; the grandparent's device shows o
 ### Phase 0 exit criteria
 
 - Three households (two ja, one vi, all relatives) installed by a guardian without the owner touching the grandparent's device, on the pilot URL.
+  - The three households are set up through "Protect a parent" and the printed setup card (step 2), not by hand.
 - Step 0 answer recorded.
 - Admin page shows the three households' verdicts within a minute of them happening.
 - `python -m pytest`, `npm test`, CI and auto-deploy green; no `family_id` in any URL.
