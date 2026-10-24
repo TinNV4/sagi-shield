@@ -32,8 +32,8 @@ class AuthError(Exception):
 
 def mode() -> Literal["firebase", "fake", "off"]:
     m = os.getenv("AUTH", "firebase").strip().lower()
-    if m == "fake" and os.getenv("STORE", "memory") == "firestore":
-        log.warning("AUTH=fake is refused with STORE=firestore; using firebase")
+    if m in ("fake", "off") and os.getenv("STORE", "memory") == "firestore":
+        log.warning("AUTH=%s is refused with STORE=firestore; using firebase", m)
         return "firebase"
     return m if m in ("fake", "off") else "firebase"
 
@@ -67,6 +67,8 @@ def _verify_firebase(token: str) -> dict:
 
 
 def verify(token: str) -> Principal:
+    if mode() == "off":   # local dev without sign-in: everybody is the same nameless device; never guardian or admin
+        return Principal("", "device")
     if not token:
         raise AuthError(401, REQUIRED)
     if mode() == "fake":
@@ -121,9 +123,9 @@ def require_legacy_family() -> None:
 
 def principal_from_query(token: str | None) -> Principal | None:
     """For the WebSocket: never raises, so a scared caller is never refused."""
-    if not token:
+    if not token and mode() != "off":
         return None
     try:
-        return verify(token)
+        return verify(token or "")
     except AuthError:
         return None

@@ -79,3 +79,30 @@ def test_anonymous_token_is_a_device_even_with_a_name_claim(monkeypatch):
     monkeypatch.setenv("AUTH", "firebase")
     monkeypatch.setattr(auth, "_verify_firebase", lambda t: {"uid": "d", "name": "x", "firebase": {"sign_in_provider": "anonymous"}, "admin": True})
     assert auth.verify("t") == auth.Principal("d", "device", "x")   # admin claim on an anonymous user is ignored
+
+def test_off_mode_is_refused_on_firestore(monkeypatch):
+    monkeypatch.setenv("AUTH", "off"); monkeypatch.setenv("STORE", "firestore")
+    assert auth.mode() == "firebase"
+    monkeypatch.setenv("STORE", "memory")
+    assert auth.mode() == "off"
+
+def test_off_mode_makes_every_request_a_nameless_device(monkeypatch):
+    monkeypatch.setenv("AUTH", "off"); monkeypatch.setenv("STORE", "memory")
+    nobody = auth.Principal("", "device")
+    assert auth.verify("") == nobody and auth.verify("anything") == nobody
+    assert auth.principal_from_query(None) == nobody
+    app = FastAPI()
+    @app.get("/who")
+    def who(p: auth.Principal = Depends(auth.principal)): return p.role
+    @app.get("/opt")
+    def opt(p=Depends(auth.optional_principal)): return p.role if p else None
+    @app.get("/g")
+    def g(p: auth.Principal = Depends(auth.guardian_or_admin)): return p.role
+    @app.get("/a")
+    def a(p: auth.Principal = Depends(auth.admin_only)): return p.role
+    c = TestClient(app)
+    assert c.get("/who").json() == "device"
+    assert c.get("/opt").json() == "device"
+    assert c.get("/who", headers={"Authorization": "Bearer fake:g:phone:admin"}).json() == "device"
+    assert c.get("/g").status_code == 403
+    assert c.get("/a").status_code == 403

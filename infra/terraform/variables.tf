@@ -66,6 +66,26 @@ variable "app_check_mode" {
   }
 }
 
+variable "auth_mode" {
+  description = "firebase | off (backend/app/auth.py): off skips sign-in checks and is refused with STORE=firestore, so keep firebase"
+  type        = string
+  default     = "firebase"
+  validation {
+    condition     = contains(["firebase", "off"], var.auth_mode)
+    error_message = "auth_mode must be firebase or off."
+  }
+}
+
+variable "legacy_family" {
+  description = "1 = the shared-secret /family/* routes still work, 0 = they answer 410 (deleted for good on 2026-11-14)"
+  type        = string
+  default     = "1"
+  validation {
+    condition     = contains(["0", "1"], var.legacy_family)
+    error_message = "legacy_family must be 0 or 1."
+  }
+}
+
 variable "app_check_domains" {
   description = "Extra hosts for the reCAPTCHA key (a custom domain); every Cloud Run URL of the service is always included"
   type        = list(string)

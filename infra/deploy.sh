@@ -28,8 +28,9 @@ if [ -z "${NO_ANALYTICS:-}" ]; then                 # analytics stream (app/anal
   ENV="$ENV@BQ_TABLE=$PROJECT.sagi.events"
 fi
 # Models: backend/core/model_ids.py holds the defaults Cloud Run runs; a job's env var set in this shell overrides it
-# APPCHECK (off | monitor | enforce) and RATE_LIMIT_UNVERIFIED_PER_MIN travel the same way
-for job in GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL            APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN; do
+# APPCHECK (off | monitor | enforce), RATE_LIMIT_UNVERIFIED_PER_MIN, AUTH (firebase | off; unset = firebase) and
+# LEGACY_FAMILY (0 = /family/* answers 410; unset = on) travel the same way
+for job in GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL            APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN AUTH LEGACY_FAMILY; do
   if [ -n "${!job:-}" ]; then ENV="$ENV@$job=${!job}"; fi
 done
 

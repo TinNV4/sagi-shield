@@ -123,6 +123,8 @@ jobs:
           STT_BATCH_MODEL: ${{ vars.STT_BATCH_MODEL }}
           APPCHECK: ${{ vars.APPCHECK }}  # off | monitor | enforce (backend/app/appcheck.py); unset -> off
           RATE_LIMIT_UNVERIFIED_PER_MIN: ${{ vars.RATE_LIMIT_UNVERIFIED_PER_MIN }}
+          AUTH: ${{ vars.AUTH }}  # firebase | off (backend/app/auth.py); unset -> firebase. `off` is refused with STORE=firestore, so never set it here
+          LEGACY_FAMILY: ${{ vars.LEGACY_FAMILY }}  # 0 = the shared-secret /family/* routes answer 410; unset -> on (removed 2026-11-14)
           FIRESTORE_DB: ${{ inputs.firestore_db }}
           BQ_TABLE: ${{ inputs.bq_table }}
         run: |
@@ -131,7 +133,7 @@ jobs:
           ENV="$ENV@STORE=firestore@FIRESTORE_DB=$FIRESTORE_DB@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=*"
           # analytics stream (app/analytics.py): only when the caller names a table; the pilot runs without one
           for job in BQ_TABLE GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL \
-                     APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN; do
+                     APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN AUTH LEGACY_FAMILY; do
             if [ -n "${!job:-}" ]; then ENV="$ENV@$job=${!job}"; fi
           done
           # both secrets exist in this project and are read by the runtime account sagi-api, not by the deployer

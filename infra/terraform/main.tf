@@ -204,6 +204,8 @@ resource "google_cloud_run_v2_service" "api" {
           CORS_ORIGINS                = var.cors_origins
           BQ_TABLE                    = "${var.project}.${google_bigquery_dataset.sagi.dataset_id}.${google_bigquery_table.events.table_id}"
           APPCHECK                    = var.app_check_mode
+          AUTH                        = var.auth_mode
+          LEGACY_FAMILY               = var.legacy_family
         }
         content {
           name  = env.key
@@ -416,6 +418,8 @@ resource "google_cloud_run_v2_service" "pilot" {
           USE_LLM                     = "1"
           CORS_ORIGINS                = var.cors_origins
           APPCHECK                    = var.app_check_mode
+          AUTH                        = var.auth_mode
+          LEGACY_FAMILY               = var.legacy_family
         }
         content {
           name  = env.key
