@@ -79,6 +79,7 @@ def _drop_guardian(hh: dict, uid: str) -> bool:
     if len(kept) == len(hh["guardians"]):
         return False
     hh["guardians"], hh["guardian_uids"] = kept, [g["uid"] for g in kept]
+    hh["push_tokens"] = [t for t in hh.get("push_tokens", []) if t.get("uid") != uid]  # a leaver gets no more alerts
     return True
 
 
@@ -102,6 +103,13 @@ def _with_token(fam: dict, token: str) -> dict:
     tokens = [t for t in fam.get("push_tokens", []) if t != token] + [token]
     fam["push_tokens"] = tokens[-MAX_PUSH_TOKENS:]
     return fam
+
+
+def _with_guardian_token(hh: dict, uid: str, token: str) -> dict:
+    """Household push_tokens are {uid, token}: they die with the guardian. <= MAX_PUSH_TOKENS, newest last, no repeats."""
+    tokens = [t for t in hh.get("push_tokens", []) if t["token"] != token] + [{"uid": uid, "token": token}]
+    hh["push_tokens"] = tokens[-MAX_PUSH_TOKENS:]
+    return hh
 
 
 def _alert(risk_level: str, scam_type: str, stage: int, summary: str, member_name: str) -> dict:
@@ -275,11 +283,11 @@ class MemoryStore:
         self.household_alerts.pop(household_id, None)
         return self.households.pop(household_id, None) is not None
 
-    def add_household_push_token(self, household_id: str, token: str) -> bool:
+    def add_household_push_token(self, household_id: str, uid: str, token: str) -> bool:
         hh = self.households.get(household_id)
         if not hh:
             return False
-        _with_token(hh, token)
+        _with_guardian_token(hh, uid, token)
         return True
 
     def add_household_alert(self, household_id: str, risk_level: str, scam_type: str, stage: int,
@@ -496,11 +504,11 @@ class FirestoreStore:
         ref.delete()
         return True
 
-    def add_household_push_token(self, household_id: str, token: str) -> bool:
+    def add_household_push_token(self, household_id: str, uid: str, token: str) -> bool:
         hh = self.get_household(household_id)
         if not hh:
             return False
-        self.db.collection("households").document(household_id).set(_with_token(hh, token))
+        self.db.collection("households").document(household_id).set(_with_guardian_token(hh, uid, token))
         return True
 
     def add_household_alert(self, household_id: str, risk_level: str, scam_type: str, stage: int,

@@ -33,10 +33,10 @@ def public(hh: dict, p: Principal) -> dict:
 
 
 def resolve_household(principal: Principal | None) -> str | None:
-    """The single household of a device (the first one), or None."""
-    if principal is None:
+    """The household a device belongs to (the first one), or None. A guardian or admin has no single household."""
+    if principal is None or principal.role != "device":
         return None
-    found = STORE.households_for(principal.uid)
+    found = [h for h in STORE.households_for(principal.uid) if principal.uid in h["devices"]]
     return found[0]["household_id"] if found else None
 
 
@@ -144,7 +144,7 @@ def household_alerts(hid: str, p: Principal = Depends(auth.principal)):
 @router.post("/household/{hid}/push")
 def household_push(hid: str, body: PushToken, p: Principal = Depends(auth.principal)):
     _member(hid, p, guardian_only=True)
-    STORE.add_household_push_token(hid, body.fcm_token)
+    STORE.add_household_push_token(hid, p.uid, body.fcm_token)
     return {"ok": True}
 
 

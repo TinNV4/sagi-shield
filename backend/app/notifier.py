@@ -63,5 +63,9 @@ def alert_household(household_id: str | None, result: dict, lang: str) -> dict |
                                       int(result.get("stage", 0)), summary)
     if not alert:
         return None
-    _push(_tokens(STORE.get_household(household_id) or {}), lang, summary, alert)
+    hh = STORE.get_household(household_id) or {}
+    guardians = hh.get("guardians", [])
+    uids = {g["uid"] for g in guardians}  # a removed guardian's push tokens are ignored
+    own = [t["token"] for t in hh.get("push_tokens", []) if t.get("uid") in uids]
+    _push(_tokens({"guardians": guardians, "push_tokens": own}), lang, summary, alert)
     return alert

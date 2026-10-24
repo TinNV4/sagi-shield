@@ -12,7 +12,19 @@ from app import main  # noqa: E402
 
 
 @pytest.fixture
-def client():
+def sent(monkeypatch):
+    """A stand-in for firebase_admin.messaging that records the multicast: the suite never reaches real FCM."""
+    from types import SimpleNamespace
+    from app import notifier
+    out = []
+    fake = SimpleNamespace(MulticastMessage=lambda **kw: kw, Notification=lambda **kw: kw, WebpushConfig=lambda **kw: kw,
+                           send_each_for_multicast=lambda m: out.append(m))
+    monkeypatch.setattr(notifier, "_messaging", lambda: fake)
+    return out
+
+
+@pytest.fixture
+def client(sent):
     main.store.__init__()
     return TestClient(main.app)
 
@@ -103,3 +115,72 @@ def test_admin_reassigns_a_lost_owner(client):
     assert client.post(f"/admin/household/{hid}/owner", json={"uid": "g2"}, headers=H("root:google.com:admin")).status_code == 200
     assert client.post(f"/admin/household/{hid}/owner", json={"uid": "zz"}, headers=H("root:google.com:admin")).status_code == 404
     assert client.get(f"/household/{hid}/alerts", headers=H("root:google.com:admin")).status_code == 403  # admin is not a member
+
+
+def _two_guardians(client, **kw):
+    h = client.post("/household", json={"member_name": "Mom", "market": "ja"}, headers=H(DEV)).json()
+    client.post("/household/join", json={"pair_code": h["pair_code"], **kw}, headers=H(G1))
+    code = client.post(f"/household/{h['household_id']}/code", json={}, headers=H(G1)).json()["pair_code"]
+    client.post("/household/join", json={"pair_code": code}, headers=H(G2))
+    return h["household_id"]
+
+
+def _notify(client, hid):
+    return client.post(f"/household/{hid}/notify", json={"risk_level": "HIGH", "reasons": ["r"], "lang": "ja"}, headers=H(DEV))
+
+
+def test_a_removed_guardian_stops_receiving_alerts(client, sent):
+    hid = _two_guardians(client)
+    for tok, who in (("tok-g1", G1), ("tok-g2", G2)):
+        assert client.post(f"/household/{hid}/push", json={"fcm_token": tok}, headers=H(who)).status_code == 200
+    _notify(client, hid)
+    assert sorted(sent[-1]["tokens"]) == ["tok-g1", "tok-g2"]
+    assert client.delete(f"/household/{hid}/guardians/g2", headers=H(G1)).status_code == 200
+    _notify(client, hid)
+    assert sent[-1]["tokens"] == ["tok-g1"]
+
+
+def test_alert_household_sends_to_pairing_and_push_tokens_once(client, sent):
+    hid = _two_guardians(client, fcm_token="a")
+    for tok in ("a", "b", "b"):
+        client.post(f"/household/{hid}/push", json={"fcm_token": tok}, headers=H(G1))
+    _notify(client, hid)
+    assert len(sent) == 1 and sent[0]["tokens"] == ["a", "b"]
+
+
+def test_resolve_household_is_for_devices_only(client):
+    from app.auth import Principal
+    from app.households import resolve_household
+    a = client.post("/household", json={"market": "ja"}, headers=H("da:anonymous")).json()
+    b = client.post("/household", json={"market": "ja"}, headers=H("db:anonymous")).json()
+    for h in (a, b):
+        client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
+    assert resolve_household(Principal("g1", "guardian")) is None
+    assert resolve_household(Principal("da", "device")) == a["household_id"]
+    assert resolve_household(Principal("nobody", "device")) is None and resolve_household(None) is None
+
+
+def test_authorization_rows(client):
+    hid = _two_guardians(client)
+    out = "outsider:google.com"
+    assert _notify_as(client, hid, out).status_code == 403
+    assert client.get(f"/household/{hid}", headers=H(out)).status_code == 403
+    assert "uid" not in str(client.get(f"/household/{hid}", headers=H(DEV)).json())
+    assert "uid" in str(client.get(f"/household/{hid}", headers=H(G2)).json())
+    assert client.delete(f"/household/{hid}/guardians/g2", headers=H(DEV)).status_code == 403
+    assert client.post(f"/household/{hid}/owner", json={"uid": "g2"}, headers=H(DEV)).status_code == 403
+    assert client.delete(f"/household/{hid}/guardians/nobody", headers=H(G1)).status_code == 404
+    assert client.post(f"/admin/household/{hid}/owner", json={"uid": "g2"}).status_code == 401
+    assert client.delete(f"/household/{hid}/guardians/g2", headers=H(G1)).status_code == 200      # owner removes another
+
+
+def _notify_as(client, hid, who):
+    return client.post(f"/household/{hid}/notify", json={"risk_level": "HIGH", "lang": "ja"}, headers=H(who))
+
+
+def test_an_admin_who_is_also_a_guardian_may_use_guardian_routes(client):
+    adm = "root:google.com:admin"
+    h = client.post("/household", json={"market": "ja"}, headers=H(adm)).json()
+    hid = h["household_id"]
+    assert client.get(f"/household/{hid}/alerts", headers=H(adm)).status_code == 200
+    assert client.post(f"/household/{hid}/push", json={"fcm_token": "x"}, headers=H(adm)).status_code == 200
