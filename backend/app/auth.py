@@ -59,7 +59,7 @@ def _verify_firebase(token: str) -> dict:
     from firebase_admin import auth as fb
     try:
         return _verify_firebase_raw(token)
-    except (ValueError, fb.ExpiredIdTokenError, fb.RevokedIdTokenError, fb.InvalidIdTokenError):
+    except (fb.ExpiredIdTokenError, fb.RevokedIdTokenError, fb.InvalidIdTokenError):
         raise AuthError(401, EXPIRED)
     except Exception:
         log.exception("sign-in check failed")

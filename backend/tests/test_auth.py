@@ -1,3 +1,4 @@
+import logging
 import pytest
 from fastapi import FastAPI, Depends
 from fastapi.testclient import TestClient
@@ -42,7 +43,7 @@ def test_dependencies(monkeypatch):
     assert c.get("/a", headers={"Authorization": "Bearer fake:g:phone:admin"}).status_code == 200
     assert c.get("/who", headers={"Authorization": "Bearer nonsense"}).status_code == 401
 
-def test_expired_and_foreign_tokens_are_401_never_500(monkeypatch):
+def test_expired_and_foreign_tokens_are_401_never_500(monkeypatch, caplog):
     monkeypatch.setenv("AUTH", "firebase")
     from firebase_admin import auth as fb
     def boom(token):
@@ -51,8 +52,28 @@ def test_expired_and_foreign_tokens_are_401_never_500(monkeypatch):
     with pytest.raises(auth.AuthError) as e:
         auth.verify("t")
     assert e.value.status == 401 and "sign in again" in e.value.detail
-    monkeypatch.setattr(auth, "_verify_firebase_raw", lambda t: (_ for _ in ()).throw(ValueError("wrong aud")))
+    def foreign(token):
+        raise fb.InvalidIdTokenError("wrong aud")
+    monkeypatch.setattr(auth, "_verify_firebase_raw", foreign)
     assert pytest.raises(auth.AuthError, auth.verify, "t").value.status == 401
+    def no_project(token):
+        raise ValueError("Failed to ascertain project ID")
+    monkeypatch.setattr(auth, "_verify_firebase_raw", no_project)
+    with caplog.at_level(logging.WARNING, logger="sagi.auth"):
+        e = pytest.raises(auth.AuthError, auth.verify, "t").value
+    assert e.status == 503
+    assert any(r.levelno >= logging.WARNING for r in caplog.records)
+
+def test_server_side_fault_is_503_through_dependency_and_none_for_socket(monkeypatch):
+    monkeypatch.setenv("AUTH", "firebase")
+    def broken(token):
+        raise RuntimeError("network down")
+    monkeypatch.setattr(auth, "_verify_firebase_raw", broken)
+    app = FastAPI()
+    @app.get("/who")
+    def who(p: auth.Principal = Depends(auth.principal)): return p.role
+    assert TestClient(app).get("/who", headers={"Authorization": "Bearer t"}).status_code == 503
+    assert auth.principal_from_query("t") is None
 
 def test_anonymous_token_is_a_device_even_with_a_name_claim(monkeypatch):
     monkeypatch.setenv("AUTH", "firebase")
