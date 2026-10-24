@@ -373,7 +373,8 @@
     "signin_unavailable": "Pairing is not available in this version of the app.",
     "create_btn": "Set up my family link",
     "member_name_label": "Your first name (optional)",
-    "owner_badge": "Owner"
+    "owner_badge": "Owner",
+    "signed_in_as_guardian": "This browser is signed in as a guardian. Open the family link on the protected person's own phone."
   },
   "guardian": {
     "member_fallback": "your family member",
@@ -421,7 +422,10 @@
     "delete_household": "Delete this household",
     "delete_confirm": "Delete the household of {{name}}? Pairing and alerts are lost for everyone.",
     "owner_cannot_leave": "You are the owner. Hand over ownership to another guardian first, or delete the household.",
-    "sign_out": "Sign out"
+    "sign_out": "Sign out",
+    "device_is_protected": "This device protects {{name}}. Open the guardian dashboard on your own phone.",
+    "no_longer_member": "You are no longer a guardian of this household.",
+    "household_gone": "This household no longer exists."
   },
   "community": {
     "title": "Community Fraud Radar",

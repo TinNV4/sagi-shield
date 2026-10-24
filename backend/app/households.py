@@ -148,6 +148,14 @@ def household_push(hid: str, body: PushToken, p: Principal = Depends(auth.princi
     return {"ok": True}
 
 
+@router.delete("/household/{hid}/push")
+def household_push_remove(hid: str, body: PushToken, p: Principal = Depends(auth.principal)):
+    """Sign-out: this browser's token stops receiving this household's alerts. Absent token is fine (200)."""
+    _member(hid, p, guardian_only=True)
+    STORE.remove_household_push_token(hid, p.uid, body.fcm_token)
+    return {"ok": True}
+
+
 @router.post("/household/{hid}/notify")
 def household_notify(hid: str, body: HouseholdNotify, p: Principal = Depends(auth.principal)):
     _member(hid, p)

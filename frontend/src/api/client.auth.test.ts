@@ -1,10 +1,11 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
 // The token source is replaced: these tests are about when the client sends a token and when it asks for a new one.
-const {idToken} = vi.hoisted(() => ({
+const {idToken, currentUser} = vi.hoisted(() => ({
   idToken: vi.fn(async (force?: boolean): Promise<string | null> => (force ? 'fresh' : 'stale')),
+  currentUser: vi.fn((): {uid: string; anonymous: boolean; name: string} | null => ({uid: 'u1', anonymous: false, name: ''})),
 }));
-vi.mock('../lib/auth', () => ({idToken}));
+vi.mock('../lib/auth', () => ({idToken, currentUser}));
 
 import {ApiError, RealApi} from './client';
 
@@ -17,6 +18,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
   idToken.mockReset();
   idToken.mockImplementation(async (force?: boolean) => (force ? 'fresh' : 'stale'));
+  currentUser.mockReset();
+  currentUser.mockReturnValue({uid: 'u1', anonymous: false, name: ''});
 });
 
 describe('Authorization header', () => {
@@ -60,8 +63,22 @@ describe('Authorization header', () => {
     expect(err.detail).toBe('sign-in required');
   });
 
+  it('after the phone slept the first token call gave nothing: a 401 is still retried once with a fresh token', async () => {
+    idToken.mockImplementation(async (force?: boolean) => (force ? 'fresh' : null));
+    const fetchMock = vi
+      .fn((..._a: FetchArgs) => reply(200, []))
+      .mockImplementationOnce(() => reply(401, {detail: 'sign-in required'}))
+      .mockImplementationOnce(() => reply(200, []));
+    vi.stubGlobal('fetch', fetchMock);
+    await new RealApi('http://api.test').myHouseholds();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(bearer(fetchMock, 0)).toBeNull();
+    expect(bearer(fetchMock, 1)).toBe('Bearer fresh');
+  });
+
   it('a 401 without a signed-in user is not retried', async () => {
     idToken.mockResolvedValue(null);
+    currentUser.mockReturnValue(null);
     const fetchMock = vi.fn((..._a: FetchArgs) => reply(401, {detail: 'sign-in required'}));
     vi.stubGlobal('fetch', fetchMock);
     const err = await new RealApi('http://api.test').myHouseholds().catch((e) => e);
@@ -101,6 +118,14 @@ describe('household routes', () => {
     });
   });
 
+  it('sign-out drops this browser token with DELETE /household/<id>/push', async () => {
+    expect(await call((a) => a.unregisterHouseholdPush('h1', 'fcm'))).toMatchObject({
+      url: 'http://api.test/household/h1/push',
+      method: 'DELETE',
+      body: {fcm_token: 'fcm'},
+    });
+  });
+
   it('join returns the household, not the wrapper', async () => {
     vi.stubGlobal('fetch', vi.fn((..._a: FetchArgs) => reply(200, {household: {household_id: 'h1'}})));
     expect(await new RealApi('http://api.test').joinHousehold('123456')).toEqual({household_id: 'h1'});
@@ -117,6 +142,42 @@ describe('household routes', () => {
     expect(alerts).toMatchObject({url: 'http://api.test/household/h1/alerts', method: 'GET'});
     expect(alerts.url).not.toContain('?');
     expect(await call((a) => a.householdDetail('h1'), {})).toMatchObject({url: 'http://api.test/household/h1', method: 'GET'});
+  });
+});
+
+describe('notifyMyHousehold (result screen: alert my family)', () => {
+  const result = {risk_level: 'HIGH', scam_type: 'fake_police', stage: 4, reasons: ['a']} as any;
+
+  it('a signed-in device with a household posts to /household/<id>/notify', async () => {
+    const fetchMock = vi
+      .fn((..._a: FetchArgs) => reply(200, {ok: true}))
+      .mockImplementationOnce(() => reply(200, [{household_id: 'h9'}, {household_id: 'h10'}]));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await new RealApi('http://api.test').notifyMyHousehold(result, 'ja')).toBe(true);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/household');
+    expect(fetchMock.mock.calls[1][0]).toBe('http://api.test/household/h9/notify');
+    expect(JSON.parse(String(fetchMock.mock.calls[1][1]?.body))).toMatchObject({risk_level: 'HIGH', lang: 'ja'});
+  });
+
+  it('a signed-in device without a household falls back to the legacy family (false without a family_id)', async () => {
+    const fetchMock = vi.fn((..._a: FetchArgs) => reply(200, []));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await new RealApi('http://api.test').notifyMyHousehold(result, 'ja')).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(1); // only the household lookup
+  });
+
+  it('legacy family_id still works while no household exists', async () => {
+    localStorage.setItem('sagi_family_id', 'fam');
+    const fetchMock = vi.fn((..._a: FetchArgs) => reply(200, []));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await new RealApi('http://api.test').notifyMyHousehold(result, 'ja')).toBe(true);
+    expect(fetchMock.mock.calls[1][0]).toBe('http://api.test/family/notify');
+    localStorage.clear();
+  });
+
+  it('a failing household lookup is not an error for the caller', async () => {
+    vi.stubGlobal('fetch', vi.fn(() => Promise.reject(new TypeError('offline'))));
+    expect(await new RealApi('http://api.test').notifyMyHousehold(result, 'ja')).toBe(false);
   });
 });
 

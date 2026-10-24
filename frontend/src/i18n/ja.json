@@ -373,7 +373,8 @@
     "signin_unavailable": "このバージョンのアプリでは、家族との連携はご利用いただけません。",
     "create_btn": "家族との連携を始める",
     "member_name_label": "お名前（任意）",
-    "owner_badge": "管理者"
+    "owner_badge": "管理者",
+    "signed_in_as_guardian": "このブラウザは見守り人としてログイン中です。連携コードは、見守られる方ご本人のスマホで表示してください。"
   },
   "guardian": {
     "member_fallback": "ご家族",
@@ -421,7 +422,10 @@
     "delete_household": "この見守りを削除",
     "delete_confirm": "{{name}}さんの見守りを削除しますか？全員の連携と通知が失われます。",
     "owner_cannot_leave": "あなたは管理者です。先に別の見守り人へ引き継ぐか、この見守りを削除してください。",
-    "sign_out": "ログアウト"
+    "sign_out": "ログアウト",
+    "device_is_protected": "この端末は{{name}}さんを守っています。見守り人の画面は、ご自身のスマホで開いてください。",
+    "no_longer_member": "この見守りの見守り人ではなくなりました。",
+    "household_gone": "この見守りはすでに削除されています。"
   },
   "community": {
     "title": "地域防犯ダッシュボード",

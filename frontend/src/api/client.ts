@@ -16,7 +16,7 @@ import {
   StatsResult,
 } from './types';
 import {APP_CHECK_HEADER, appCheckToken} from '../lib/appCheck';
-import {idToken} from '../lib/auth';
+import {currentUser, idToken} from '../lib/auth';
 
 export interface SagiApi {
   isMock: boolean;
@@ -40,7 +40,11 @@ export interface SagiApi {
   householdCode(id: string): Promise<HouseholdCode>;
   householdAlerts(id: string): Promise<FamilyAlertItem[]>;
   registerHouseholdPush(id: string, fcmToken: string): Promise<void>;
+  /** Sign-out: this browser's token stops receiving the household's alerts (best effort, absent token is fine). */
+  unregisterHouseholdPush(id: string, fcmToken: string): Promise<void>;
   notifyHousehold(id: string, result: CheckResult, lang: string): Promise<boolean>;
+  /** "Alert my family" from a result: the signed-in device's first household, else the legacy family while one exists. */
+  notifyMyHousehold(result: CheckResult, lang: string): Promise<boolean>;
   removeGuardian(id: string, uid: string): Promise<void>;
   deleteHousehold(id: string): Promise<void>;
   handOver(id: string, uid: string): Promise<void>;
@@ -185,8 +189,8 @@ export class RealApi implements SagiApi {
     };
     const bearer = await idToken();
     let res = await attempt(bearer);
-    if (res.status === 401 && bearer) {
-      // an expired token: ask the SDK for a new one and try once more, never in a loop
+    if (res.status === 401 && (bearer || currentUser())) {
+      // an expired token, or none because the SDK was too slow after the phone slept: ask for a new one, once
       const fresh = await idToken(true);
       if (fresh) res = await attempt(fresh);
     }
@@ -308,6 +312,23 @@ export class RealApi implements SagiApi {
 
   async registerHouseholdPush(id: string, fcmToken: string): Promise<void> {
     await this.postJson(`/household/${encodeURIComponent(id)}/push`, {fcm_token: fcmToken});
+  }
+
+  async unregisterHouseholdPush(id: string, fcmToken: string): Promise<void> {
+    const init = {method: 'DELETE', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({fcm_token: fcmToken})};
+    await this.request(`/household/${encodeURIComponent(id)}/push`, init);
+  }
+
+  async notifyMyHousehold(result: CheckResult, lang: string): Promise<boolean> {
+    if (await idToken()) {
+      try {
+        const [first] = await this.myHouseholds();
+        if (first) return await this.notifyHousehold(first.household_id, result, lang);
+      } catch {
+        return false;
+      }
+    }
+    return this.notifyFamily(result, lang); // legacy family while one exists; false without a family_id
   }
 
   async notifyHousehold(id: string, result: CheckResult, lang: string): Promise<boolean> {
@@ -929,7 +950,22 @@ class MockApi implements SagiApi {
 
   async registerHouseholdPush(_id: string, _fcmToken: string): Promise<void> {}
 
+  async unregisterHouseholdPush(_id: string, _fcmToken: string): Promise<void> {}
+
   async notifyHousehold(): Promise<boolean> {
+    return true;
+  }
+
+  async notifyMyHousehold(result: CheckResult): Promise<boolean> {
+    this.addMockAlert({
+      id: `alert-${Date.now()}`,
+      created_at: new Date().toISOString(),
+      member_name: this.mockHouseholds[0]?.member_name ?? '',
+      risk_level: result.risk_level,
+      scam_type: result.scam_type,
+      stage: result.stage,
+      summary: result.reasons[0] ?? result.advice,
+    });
     return true;
   }
 
@@ -1284,6 +1320,12 @@ export const api: SagiApi = {
   },
   notifyHousehold(id: string, result: CheckResult, lang: string) {
     return getActiveApi().notifyHousehold(id, result, lang);
+  },
+  notifyMyHousehold(result: CheckResult, lang: string) {
+    return getActiveApi().notifyMyHousehold(result, lang);
+  },
+  unregisterHouseholdPush(id: string, fcmToken: string) {
+    return getActiveApi().unregisterHouseholdPush(id, fcmToken);
   },
   removeGuardian(id: string, uid: string) {
     return getActiveApi().removeGuardian(id, uid);

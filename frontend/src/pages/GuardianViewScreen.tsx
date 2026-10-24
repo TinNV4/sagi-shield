@@ -21,6 +21,7 @@ import {AuthUser, confirmPhoneCode, onAuth, RECAPTCHA_CONTAINER_ID, signInGuardi
 import {
   guardianScreenState,
   householdLabel,
+  householdRouteFailure,
   manageActions,
   marketForLang,
   newHighAlert,
@@ -203,6 +204,8 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   const [households, setHouseholds] = useState<Household[] | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
+  // "you are no longer a guardian of this household" / "it is gone": said once, in words, after the list was resynced
+  const [notice, setNotice] = useState<string | null>(null);
 
   const [alerts, setAlerts] = useState<FamilyAlertItem[]>([]);
   const [alertsLoaded, setAlertsLoaded] = useState(false);
@@ -229,13 +232,29 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
 
   useEffect(() => onAuth((user) => setAuthState({known: true, user})), []);
 
-  const signedIn = api.isMock || Boolean(authState.user && !authState.user.anonymous);
+  // an anonymous device account counts too: its households decide between the notice and the sign-in card
+  const hasUser = api.isMock || Boolean(authState.user);
   const state = guardianScreenState({isMock: api.isMock, authKnown: authState.known, user: authState.user, households, failure});
   const selected = selectedHousehold(households, selectedId);
   const polledId = state.kind === 'dashboard' ? (selected?.household_id ?? null) : null;
 
   const noteFailure = (err: unknown) => {
     if (statusOf(err) === 401) setFailure(err);
+  };
+
+  // A household route that answers 401 (session gone), 403 (no longer a guardian) or 404 (household gone):
+  // true when handled here. 403 / 404 resync the list, so a removed guardian does not keep a "live" dashboard.
+  const handleRouteError = (err: unknown): boolean => {
+    if (statusOf(err) === 401) {
+      setFailure(err);
+      return true;
+    }
+    const gone = householdRouteFailure(err);
+    if (!gone) return false;
+    setNotice(t(gone.messageKey));
+    setManageOpen(false);
+    void loadHouseholds();
+    return true;
   };
 
   const loadHouseholds = useCallback(async () => {
@@ -252,8 +271,8 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
   useEffect(() => {
     setHouseholds(null);
     setSelectedId(null);
-    if (signedIn && (api.isMock || authState.known)) void loadHouseholds();
-  }, [signedIn, uid, authState.known, loadHouseholds]);
+    if (hasUser && (api.isMock || authState.known)) void loadHouseholds();
+  }, [hasUser, uid, authState.known, loadHouseholds]);
 
   const saveMemberTel = () => {
     const tel = telInput.trim().slice(0, 30);
@@ -281,6 +300,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
       setPush(readPushState());
       setCodeInput('');
       setAddOpen(false);
+      setNotice(null);
       await loadHouseholds();
       setSelectedId(joined.household_id);
     } catch (err) {
@@ -343,8 +363,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
     } catch (err) {
       if (polledIdRef.current !== id) return;
       // an expired session must show as such, never as "no alerts"
-      if (statusOf(err) === 401) setFailure(err);
-      else setAlertsError(err);
+      if (!handleRouteError(err)) setAlertsError(err);
     } finally {
       if (!silent) setIsRefreshing(false);
     }
@@ -380,8 +399,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
       .householdDetail(polledId)
       .then((d) => !cancelled && setDetail(d))
       .catch((err) => {
-        if (cancelled) return;
-        noteFailure(err);
+        if (cancelled || handleRouteError(err)) return;
         setManageError(describeApiError(err, t));
       });
     return () => {
@@ -403,9 +421,8 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
       if (pending.kind === 'leave' || pending.kind === 'delete') setManageOpen(false);
       else setDetail(await api.householdDetail(polledId));
     } catch (err) {
-      noteFailure(err);
       setPending(null);
-      setManageError(statusOf(err) === 409 ? t('guardian.owner_cannot_leave') : describeApiError(err, t));
+      if (!handleRouteError(err)) setManageError(statusOf(err) === 409 ? t('guardian.owner_cannot_leave') : describeApiError(err, t));
     } finally {
       setManaging(false);
     }
@@ -413,6 +430,16 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
 
   const handleSignOut = async () => {
     setManageOpen(false);
+    // this browser's push token must not keep receiving the households' alerts after sign-out (best effort)
+    if (readPushState() === 'on' && households?.length) {
+      const token = await pushToken();
+      if (token) await Promise.allSettled(households.map((h) => api.unregisterHouseholdPush(h.household_id, token)));
+    }
+    try {
+      localStorage.removeItem(PUSH_KEY);
+    } catch {}
+    setPush(readPushState());
+    setNotice(null);
     await signOut();
   };
 
@@ -531,6 +558,18 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
         </p>
       )}
 
+      {notice && (state.kind === 'dashboard' || state.kind === 'empty') && (
+        <p id="guardian-notice" role="status" className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-400 text-sm font-bold text-amber-900 dark:text-amber-200">
+          {notice}
+        </p>
+      )}
+
+      {state.kind === 'protected_device' && (
+        <p id="guardian-device-is-protected" role="status" className="p-5 rounded-2xl bg-white dark:bg-slate-900 border-2 border-emerald-600/30 text-base font-bold text-gray-900 dark:text-white">
+          {t('guardian.device_is_protected', {name: householdLabel(state.household, t('guardian.member_fallback'))})}
+        </p>
+      )}
+
       {state.kind === 'signin' && (
         <SignInCard
           expired={state.expired}
@@ -578,7 +617,10 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack}) 
                     key={h.household_id}
                     role="tab"
                     aria-selected={h.household_id === selected.household_id}
-                    onClick={() => setSelectedId(h.household_id)}
+                    onClick={() => {
+                      setNotice(null);
+                      setSelectedId(h.household_id);
+                    }}
                     className={`min-h-[40px] px-4 rounded-full text-sm font-bold border-2 transition ${
                       h.household_id === selected.household_id
                         ? 'bg-[#1B4D3E] border-[#1B4D3E] text-white'

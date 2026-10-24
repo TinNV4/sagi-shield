@@ -6,6 +6,7 @@ import {
   guardianRows,
   guardianScreenState,
   householdLabel,
+  householdRouteFailure,
   manageActions,
   marketForLang,
   memberScreenState,
@@ -34,6 +35,12 @@ describe('memberScreenState', () => {
 
   it('says pairing is unavailable when the sign-in returned null; no household is looked at', () => {
     expect(memberScreenState({uid: null, households: [household()], failed: false})).toEqual({kind: 'unavailable'});
+  });
+
+  it('a browser signed in as a guardian gets a notice, never a household code', () => {
+    expect(memberScreenState({uid: 'g1', households: [household()], failed: false, guardianSession: true})).toEqual({kind: 'guardian_session'});
+    expect(memberScreenState({uid: 'g1', households: null, failed: false, guardianSession: true})).toEqual({kind: 'guardian_session'});
+    expect(memberScreenState({uid: null, households: null, failed: false, guardianSession: true})).toEqual({kind: 'unavailable'});
   });
 
   it('offers to create a household when there is none', () => {
@@ -89,7 +96,17 @@ describe('guardianScreenState', () => {
 
   it('not signed in, or only the anonymous device account: the sign-in card', () => {
     expect(guardianScreenState({...base, user: null})).toEqual({kind: 'signin', expired: false});
-    expect(guardianScreenState({...base, user: user({anonymous: true})})).toEqual({kind: 'signin', expired: false});
+    expect(guardianScreenState({...base, user: user({anonymous: true}), households: []})).toEqual({kind: 'signin', expired: false});
+  });
+
+  it("the protected person's own device (anonymous, with a household) gets a notice instead of sign-in buttons", () => {
+    const h = household({member_name: 'Mom'});
+    expect(guardianScreenState({...base, user: user({anonymous: true}), households: [h]})).toEqual({kind: 'protected_device', household: h});
+  });
+
+  it('an anonymous user whose households are still loading waits; a failed load does not block sign-in', () => {
+    expect(guardianScreenState({...base, user: user({anonymous: true}), households: null})).toEqual({kind: 'loading'});
+    expect(guardianScreenState({...base, user: user({anonymous: true}), households: null, failure: {status: 503}})).toEqual({kind: 'signin', expired: false});
   });
 
   it('a 401 that survived the client retry is "session expired" with the sign-in card, never an empty list', () => {
@@ -190,5 +207,15 @@ describe('toE164', () => {
     expect(toE164('', 'ja')).toBeNull();
     expect(toE164('abc', 'ja')).toBeNull();
     expect(toE164('123', 'ja')).toBeNull();
+  });
+});
+
+describe('householdRouteFailure', () => {
+  it('403 means no longer a guardian, 404 means the household is gone; both resync the list', () => {
+    expect(householdRouteFailure({status: 403})).toEqual({reload: true, messageKey: 'guardian.no_longer_member'});
+    expect(householdRouteFailure({status: 404})).toEqual({reload: true, messageKey: 'guardian.household_gone'});
+  });
+  it('anything else is left to the generic error handling', () => {
+    for (const e of [{status: 401}, {status: 429}, {status: 503}, {status: 409}, new Error('x'), null, undefined]) expect(householdRouteFailure(e)).toBeNull();
   });
 });

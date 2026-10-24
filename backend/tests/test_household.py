@@ -260,3 +260,33 @@ def test_live_legacy_family_id_is_told_to_update_when_the_flag_is_off(client, mo
         assert ws.receive_json() == {"event": "outdated"}
         say(ws, "もしもし")
         assert ws.receive_json()["risk_level"] == "LOW"
+
+
+def test_sign_out_drops_only_the_callers_copy_of_a_push_token(client, sent):
+    hid = _two_guardians(client, fcm_token="pair-g1")
+    for tok, who in (("tok-g1", G1), ("tok-g2", G2)):
+        client.post(f"/household/{hid}/push", json={"fcm_token": tok}, headers=H(who))
+    _notify(client, hid)
+    assert sorted(sent[-1]["tokens"]) == ["pair-g1", "tok-g1", "tok-g2"]
+    for tok in ("tok-g1", "pair-g1", "never-registered"):
+        r = client.request("DELETE", f"/household/{hid}/push", json={"fcm_token": tok}, headers=H(G1))
+        assert r.status_code == 200
+    _notify(client, hid)
+    assert sent[-1]["tokens"] == ["tok-g2"]
+
+
+def test_removing_a_token_never_touches_another_guardians_identical_token(client, sent):
+    hid = _two_guardians(client)
+    client.post(f"/household/{hid}/push", json={"fcm_token": "same"}, headers=H(G1))
+    client.post(f"/household/{hid}/push", json={"fcm_token": "same"}, headers=H(G2))  # the newest registration owns it
+    assert client.request("DELETE", f"/household/{hid}/push", json={"fcm_token": "same"}, headers=H(G1)).status_code == 200
+    _notify(client, hid)
+    assert sent[-1]["tokens"] == ["same"]
+
+
+def test_push_removal_is_guardian_only(client):
+    hid = _two_guardians(client)
+    body = {"fcm_token": "x"}
+    assert client.request("DELETE", f"/household/{hid}/push", json=body, headers=H(DEV)).status_code == 403
+    assert client.request("DELETE", f"/household/{hid}/push", json=body, headers=H("out:google.com")).status_code == 403
+    assert client.request("DELETE", f"/household/{hid}/push", json=body).status_code == 401

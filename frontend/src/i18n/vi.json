@@ -373,7 +373,8 @@
     "signin_unavailable": "Phiên bản ứng dụng này chưa hỗ trợ kết nối người thân.",
     "create_btn": "Bắt đầu kết nối người thân",
     "member_name_label": "Tên của bạn (không bắt buộc)",
-    "owner_badge": "Người quản lý"
+    "owner_badge": "Người quản lý",
+    "signed_in_as_guardian": "Trình duyệt này đang đăng nhập với tư cách người giám hộ. Hãy mở phần kết nối trên điện thoại của người được bảo vệ."
   },
   "guardian": {
     "member_fallback": "người thân",
@@ -421,7 +422,10 @@
     "delete_household": "Xóa nhóm này",
     "delete_confirm": "Xóa nhóm của {{name}}? Mọi người sẽ mất liên kết và cảnh báo.",
     "owner_cannot_leave": "Bạn là người quản lý. Hãy chuyển quyền cho người khác trước, hoặc xóa nhóm này.",
-    "sign_out": "Đăng xuất"
+    "sign_out": "Đăng xuất",
+    "device_is_protected": "Thiết bị này đang bảo vệ {{name}}. Hãy mở bảng điều khiển người giám hộ trên điện thoại của bạn.",
+    "no_longer_member": "Bạn không còn là người giám hộ của nhóm này.",
+    "household_gone": "Nhóm này không còn tồn tại."
   },
   "community": {
     "title": "Bản đồ lừa đảo cộng đồng",

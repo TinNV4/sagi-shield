@@ -15,7 +15,7 @@ import QRCode from 'qrcode';
 import {api, describeApiError} from '../api/client';
 import type {Household} from '../api/types';
 import {useI18n} from '../i18n';
-import {ensureDeviceSignIn} from '../lib/auth';
+import {currentUser, ensureDeviceSignIn} from '../lib/auth';
 import {formatPairCode, guardianRows, marketForLang, memberScreenState} from '../lib/householdState';
 import * as speech from '../lib/speak';
 
@@ -34,6 +34,7 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
 
   // uid: undefined = sign-in pending, null = not available on this build. households: null = not loaded yet.
   const [uid, setUid] = useState<string | null | undefined>(undefined);
+  const [guardianSession, setGuardianSession] = useState(false); // this browser is signed in as a guardian
   const [households, setHouseholds] = useState<Household[] | null>(null);
   const [failure, setFailure] = useState<unknown>(null);
   const [pairCode, setPairCode] = useState(''); // six digits, as the API sends them
@@ -52,6 +53,9 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
       if (cancelled) return;
       setUid(id);
       if (!id) return;
+      // a guardian's session is not a protected device: no household, no code (the household is not theirs to open)
+      if (currentUser()?.anonymous === false) return setGuardianSession(true);
+      setGuardianSession(false);
       try {
         const list = await api.myHouseholds();
         if (list.length > 0) {
@@ -82,7 +86,7 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
     }
   };
 
-  const view = memberScreenState({uid, households, failed: failure !== null});
+  const view = memberScreenState({uid, households, failed: failure !== null, guardianSession});
   const linkedGuardians = view.kind === 'household' ? guardianRows(view.household) : [];
 
   // The QR opens this app on the guardian's phone with the code pre-filled. Fragment, not query: never sent to a server.
@@ -154,6 +158,12 @@ export const FamilyScreen: React.FC<FamilyScreenProps> = ({
         {view.kind === 'unavailable' && (
           <p id="family-signin-unavailable" role="status" className="text-sm font-bold text-gray-700 dark:text-gray-300">
             {t('family.signin_unavailable')}
+          </p>
+        )}
+
+        {view.kind === 'guardian_session' && (
+          <p id="family-signed-in-as-guardian" role="status" className="text-sm font-bold text-gray-700 dark:text-gray-300">
+            {t('family.signed_in_as_guardian')}
           </p>
         )}
 

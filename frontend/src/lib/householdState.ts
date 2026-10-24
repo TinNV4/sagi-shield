@@ -10,6 +10,7 @@ import type {AuthUser} from './auth';
 export type MemberScreenState =
   | {kind: 'loading'}
   | {kind: 'unavailable'}
+  | {kind: 'guardian_session'}
   | {kind: 'error'}
   | {kind: 'create'}
   | {kind: 'household'; household: Household};
@@ -19,9 +20,16 @@ export type MemberScreenState =
  * build, or it failed). `households`: null = not loaded yet. A failed call is an error with a retry, never an
  * empty "create" state: offering to create a second household because a request failed would be wrong.
  */
-export function memberScreenState(input: {uid: string | null | undefined; households: Household[] | null; failed: boolean}): MemberScreenState {
+export function memberScreenState(input: {
+  uid: string | null | undefined;
+  households: Household[] | null;
+  failed: boolean;
+  /** This browser is signed in as a guardian (Google / phone), not as a protected device. */
+  guardianSession?: boolean;
+}): MemberScreenState {
   if (input.uid === undefined) return {kind: 'loading'};
   if (input.uid === null) return {kind: 'unavailable'};
+  if (input.guardianSession) return {kind: 'guardian_session'};
   if (input.failed) return {kind: 'error'};
   if (input.households === null) return {kind: 'loading'};
   if (input.households.length === 0) return {kind: 'create'};
@@ -48,6 +56,7 @@ export const guardianRows = (household: Household): GuardianRow[] =>
 export type GuardianScreenState =
   | {kind: 'loading'}
   | {kind: 'signin'; expired: boolean}
+  | {kind: 'protected_device'; household: Household}
   | {kind: 'error'}
   | {kind: 'empty'}
   | {kind: 'dashboard'};
@@ -69,7 +78,14 @@ export function guardianScreenState(input: {
 }): GuardianScreenState {
   if (!input.isMock) {
     if (!input.authKnown) return {kind: 'loading'};
-    if (!input.user || input.user.anonymous) return {kind: 'signin', expired: false};
+    if (!input.user) return {kind: 'signin', expired: false};
+    if (input.user.anonymous) {
+      // The protected person's own device: a guardian sign-in here would replace its anonymous session and cut it
+      // out of its household. Only a device without a household may go on to sign in.
+      if (input.failure !== null && input.failure !== undefined) return {kind: 'signin', expired: false};
+      if (input.households === null) return {kind: 'loading'};
+      return input.households.length > 0 ? {kind: 'protected_device', household: input.households[0]} : {kind: 'signin', expired: false};
+    }
     if (isUnauthorized(input.failure)) return {kind: 'signin', expired: true};
   }
   if (input.failure !== null && input.failure !== undefined) return {kind: 'error'};
@@ -125,4 +141,16 @@ export function toE164(input: string, market: 'ja' | 'vi'): string | null {
   if (digits.length < 8) return null;
   if (trimmed.startsWith('+')) return `+${digits}`;
   return `+${COUNTRY_CODE[market]}${digits.replace(/^0+/, '')}`;
+}
+
+/**
+ * A household route answered 403 (not a guardian of it any more) or 404 (it is gone): the list on screen is out of
+ * date. The action is always the same: reload the households, drop the gone one, say so in a translated sentence.
+ * Null for any other failure (401 has its own path, the rest is the generic error).
+ */
+export function householdRouteFailure(failure: unknown): {reload: true; messageKey: string} | null {
+  const status = typeof failure === 'object' && failure !== null ? (failure as {status?: unknown}).status : undefined;
+  if (status === 403) return {reload: true, messageKey: 'guardian.no_longer_member'};
+  if (status === 404) return {reload: true, messageKey: 'guardian.household_gone'};
+  return null;
 }

@@ -112,6 +112,15 @@ def _with_guardian_token(hh: dict, uid: str, token: str) -> dict:
     return hh
 
 
+def _without_guardian_token(hh: dict, uid: str, token: str) -> dict:
+    """Drops this guardian's copy of a browser token (push list and pairing-time token); other guardians keep theirs."""
+    hh["push_tokens"] = [t for t in hh.get("push_tokens", []) if not (t.get("uid") == uid and t["token"] == token)]
+    for g in hh.get("guardians", []):
+        if g.get("uid") == uid and g.get("fcm_token") == token:
+            g["fcm_token"] = None
+    return hh
+
+
 def _alert(risk_level: str, scam_type: str, stage: int, summary: str, member_name: str) -> dict:
     return {"id": uuid.uuid4().hex[:12], "created_at": _now_iso(), "member_name": member_name,
             "risk_level": risk_level, "scam_type": scam_type, "stage": stage, "summary": summary[:300]}
@@ -288,6 +297,13 @@ class MemoryStore:
         if not hh:
             return False
         _with_guardian_token(hh, uid, token)
+        return True
+
+    def remove_household_push_token(self, household_id: str, uid: str, token: str) -> bool:
+        hh = self.households.get(household_id)
+        if not hh:
+            return False
+        _without_guardian_token(hh, uid, token)
         return True
 
     def add_household_alert(self, household_id: str, risk_level: str, scam_type: str, stage: int,
@@ -509,6 +525,13 @@ class FirestoreStore:
         if not hh:
             return False
         self.db.collection("households").document(household_id).set(_with_guardian_token(hh, uid, token))
+        return True
+
+    def remove_household_push_token(self, household_id: str, uid: str, token: str) -> bool:
+        hh = self.get_household(household_id)
+        if not hh:
+            return False
+        self.db.collection("households").document(household_id).set(_without_guardian_token(hh, uid, token))
         return True
 
     def add_household_alert(self, household_id: str, risk_level: str, scam_type: str, stage: int,
