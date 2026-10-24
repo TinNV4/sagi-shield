@@ -13,6 +13,8 @@ import {cardSteps, formatPairCode, householdLabel} from '../lib/householdState';
 export interface CardCode {
   pair_code: string;
   expiresAt: number;
+  /** Live Guard was asked for but the household update failed: the card says so. */
+  liveGuardFailed?: boolean;
 }
 
 const DICTIONARIES: Record<Language, any> = {ja, vi, en};
@@ -107,6 +109,11 @@ export const SetupCardScreen: React.FC<SetupCardScreenProps> = ({household, init
         {code && (
           <p role="status" className={`text-sm font-bold ${expired ? 'text-red-700 dark:text-red-400' : 'text-gray-600 dark:text-gray-400'}`}>
             {expired ? t('card.code_expired') : t('card.code_valid_until', {time: timeOf(code.expiresAt)})}
+          </p>
+        )}
+        {initialCode?.liveGuardFailed && (
+          <p role="alert" className="text-sm font-bold text-amber-800 dark:text-amber-300">
+            {t('card.live_guard_not_saved')}
           </p>
         )}
         {error && (

@@ -108,4 +108,12 @@ html.dark {
   #app-root-container {
     background: #fff !important;
   }
+  /* dark mode must not print white on white: the card is always dark text on white, without decorative fills */
+  #setup-card,
+  #setup-card * {
+    color: #111 !important;
+    background: #fff !important;
+    border-color: #999 !important;
+    box-shadow: none !important;
+  }
 }

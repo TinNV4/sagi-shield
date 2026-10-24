@@ -463,7 +463,8 @@
     "step_mic": "Allow the microphone when asked.",
     "step_charger": "Leave the device on its charger.",
     "iphone_note": "iPhone: in Safari, tap Share, then Add to Home Screen. Open the app from the home screen and turn notifications on there.",
-    "print": "Print"
+    "print": "Print",
+    "live_guard_not_saved": "Live Guard could not be turned on. Turn it on later in the household settings."
   },
   "community": {
     "title": "Community Fraud Radar",

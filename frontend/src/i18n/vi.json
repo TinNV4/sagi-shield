@@ -458,12 +458,13 @@
     "code_expired": "Mã đã hết hạn. Hãy tạo mã mới.",
     "new_code": "Mã mới",
     "open_link": "Liên kết để mở",
-    "step_open": "Mở liên kết ở trên trên thiết bị, hoặc quét mã.",
+    "step_open": "Mở liên kết ở trên bằng thiết bị, hoặc quét mã.",
     "step_code": "Ở màn hình Gia đình, nhập mã gồm 6 chữ số.",
     "step_mic": "Cho phép micro khi được hỏi.",
     "step_charger": "Để thiết bị cắm sạc.",
     "iphone_note": "iPhone: trong Safari, chọn Chia sẻ rồi Thêm vào Màn hình chính. Mở ứng dụng từ màn hình chính và bật thông báo tại đó.",
-    "print": "In"
+    "print": "In",
+    "live_guard_not_saved": "Không thể bật Live Guard. Hãy bật sau trong phần cài đặt hộ gia đình."
   },
   "community": {
     "title": "Bản đồ lừa đảo cộng đồng",

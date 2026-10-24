@@ -524,12 +524,14 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, o
     setProtectError(null);
     try {
       const created = await api.createHousehold({member_name: protectName.trim() || undefined, market: protectMarket});
+      const issuedAt = Date.now(); // the code's 15 minutes start here, not after the steps below
       let household = created.household;
+      let liveGuardFailed = false;
       if (protectLive) {
         try {
           household = await api.updateHousehold(created.household_id, {live_guard_enabled: true});
-        } catch (err) {
-          setNotice(describeApiError(err, t)); // the household exists: the toggle can be set again in Settings
+        } catch {
+          liveGuardFailed = true; // the household exists; the card says so and Settings can switch it on
         }
       }
       setProtectOpen(false);
@@ -537,7 +539,7 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, o
       setProtectLive(false);
       await loadHouseholds();
       setSelectedId(created.household_id);
-      onOpenCard(household, {pair_code: created.pair_code, expiresAt: Date.now() + created.expires_in * 1000});
+      onOpenCard(household, {pair_code: created.pair_code, expiresAt: issuedAt + created.expires_in * 1000, liveGuardFailed});
     } catch (err) {
       if (statusOf(err) === 401) setFailure(err);
       else setProtectError(describeApiError(err, t));
