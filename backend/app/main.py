@@ -31,7 +31,7 @@ from .analytics import log_event  # noqa: E402
 from .guard import GuardMiddleware  # noqa: E402
 from .live import router as live_router  # noqa: E402
 from .notifier import alert_family  # noqa: E402
-from .storage import STORE, FamilyId, _today as storage_today  # noqa: E402
+from .storage import STORE, FamilyId, FirestoreStore, _today as storage_today  # noqa: E402
 from .verdict_log import log_verdict  # noqa: E402
 
 MAX_IMAGE, MAX_AUDIO, MAX_TEXT = 8 * 2**20, 20 * 2**20, 20_000
@@ -117,7 +117,8 @@ def finish(result: dict, flags: list[str], community_hits: int, kind: str = "che
 @app.get("/health")
 @app.get("/healthz", include_in_schema=False)  # local alias; Cloud Run reserves paths ending in "z"
 def healthz():
-    return {"ok": True, "llm": use_llm(), "store": type(store).__name__, "model": model_id("GEMINI_MODEL")}
+    return {"ok": True, "llm": use_llm(), "store": "firestore" if isinstance(store, FirestoreStore) else "memory",
+            "database": getattr(store, "database", None), "model": model_id("GEMINI_MODEL")}
 
 
 @app.post("/check")

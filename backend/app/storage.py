@@ -191,11 +191,27 @@ class MemoryStore:
             self.recovery.pop(next(iter(self.recovery)))
 
 
+def _firestore():
+    """The SDK module, imported late so MemoryStore never needs it (tests replace this hook)."""
+    from google.cloud import firestore
+    return firestore
+
+
 class FirestoreStore:
     def __init__(self):
-        from google.cloud import firestore
+        firestore = _firestore()
         self.fs = firestore
-        self.db = firestore.Client()
+        # FIRESTORE_DB: one database per environment (the pilot service writes to "pilot"), so reports, stats and
+        # households from a test family never change what the judged service shows
+        self.database = os.getenv("FIRESTORE_DB", "(default)")
+        self.db = firestore.Client(database=self.database)
+
+    def probe(self) -> None:
+        """One read at start-up: a database that does not exist must stop the process, not serve verdicts without a store."""
+        try:
+            next(self.db.collections(), None)
+        except Exception as e:  # noqa: BLE001 - whatever the SDK raises, the message names the database
+            raise RuntimeError(f"Firestore database '{self.database}' is missing or unreadable: {type(e).__name__}: {e}") from e
 
     def add_report(self, scam_type, phone_hash, keywords, prefecture, reporter=None) -> None:
         self.db.collection("reports").add({"scam_type": scam_type, "phone_hash": phone_hash, "keywords": keywords[:10],
@@ -315,7 +331,9 @@ def get_store():
     # space is small) and would no longer match once a real key is set.
     if not (os.getenv("HASH_KEY") or os.getenv("HASH_SALT") or "").strip():
         raise RuntimeError("STORE=firestore needs HASH_KEY (mounted from Secret Manager); refusing the dev default key")
-    return FirestoreStore()
+    store = FirestoreStore()
+    store.probe()
+    return store
 
 
 STORE = get_store()  # one instance per process, shared by the HTTP routes and the live socket
