@@ -151,6 +151,17 @@ export function manageActions(household: Household): ManageActions {
 /** What a household is called on a chip and in the delete confirmation: the protected person first. */
 export const householdLabel = (household: Household, fallback: string): string => household.member_name || household.name || fallback;
 
+/**
+ * A chip label: the protected person, else the household name, else "Household from DD/MM" (from the ISO creation date,
+ * read as text so the time zone cannot shift the day) so two unnamed households do not look the same.
+ */
+export function householdChipLabel(household: Household, t: (path: string, params?: Record<string, string | number>) => string): string {
+  const named = household.member_name || household.name;
+  if (named) return named;
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(household.created_at ?? '');
+  return m ? t('guardian.household_created', {date: `${m[3]}/${m[2]}`}) : t('guardian.member_fallback');
+}
+
 // ---------------------------------------------------------------- phone sign-in (SignInCard)
 
 /** Number entry, or waiting for the SMS code that was sent to `sentTo` at `sentAt` (ms). */
@@ -226,12 +237,20 @@ export function kioskDecision(input: {
   fromHousehold: boolean;
   unlockedUntil: string | null;
   now: number;
-}): 'on' | 'off' | 'keep' {
+}): 'on' | 'off' | 'keep' | 'mark' {
   if (!input.user?.anonymous) return 'keep';
   if (kioskUnlockActive(input.unlockedUntil, input.now)) return 'keep';
-  if (kioskFromHousehold(input.household)) return input.kioskOn ? 'keep' : 'on';
+  // 'mark': a kiosk that was already on (an older build, or turned on by hand) while the household has Live Guard on gets the marker back-filled, so switching Live Guard off later can undo it.
+  if (kioskFromHousehold(input.household)) return input.kioskOn ? (input.fromHousehold ? 'keep' : 'mark') : 'on';
   return input.kioskOn && input.fromHousehold ? 'off' : 'keep';
 }
+/** After a check that came in through the OS share sheet a kiosk device returns to Live Guard, anything else to Home. */
+export const afterResultTarget = (input: {kioskMode: boolean; cameFromShare: boolean}): 'guard' | 'home' =>
+  input.kioskMode && input.cameFromShare ? 'guard' : 'home';
+
+/** The shared text and the shared images are both present: the check uses the images, the text stays in the Text tab. */
+export const shareNeedsTextHint = (input: {text: string; images: readonly unknown[]}): boolean => Boolean(input.text) && input.images.length > 0;
+
 // ---------------------------------------------------------------- guardian dashboard: device status, setup card
 
 /** A listening heartbeat older than this (three missed beats of `HEARTBEAT_EVERY_S` = 180) no longer says "listening". */

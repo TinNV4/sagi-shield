@@ -8,7 +8,7 @@ import {Header} from './components/Header';
 import {OnboardingModal} from './components/OnboardingModal';
 import {I18nProvider, useI18n} from './i18n';
 import {currentUser, onAuth, type AuthUser} from './lib/auth';
-import {deviceHousehold, kioskDecision, KIOSK_UNLOCK_MS} from './lib/householdState';
+import {afterResultTarget, deviceHousehold, kioskDecision, KIOSK_UNLOCK_MS} from './lib/householdState';
 import * as speech from './lib/speak';
 import {HomeScreen} from './pages/HomeScreen';
 import {LiveGuardScreen} from './pages/LiveGuardScreen';
@@ -177,6 +177,16 @@ function AppContent() {
     window.scrollTo({top: 0, behavior: 'smooth'});
   };
 
+  // A check that came in through the OS share sheet ends back in Live Guard on a kiosk device (the guard restarts as it
+  // does for kiosk mode), otherwise at Home; any other check goes back the usual way.
+  const handleResultBack = () => {
+    if (!SHARE_FROM_LINK) return handleGoBack();
+    speech.warmUp();
+    setNavHistory([]);
+    setCurrentTab(afterResultTarget({kioskMode: isKioskMode, cameFromShare: true}));
+    window.scrollTo({top: 0, behavior: 'smooth'});
+  };
+
   const handleSetKioskMode = (enabled: boolean) => {
     setIsKioskMode(enabled);
     try {
@@ -222,6 +232,10 @@ function AppContent() {
     if (decision === 'on') {
       setIsOnboardingOpen(false);
       handleSetKioskMode(true);
+      try {
+        localStorage.setItem('sagi_kiosk_from_household', '1');
+      } catch {}
+    } else if (decision === 'mark') {
       try {
         localStorage.setItem('sagi_kiosk_from_household', '1');
       } catch {}
@@ -383,7 +397,7 @@ function AppContent() {
           <ResultScreen
             result={activeCheckResult}
             checkInput={activeCheckInput}
-            onBack={handleGoBack}
+            onBack={handleResultBack}
             onGoRecovery={() => navigateTo('recovery')}
             onNotifyFamily={() => {
               api.notifyMyHousehold(activeCheckResult, lang).catch(() => {});

@@ -200,6 +200,7 @@
     "images_hint": "{n} of {max} images. Pages of one conversation are read together.",
     "images_limit": "Up to 5 images per check. The first 5 were kept.",
     "share_empty": "Could not open what you shared. Please attach it here.",
+    "share_text_kept": "The shared text is in the Text tab; this check uses the images.",
     "share_rejected_size": "Some shared files were not checked: images over 8 MB are skipped.",
     "share_rejected_type": "Some shared files were not checked: only images can be checked.",
     "remove_image": "Remove image"
@@ -389,6 +390,7 @@
   },
   "guardian": {
     "member_fallback": "your family member",
+    "household_created": "Household from {date}",
     "push_enable": "Turn on alerts on this phone",
     "push_on": "Alerts on this phone are on: you are notified even when this page is closed.",
     "push_blocked": "Notifications are blocked in this browser's settings. Alerts still appear here while this page is open.",

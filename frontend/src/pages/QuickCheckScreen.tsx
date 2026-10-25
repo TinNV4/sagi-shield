@@ -15,6 +15,7 @@ import {api, describeApiError} from '../api/client';
 import {CheckResult} from '../api/types';
 import {useI18n} from '../i18n';
 import {type ShareCheckInput} from '../lib/shareInbox';
+import {shareNeedsTextHint} from '../lib/householdState';
 import * as speech from '../lib/speak';
 
 export type QuickCheckTab = 'text' | 'screenshot' | 'recording' | 'phone' | 'link';
@@ -66,6 +67,7 @@ export const QuickCheckScreen: React.FC<QuickCheckScreenProps> = ({onCheckComple
         reasons.has('size') ? t('quick.share_rejected_size') : '',
         reasons.has('type') ? t('quick.share_rejected_type') : '',
         reasons.has('count') ? t('quick.images_limit') : '',
+        shareNeedsTextHint(initialInput) ? t('quick.share_text_kept') : '',
       ]
         .filter(Boolean)
         .join(' ')

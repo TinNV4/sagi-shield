@@ -200,6 +200,7 @@
     "images_hint": "{n} / {max} ảnh. Các trang của cùng một cuộc trò chuyện được xét chung.",
     "images_limit": "Mỗi lần kiểm tra tối đa 5 ảnh. Đã giữ 5 ảnh đầu.",
     "share_empty": "Không mở được nội dung bạn đã chia sẻ. Vui lòng dán hoặc đính kèm lại tại đây.",
+    "share_text_kept": "Nội dung chữ được chia sẻ nằm ở tab Văn bản; lần kiểm tra này dùng các hình ảnh.",
     "share_rejected_size": "Một số tệp được chia sẻ chưa được kiểm tra: ảnh trên 8 MB bị bỏ qua.",
     "share_rejected_type": "Một số tệp được chia sẻ chưa được kiểm tra: chỉ có thể kiểm tra ảnh.",
     "remove_image": "Bỏ ảnh"
@@ -389,6 +390,7 @@
   },
   "guardian": {
     "member_fallback": "người thân",
+    "household_created": "Nhóm gia đình tạo ngày {date}",
     "push_enable": "Bật thông báo trên điện thoại này",
     "push_on": "Thông báo trên điện thoại này đang bật: bạn vẫn nhận được khi đã đóng trang này.",
     "push_blocked": "Trình duyệt đang chặn thông báo trong phần cài đặt. Khi trang này đang mở, cảnh báo vẫn hiện ở đây.",

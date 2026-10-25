@@ -2,6 +2,9 @@ import {describe, expect, it} from 'vitest';
 import type {Household} from '../api/types';
 import type {AuthUser} from './auth';
 import {
+  afterResultTarget,
+  householdChipLabel,
+  shareNeedsTextHint,
   formatPairCode,
   deviceHousehold,
   cardSteps,
@@ -382,7 +385,15 @@ describe('kioskDecision', () => {
   it('household on + kiosk off turns kiosk on; already on is kept', () => {
     expect(kioskDecision(base)).toBe('on');
     expect(kioskDecision({...base, unlockedUntil: String(now - 1)})).toBe('on');
-    expect(kioskDecision({...base, kioskOn: true})).toBe('keep');
+    expect(kioskDecision({...base, kioskOn: true, fromHousehold: true})).toBe('keep');
+  });
+
+  it('household on + kiosk on without the marker only back-fills the marker', () => {
+    expect(kioskDecision({...base, kioskOn: true})).toBe('mark');
+  });
+
+  it('a kiosk the person chose with Live Guard off stays untouched', () => {
+    expect(kioskDecision({...base, household: off, kioskOn: true})).toBe('keep');
   });
 
   it('household off turns off only a kiosk the household turned on (also when the device left its household)', () => {
@@ -430,5 +441,37 @@ describe('normalizePairCode', () => {
     expect(normalizePairCode('123-456')).toBe('123456');
     expect(normalizePairCode('１２３ ４５６７')).toBe('123456');
     expect(normalizePairCode('ab12')).toBe('12');
+  });
+});
+
+describe('householdChipLabel', () => {
+  const t = (key: string, params?: Record<string, string | number>) => (params ? `${key}:${params.date}` : key);
+  it('prefers the member name, then the household name', () => {
+    expect(householdChipLabel(household({member_name: 'Mom'}), t)).toBe('Mom');
+    expect(householdChipLabel(household({member_name: '', name: 'Home'}), t)).toBe('Home');
+  });
+  it('an unnamed household is told apart by its creation date (DD/MM)', () => {
+    expect(householdChipLabel(household({member_name: '', name: '', created_at: '2026-10-05T23:30:00Z'}), t)).toBe('guardian.household_created:05/10');
+  });
+  it('an unreadable date falls back to the generic label', () => {
+    expect(householdChipLabel(household({member_name: '', name: '', created_at: ''}), t)).toBe('guardian.member_fallback');
+  });
+});
+
+describe('afterResultTarget', () => {
+  it('goes back to the guard only for a kiosk device after a share', () => {
+    expect(afterResultTarget({kioskMode: true, cameFromShare: true})).toBe('guard');
+    expect(afterResultTarget({kioskMode: true, cameFromShare: false})).toBe('home');
+    expect(afterResultTarget({kioskMode: false, cameFromShare: true})).toBe('home');
+    expect(afterResultTarget({kioskMode: false, cameFromShare: false})).toBe('home');
+  });
+});
+
+describe('shareNeedsTextHint', () => {
+  const img = {name: 'a'} as never;
+  it('is true only with both text and images', () => {
+    expect(shareNeedsTextHint({text: 'hi', images: [img]})).toBe(true);
+    expect(shareNeedsTextHint({text: 'hi', images: []})).toBe(false);
+    expect(shareNeedsTextHint({text: '', images: [img]})).toBe(false);
   });
 });

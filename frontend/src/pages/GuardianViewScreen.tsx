@@ -25,6 +25,7 @@ import {
   guardianName,
   guardianScreenState,
   householdLabel,
+  householdChipLabel,
   householdRouteFailure,
   isSystemAlert,
   manageActions,
@@ -605,6 +606,11 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, o
   };
 
   const label = (h: Household) => householdLabel(h, t('guardian.member_fallback'));
+  // The chip's dot repeats the device status: green listening, amber offline, grey for anything else.
+  const chipDotClass = (h: Household) => {
+    const kind = deviceStatusLabel(h.device_status, Date.now(), h.devices, h.live_guard_enabled).kind;
+    return kind === 'listening' ? 'bg-green-600' : kind === 'offline' ? 'bg-amber-500' : 'bg-gray-400';
+  };
   const shownName = (g: {name: string}, i: number) => guardianName(g, i, (n) => t('family.guardian_fallback', {n}));
   const actions = detail ? manageActions(detail) : null;
   const device = selected ? deviceStatusLabel(selected.device_status, Date.now(), selected.devices, selected.live_guard_enabled) : null;
@@ -834,7 +840,11 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, o
                         : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-gray-700 text-gray-800 dark:text-gray-200'
                     }`}
                   >
-                    {label(h)}
+                    <span
+                      aria-hidden="true"
+                      className={`inline-block w-2.5 h-2.5 rounded-full mr-2 ${chipDotClass(h)}`}
+                    />
+                    {householdChipLabel(h, t)}
                   </button>
                 ))}
               </div>
