@@ -377,6 +377,7 @@ gantt
 - Untrusted-content handling: transcripts/OCR are data, never instructions (section 6.8).
 - Never claim "100% safe"; LOW still says "verify via official number".
 - Clear disclaimer: aid tool, not police/bank service. Recovery agent gives procedural guidance, not legal advice.
+- **Retention (pilot, 2026-10-25):** alerts auto-expire after 90 days, feedback after 365 days, verdict dataset partitions after 400 days (same as `sagi.events`), recovery sessions after 24 h; the figures live in `backend/app/retention.py`. The household-facing notice is in the app at `/#privacy` (`frontend/src/content/privacy.ts`, ja / vi / en) and the pilot protocol with the family one-pager is `docs/PILOT.md`.
 
 ## 14. Risks
 

@@ -110,7 +110,7 @@ The guardian's phone becomes the control panel; the grandparent's device shows o
 - "Was this right?" on every result screen and on the guardian alert card: thumbs up / down plus an optional reason chip. Stored with the verdict id, no text. This is the only labelled real-world data we will ever get and it feeds the eval sets.
 - Cloud Monitoring uptime check on `/health`, alert policy on 5xx rate and on Cloud Run instance count, both to the owner's phone. Error Reporting on the backend.
 
-### Step 4 - pilot kit and consent
+### Step 4 - pilot kit and consent (built 2026-10-25, verified on the pilot: pending)
 
 - One page for the family, in ja and vi: what the app does, what leaves the device (masked text, no audio), what is stored (alerts for 90 days, no transcripts), how to delete, who to call. Written as the privacy notice the app links to.
 - Caller consent, Japan and Vietnam: a party to a call may analyse or record it; Live Guard on speaker is the protected person's own analysis of their own call. Phase 1 adds a short spoken notice option (section 5) so the design also fits the device route later. **[open: a lawyer reads the notice before any non-relative household joins]**.
