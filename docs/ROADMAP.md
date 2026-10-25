@@ -93,7 +93,7 @@ The submission is being scored from 2026-10-19 to 2026-11-07 and the judged URL 
 
 **Why now:** the pilot cannot start without it. Today anybody who shoulder-surfs a `family_id` can read a family's alerts, and there is no way to remove a guardian or wipe a household.
 
-### Step 2 - the guardian sets up the grandparent (built 2026-10-25, guardian side verified on the pilot: pending)
+### Step 2 - the guardian sets up the grandparent (built 2026-10-25, guardian side verified on the pilot 2026-10-25 from the iPhone; printed card and the 24 h offline push still unverified)
 
 The guardian's phone becomes the control panel; the grandparent's device shows one screen.
 
@@ -110,11 +110,11 @@ The guardian's phone becomes the control panel; the grandparent's device shows o
 - "Was this right?" on every result screen and on the guardian alert card: thumbs up / down plus an optional reason chip. Stored with the verdict id, no text. This is the only labelled real-world data we will ever get and it feeds the eval sets.
 - Cloud Monitoring uptime check on `/health`, alert policy on 5xx rate and on Cloud Run instance count, both to the owner's phone. Error Reporting on the backend.
 
-### Step 4 - pilot kit and consent (built 2026-10-25, verified on the pilot: pending)
+### Step 4 - pilot kit and consent (built 2026-10-25, verified on the pilot 2026-10-25: `/#privacy` in ja and vi at 360 px, TTL policies active, verdict table expiry set, weekly report run)
 
-- One page for the family, in ja and vi: what the app does, what leaves the device (masked text, no audio), what is stored (alerts for 90 days, no transcripts), how to delete, who to call. Written as the privacy notice the app links to.
+- One page for the family, in ja and vi: what the app does, what leaves the device (masked text, no audio), what is stored (alerts for 90 days, no transcripts), how to delete, who to call. Written as the privacy notice the app links to (`/#privacy`); two review rounds corrected every statement that went further than the code (screenshots are sent with their numbers, the technical log keeps the judge's two-line explanation, household membership and device status are kept until deletion).
 - Caller consent, Japan and Vietnam: a party to a call may analyse or record it; Live Guard on speaker is the protected person's own analysis of their own call. Phase 1 adds a short spoken notice option (section 5) so the design also fits the device route later. **[open: a lawyer reads the notice before any non-relative household joins]**.
-- Weekly check-in script for the owner: number of checks, number of alarms, any complaint, any call the app missed. `tools/real_call_report.py` summarises the verdict log per household id.
+- Weekly check-in script for the owner: number of checks, number of alarms, any complaint, any call the app missed (`docs/PILOT.md`). `tools/pilot_report.py` summarises the verdict table, feedback and households for the week (counts only).
 - Household retention: alerts auto-expire after 90 days (Firestore TTL). The anonymous analytics stream (`app/analytics.py`) stays without any household identifier. The verdict log, which the admin page and the weekly report read, carries no household id (counts only); per-household review uses the guardian dashboard and its alerts, not the log.
 
 ### Phase 0 exit criteria
