@@ -145,7 +145,8 @@
     "debug_inactive": "KHÔNG HOẠT ĐỘNG",
     "debug_trigger": "Từ khóa kích hoạt",
     "debug_none": "không có",
-    "debug_last_msg": "Nội dung gần nhất"
+    "debug_last_msg": "Nội dung gần nhất",
+    "cloud_privacy": "Đang dùng nhận dạng giọng nói trên đám mây của trình duyệt"
   },
   "quick": {
     "title": "Kiểm tra nhanh",
@@ -784,6 +785,6 @@
   },
   "privacy": {
     "title": "Thông báo về quyền riêng tư",
-    "updated": "Cập nhật: {date}"
+    "updated": "Cập nhật: {{date}}"
   }
 }

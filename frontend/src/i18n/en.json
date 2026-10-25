@@ -145,7 +145,8 @@
     "debug_inactive": "INACTIVE",
     "debug_trigger": "Trigger",
     "debug_none": "none",
-    "debug_last_msg": "Last Msg"
+    "debug_last_msg": "Last Msg",
+    "cloud_privacy": "Browser cloud speech in use"
   },
   "quick": {
     "title": "Quick Check",
@@ -784,6 +785,6 @@
   },
   "privacy": {
     "title": "Privacy notice",
-    "updated": "Updated {date}"
+    "updated": "Updated {{date}}"
   }
 }

@@ -30,10 +30,12 @@ import {
   checkOnDeviceSpeechSupport,
   FileAudioSource,
   LiveGuardController,
+  SpeechMode,
   SpeechSupportDetails,
   startLiveGuard,
 } from '../lib/liveGuard';
 import {onAuth} from '../lib/auth';
+import {speechBadgeKey} from '../lib/speechBadge';
 import {startHeartbeat} from '../lib/heartbeat';
 import {deviceHousehold} from '../lib/householdState';
 import * as speech from '../lib/speak';
@@ -98,6 +100,7 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
   // Connection & Activity State
   const [status, setStatus] = useState<'idle' | 'listening' | 'checking' | 'connected' | 'reconnecting' | 'disconnected'>('idle');
   const [allowCloudFallback, setAllowCloudFallback] = useState<boolean>(false);
+  const [speechMode, setSpeechMode] = useState<SpeechMode | null>(null);
   const [showCloudOptInNotice, setShowCloudOptInNotice] = useState<boolean>(false);
 
   // Kiosk clock and idle dimming
@@ -253,7 +256,10 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
       allowCloudFallback,
       audioTrack,
       onSpeechError: (err) => audioTrack && setTestError(err),
-      onSpeechMode: (m) => setShowCloudOptInNotice(m === 'blocked'),
+      onSpeechMode: (m) => {
+        setSpeechMode(m);
+        setShowCloudOptInNotice(m === 'blocked');
+      },
       onRisk: handleRiskUpdate,
       onReset: handleSessionReset,
       onStatus: (st) => {
@@ -625,7 +631,7 @@ export const LiveGuardScreen: React.FC<LiveGuardScreenProps> = ({
           </div>
 
           <div className="text-xs font-mono font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-100/70 dark:bg-emerald-950/60 px-2.5 py-1 rounded-lg">
-            {t('live.ondevice_privacy')}
+            {t(speechBadgeKey(speechMode))}
           </div>
         </div>
 

@@ -145,7 +145,8 @@
     "debug_inactive": "無効",
     "debug_trigger": "検知トリガー",
     "debug_none": "なし",
-    "debug_last_msg": "最新テキスト"
+    "debug_last_msg": "最新テキスト",
+    "cloud_privacy": "ブラウザのクラウド認識を使用中"
   },
   "quick": {
     "title": "今すぐチェック",
@@ -784,6 +785,6 @@
   },
   "privacy": {
     "title": "プライバシーのお知らせ",
-    "updated": "更新日: {date}"
+    "updated": "更新日: {{date}}"
   }
 }

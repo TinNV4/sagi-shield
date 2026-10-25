@@ -26,16 +26,17 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
       {
         title: 'サギシールドとは',
         paragraphs: [
-          'サギシールドは、電話や画面のやりとりに詐欺の兆候がないかを一緒に確かめる補助アプリです。警察でも銀行でもありません。',
+          'サギシールドは、電話やメッセージに詐欺の兆候がないかを一緒に確かめる補助アプリです。警察でも銀行でもありません。',
           '「必ず安全」とお伝えすることはできません。迷ったときは、自分で調べた公式の番号に電話して確かめてください。',
         ],
       },
       {
         title: '端末の外に出る情報',
         paragraphs: [
-          'ライブガードの音声認識は、お使いの端末の中で行います。音声が端末の外に出ることはありません。ただし、設定でクラウド認識を自分でオンにした場合は別で、その場合は画面にはっきり表示されます。',
-          '通話中は約20秒ごとに、数字を伏せた文章だけを Google の Gemini に送って判定します。「確認する」を使ったときも、選んだ文章や画像を、電話番号や口座番号などの数字を伏せたうえで送ります。送信先は日本やベトナムの外にある Google のグローバルな接続先です。',
-          'Agent Platform 上の Gemini は、お客様のデータを学習に使いません。',
+          '「通話を見守る」の音声認識は、お使いの端末の中で行い、音声は端末の外に出ません。「通話を見守る」の画面で、ブラウザのクラウド認識をご自身でオンにした場合だけ、音声がブラウザ提供元の音声認識サービスに送られます。そのときは画面にはっきり表示されます。',
+          '認識された文は、1文ごとに文字として東京にあるサギシールドのサーバーに送られます。サーバーは届いた時点で数字を伏せ、文は保存しません。通話中は約20秒ごとに、直近の数行を（数字を伏せたまま）Google の Gemini に送って判定します。',
+          '「今すぐチェック」では、文章は数字を伏せてから送ります。スクリーンショットは見たままの形で、写っている数字も含めて送られます。確認のために選んだ録音は、文字起こしのために送られ、保存されません。',
+          '送信先は Google のグローバルな接続先で、処理する国は日本とは限りません。Agent Platform 上の Gemini は、お客様のデータを学習に使いません。',
         ],
       },
       {
@@ -43,8 +44,9 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
         paragraphs: [
           '家族への通知: 危険度と、要約の一文だけを{alert_days}日間保存します。',
           '「この判定は合っていましたか」への回答: 文章は付けず、{feedback_days}日間保存します。',
-          'みんなの通報: 電話番号そのものではなく、ハッシュ（元に戻せない変換値）だけを保存します。',
-          '技術ログ: 文章や電話番号を含まない記録を{verdict_days}日間保存し、その後は自動で消えます。',
+          'みんなの通報: 詐欺の種類、都道府県、日付、そして電話番号の元に戻せない変換値だけを保存します。電話番号そのものは保存しません。地域統計が存在する限り保管されます。',
+          '被害相談のチャット（数字は伏せたもの）: 24時間。',
+          '技術ログ: 通話の文章や番号は含みませんが、判定ごとにアプリが書いた2行の説明は残ります。{verdict_days}日間保存し、その後は自動で消えます。',
           '音声も通話の文字起こしも、保存しません。',
         ],
       },
@@ -52,14 +54,14 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
         title: '誰が見られるか',
         paragraphs: [
           '同じ世帯の見守り役の方が、家族への通知を見られます。',
-          'このパイロットの運営者が見られるのは件数などの集計だけで、文章や番号は見られません。',
-          'Google は、同社のクラウド規約のもとで送信された文章を処理します。それ以外の人には見えません。',
+          '試験運用の運営者が見る概要画面には件数だけが表示され、個々の通知は開きません。',
+          'Google は、同社のクラウド規約のもとで送信された内容を処理します。それ以外の人には見えません。',
         ],
       },
       {
         title: '削除する方法',
         paragraphs: [
-          '世帯の管理者が、見守り画面から世帯を削除できます。通知とペアリングがすべて消えます。',
+          'アプリで世帯をつくった方が、「見守り人ダッシュボード」から世帯を削除できます。通知と、ご家族との連携がすべて消えます。',
           '技術ログは、上に書いた期間が過ぎると自動で消えます。',
         ],
       },
@@ -68,14 +70,14 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
         paragraphs: [
           '日本: 警察相談専用電話 #9110、消費者ホットライン 188。',
           'ベトナム: 警察 113。',
-          'このパイロットについては、お誘いした運営者にお尋ねください。',
+          'この試験運用については、このアプリを紹介した方にお尋ねください。',
         ],
       },
       {
-        title: 'このパイロットについて',
+        title: 'この試験運用について',
         paragraphs: [
           'これは、親戚の方々と行う小さな試験運用です。この説明文は、まだ弁護士の確認を受けていません。',
-          'いつでもやめることができます。やめるときは、見守り画面から世帯を削除してください。',
+          'いつでもやめることができます。世帯をつくった方が、すべてを削除することもできます。',
         ],
       },
     ],
@@ -93,9 +95,10 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
       {
         title: 'Thông tin rời khỏi điện thoại',
         paragraphs: [
-          'Nhận dạng giọng nói của Live Guard chạy ngay trên thiết bị của bạn. Âm thanh không rời khỏi thiết bị, trừ khi chính bạn bật nhận dạng trên đám mây trong phần cài đặt; khi đó màn hình sẽ ghi rõ.',
-          'Trong cuộc gọi, khoảng 20 giây một lần, chỉ phần chữ đã được che số mới được gửi đến Gemini của Google để đánh giá. Khi bạn dùng chức năng kiểm tra, văn bản hoặc hình ảnh bạn chọn cũng được gửi đi sau khi che số điện thoại và số tài khoản. Máy chủ nhận nằm ở điểm kết nối toàn cầu của Google, ngoài Nhật Bản và Việt Nam.',
-          'Gemini trên Agent Platform không dùng dữ liệu của khách hàng để huấn luyện.',
+          'Phần giám sát cuộc gọi (Live Guard) nhận dạng giọng nói ngay trên thiết bị của bạn, âm thanh không rời khỏi thiết bị. Chỉ khi chính bạn bật nhận dạng trên đám mây của trình duyệt, ngay trên màn hình Live Guard, âm thanh mới được gửi đến dịch vụ giọng nói của nhà cung cấp trình duyệt; khi đó màn hình sẽ ghi rõ.',
+          'Mỗi câu được nhận dạng sẽ được gửi dưới dạng chữ đến máy chủ Sagi Shield ở Tokyo; máy chủ che số ngay khi nhận và không lưu câu đó. Trong cuộc gọi, khoảng 20 giây một lần, vài dòng gần nhất (đã che số) được gửi tiếp đến Gemini của Google để đánh giá.',
+          'Với "Kiểm tra nhanh": văn bản được che số trước khi gửi. Ảnh chụp màn hình được gửi nguyên như bạn thấy, kể cả các con số trong ảnh. Bản ghi âm bạn chọn kiểm tra được gửi đi để chuyển thành chữ và không được lưu.',
+          'Dữ liệu đến điểm kết nối toàn cầu của Google, nên có thể được xử lý ở bất kỳ quốc gia nào. Gemini trên Agent Platform không dùng dữ liệu của khách hàng để huấn luyện.',
         ],
       },
       {
@@ -103,8 +106,9 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
         paragraphs: [
           'Cảnh báo gửi gia đình: chỉ một câu tóm tắt và mức độ, lưu trong {alert_days} ngày.',
           'Câu trả lời của bạn cho "Đánh giá này có đúng không?": không kèm nội dung, lưu trong {feedback_days} ngày.',
-          'Báo cáo của cộng đồng: chỉ lưu giá trị băm (hash) của số điện thoại, không lưu chính số đó.',
-          'Nhật ký kỹ thuật: không chứa nội dung tin nhắn hay số điện thoại, lưu trong {verdict_days} ngày rồi tự xóa.',
+          'Báo cáo của cộng đồng: loại lừa đảo, tỉnh/thành, ngày báo và một mã một chiều của số điện thoại, không bao giờ lưu chính số đó. Được giữ chừng nào danh sách của cộng đồng còn tồn tại.',
+          'Cuộc trò chuyện hỗ trợ khi bị lừa (đã che số): 24 giờ.',
+          'Nhật ký kỹ thuật: không có nội dung cuộc gọi hay số điện thoại, nhưng giữ lại hai dòng giải thích do chính ứng dụng viết cho mỗi đánh giá. Lưu trong {verdict_days} ngày rồi tự xóa.',
           'Không lưu âm thanh và không lưu bản ghi lời thoại của cuộc gọi.',
         ],
       },
@@ -112,14 +116,14 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
         title: 'Ai có thể xem',
         paragraphs: [
           'Những người giám hộ trong cùng hộ gia đình xem được các cảnh báo.',
-          'Người điều hành đợt thử nghiệm chỉ xem được số liệu tổng hợp, không thấy nội dung hay số điện thoại.',
-          'Google xử lý phần văn bản được gửi đi theo điều khoản đám mây của Google. Không ai khác xem được.',
+          'Màn hình tổng quan của người điều hành đợt thử nghiệm chỉ hiển thị số liệu đếm; họ không mở từng cảnh báo.',
+          'Google xử lý phần dữ liệu được gửi đi theo điều khoản đám mây của Google. Không ai khác xem được.',
         ],
       },
       {
         title: 'Cách xóa dữ liệu',
         paragraphs: [
-          'Chủ hộ có thể xóa hộ gia đình trong màn hình theo dõi. Toàn bộ cảnh báo và liên kết ghép đôi sẽ bị xóa.',
+          'Người tạo hộ gia đình trong ứng dụng có thể xóa hộ gia đình trong "Bảng điều khiển người giám hộ". Toàn bộ cảnh báo và các kết nối với người thân sẽ bị xóa.',
           'Nhật ký kỹ thuật tự hết hạn sau thời gian nêu ở trên.',
         ],
       },
@@ -127,15 +131,15 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
         title: 'Số điện thoại cần gọi',
         paragraphs: [
           'Việt Nam: công an 113.',
-          'Nhật Bản: đường dây tư vấn của cảnh sát #9110, đường dây tiêu dùng 188.',
-          'Về đợt thử nghiệm này, hãy hỏi người đã mời bạn tham gia.',
+          'Nhật Bản: đường dây tư vấn của cảnh sát #9110, đường dây nóng tư vấn tiêu dùng 188.',
+          'Về đợt thử nghiệm này, hãy hỏi người đã giới thiệu ứng dụng cho bạn.',
         ],
       },
       {
         title: 'Về đợt thử nghiệm này',
         paragraphs: [
           'Đây là một đợt thử nghiệm nhỏ với người thân. Bản thông báo này chưa được luật sư xem xét.',
-          'Bạn có thể dừng bất cứ lúc nào. Để dừng, hãy xóa hộ gia đình trong màn hình theo dõi.',
+          'Bạn có thể dừng bất cứ lúc nào; người tạo hộ gia đình cũng có thể xóa toàn bộ.',
         ],
       },
     ],
@@ -153,9 +157,10 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
       {
         title: 'What leaves your phone',
         paragraphs: [
-          'Live Guard recognises speech on your own device. Audio does not leave it, unless you yourself turn on cloud recognition in Settings; the screen says so clearly when it is on.',
-          'During a call, about every 20 seconds, only the text with phone and account numbers hidden is sent to Google\'s Gemini for a judgement. When you run a check, the text or image you chose is sent the same way, numbers hidden. It goes to a global Google endpoint, which is outside Japan and Vietnam.',
-          'Gemini on Agent Platform does not use customer data for training.',
+          'Live Guard recognises speech on your own device, and the audio stays there. Only if you yourself turn on the browser\'s cloud recogniser, on the Live Guard screen, does audio go to the browser maker\'s speech service; the screen says so clearly when it is on.',
+          'Each recognised sentence goes as text to the Sagi Shield server in Tokyo, which hides numbers on arrival and does not store it. During a call, about every 20 seconds, the last few lines (numbers still hidden) go on to Google\'s Gemini for a judgement.',
+          'In Quick Check, text has its numbers hidden before it is sent. A screenshot is sent as you see it, numbers included. A recording you choose to check is sent for transcription and is not stored.',
+          'Everything goes to a global Google endpoint, so it may be processed in any country. Gemini on Agent Platform does not use customer data for training.',
         ],
       },
       {
@@ -163,8 +168,9 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
         paragraphs: [
           'Alerts to your family: one summary sentence and the risk level, for {alert_days} days.',
           'Your answers to "Was this right?": no text, for {feedback_days} days.',
-          'Community reports: a hash of the number only, never the number itself.',
-          'A technical log without any text or phone numbers: {verdict_days} days, then it deletes itself.',
+          'Community reports: the type of scam, the prefecture, the date and a one-way code of the number, never the number itself; kept for as long as the community list exists.',
+          'Recovery chat, numbers hidden: 24 hours.',
+          'A technical log: no call text or numbers; it keeps the app\'s own two-line explanation of each verdict. {verdict_days} days, then it deletes itself.',
           'No audio and no call transcripts are stored.',
         ],
       },
@@ -172,14 +178,14 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
         title: 'Who can see it',
         paragraphs: [
           'The guardians of your household can see the alerts.',
-          'The owner of this pilot sees counts only, never text or numbers.',
-          'Google processes the text that is sent under its cloud terms. No one else can see it.',
+          'The pilot owner\'s overview shows counts only; they do not open individual alerts.',
+          'Google processes what is sent under its cloud terms. No one else can see it.',
         ],
       },
       {
         title: 'How to delete',
         paragraphs: [
-          'The household owner can delete the household in the guardian dashboard. That removes the alerts and the pairings.',
+          'The household owner can delete the household in the Guardian Dashboard. That removes the alerts and the links to your family.',
           'The technical log expires on its own after the period above.',
         ],
       },
@@ -188,14 +194,14 @@ const RAW: Record<'ja' | 'vi' | 'en', PrivacyNotice> = {
         paragraphs: [
           'Japan: police consultation line #9110, consumer hotline 188.',
           'Vietnam: police 113.',
-          'About this pilot, ask the person who invited you.',
+          'About this pilot, ask the person who introduced you to the app.',
         ],
       },
       {
         title: 'This pilot',
         paragraphs: [
           'This is a small test with relatives. A lawyer has not yet reviewed this notice.',
-          'You can stop at any time. To stop, delete the household in the guardian dashboard.',
+          'You can stop at any time; the household owner can also delete everything.',
         ],
       },
     ],

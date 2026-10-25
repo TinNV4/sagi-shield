@@ -13,7 +13,7 @@ agrees to before anything is installed:
 > I agree that Sagi Shield is installed on my parent's phone by me, that it warns our family when a call looks like a scam,
 > that the owner of the pilot sees only counts and the reasons for a warning (never the words of a call, never audio), and
 > that I can stop it whenever I want: deleting the household removes its alerts and pairings at once, and the few
-> text-free records that remain (section 6) expire on their own.
+> records that remain (section 6) expire on their own.
 
 The privacy notice the app links to is `/#privacy` (content in `frontend/src/content/privacy.ts`). Send it with the consent
 sentence. Record the date each household said yes in the Log (section 9), by first name only.
@@ -77,7 +77,7 @@ Question 5 matters most: an app that is switched off protects no one. If the ans
 4. Handle open incidents (section 5).
 5. Add a dated entry to the Log: numbers, anomalies, decisions, what changes next week.
 
-Retention, so the notice stays true: alerts 90 days, feedback 365 days, verdict dataset partitions 400 days, recovery chats 24 hours.
+Retention, so the notice stays true: alerts 90 days, feedback 365 days, verdict dataset partitions 400 days, recovery chats 24 hours. The technical log holds no call text or numbers but keeps the app's own two-line explanation of each verdict. Community reports keep the scam type, prefecture, date and a one-way code of the number, for as long as the community list exists (no expiry is set).
 
 ## 7. Exit criteria (ROADMAP phase 0)
 
@@ -104,7 +104,7 @@ Print one per household. Short on purpose; the full text is the notice at `/#pri
 
 - **何をするアプリか:** 親御さんの電話が詐欺かもしれないとき、ご本人とご家族にそっとお知らせします。「100%安全」とはお約束できません。あやしいと思ったら、電話を切って、ご家族か公式の番号に確認してください。
 - **端末の外に出るもの:** 音声は端末の外に出ません。文字にした会話の一部だけが、電話番号などを伏せた形で判定に使われます。
-- **保存されるもの:** ご家族への通知(危険度と要約の一文のみ)は90日、「この判定は合っていましたか」への回答(文章なし)は365日、文章や番号を含まない技術ログは400日で、自動で消えます。みんなの通報は電話番号のハッシュのみです。音声も通話の文字起こしも保存しません。
+- **保存されるもの:** ご家族への通知(危険度と要約の一文のみ)は90日、「この判定は合っていましたか」への回答(文章なし)は365日、通話の文章や番号を含まない技術ログ(判定ごとにアプリが書いた2行の説明は残ります)は400日で、自動で消えます。みんなの通報は、詐欺の種類・都道府県・日付と、電話番号の元に戻せない変換値だけを保存し、地域統計がある間は保管されます。被害相談のチャット(数字は伏せたもの)は24時間です。音声も通話の文字起こしも保存しません。
 - **やめたいとき:** いつでもやめられます。ご家族が見守り画面から世帯を削除すると、通知とペアリングはすぐに消えます。回答と技術ログは上の期間で自動的に消えます。
 - **困ったとき:** 運営の連絡先(家族グループまたは電話)へ。あやしい電話の内容そのものを送る必要はありません。
 - 詳しい説明は、アプリの「プライバシーについて」(`/#privacy`)をご覧ください。
@@ -115,7 +115,7 @@ Print one per household. Short on purpose; the full text is the notice at `/#pri
 
 - **Ứng dụng làm gì:** khi cuộc gọi đến cha mẹ có thể là lừa đảo, ứng dụng nhẹ nhàng báo cho chính người nhận và gia đình. Chúng tôi không thể hứa "an toàn 100%". Nếu thấy nghi ngờ, hãy cúp máy và gọi lại cho người nhà hoặc số chính thức.
 - **Những gì rời khỏi điện thoại:** âm thanh không bao giờ rời khỏi điện thoại. Chỉ một phần lời thoại đã chuyển thành chữ, đã che số điện thoại và số tài khoản, được dùng để đánh giá.
-- **Những gì được lưu:** thông báo gửi gia đình (chỉ mức độ và một câu tóm tắt) tự xóa sau 90 ngày; câu trả lời "Đánh giá này có đúng không?" (không kèm nội dung) sau 365 ngày; nhật ký kỹ thuật (không có tin nhắn hay số điện thoại) sau 400 ngày. Báo cáo cộng đồng chỉ lưu giá trị băm của số điện thoại. Không lưu âm thanh và không lưu bản ghi lời thoại.
+- **Những gì được lưu:** thông báo gửi gia đình (chỉ mức độ và một câu tóm tắt) tự xóa sau 90 ngày; câu trả lời "Đánh giá này có đúng không?" (không kèm nội dung) sau 365 ngày; nhật ký kỹ thuật (không có nội dung cuộc gọi hay số điện thoại, nhưng giữ hai dòng giải thích do ứng dụng viết cho mỗi đánh giá) sau 400 ngày. Báo cáo cộng đồng lưu loại lừa đảo, tỉnh/thành, ngày báo và một mã một chiều của số điện thoại (không lưu chính số), giữ chừng nào danh sách cộng đồng còn tồn tại. Cuộc trò chuyện hỗ trợ khi bị lừa (đã che số) giữ 24 giờ. Không lưu âm thanh và không lưu bản ghi lời thoại.
 - **Khi muốn dừng:** dừng bất cứ lúc nào. Khi người nhà xóa hộ gia đình trong màn hình theo dõi, thông báo và liên kết thiết bị bị xóa ngay; câu trả lời và nhật ký kỹ thuật tự xóa sau thời hạn nêu trên.
 - **Khi cần giúp:** liên hệ người phụ trách (nhóm gia đình hoặc điện thoại). Không cần gửi nội dung cuộc gọi đáng ngờ.
 - Xem giải thích đầy đủ trong ứng dụng, mục "Quyền riêng tư" (`/#privacy`).
