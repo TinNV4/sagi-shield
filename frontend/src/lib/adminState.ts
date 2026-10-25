@@ -1,4 +1,4 @@
-import type {AdminSummary} from '../api/types';
+import type {AdminSummary, LatencyPercentiles} from '../api/types';
 
 /** Admin screen: which of loading / forbidden / unavailable / data to show, and the feedback agreement rate. */
 
@@ -26,6 +26,12 @@ export function agreementRate(fb: {n: number; correct: number}): number | null {
   return fb.n > 0 ? Math.round((fb.correct / fb.n) * 100) : null;
 }
 
+/** One latency line: a dash for a missing kind or percentile (a 0 ms would be invented). */
+export function latencyLine(b: LatencyPercentiles | null | undefined): string {
+  if (!b) return '-';
+  return `p50 ${b.p50 ?? '-'} ms · p95 ${b.p95 ?? '-'} ms`;
+}
+
 export type AdminSection = 'verdicts' | 'latency' | 'live' | 'rule_hits' | 'reasons' | 'feedback' | 'households';
 
 /**
@@ -43,7 +49,8 @@ export function sectionState(summary: Partial<AdminSummary>, section: AdminSecti
       return summary.reasons?.length ? 'ok' : 'empty';
     case 'latency': {
       const l = summary.latency_ms;
-      return l && (l.p50 !== null || l.p95 !== null) ? 'ok' : 'empty';
+      const has = (b: LatencyPercentiles | null | undefined) => !!b && (b.p50 !== null || b.p95 !== null);
+      return l && (has(l.check) || has(l.live_look)) ? 'ok' : 'empty';
     }
     case 'live': {
       const l = summary.live;

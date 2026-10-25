@@ -1,6 +1,6 @@
 import {describe, expect, it} from 'vitest';
 import type {AdminSummary} from '../api/types';
-import {adminScreenState, agreementRate, sectionState, type AdminSection} from './adminState';
+import {adminScreenState, agreementRate, latencyLine, sectionState, type AdminSection} from './adminState';
 
 describe('adminScreenState', () => {
   it('no data and no error: loading', () => {
@@ -38,7 +38,7 @@ const full = (over: Partial<AdminSummary> = {}): AdminSummary => ({
   days: 7,
   table: 't',
   verdicts: [{day: '2026-10-25', kind: 'check', level: 'HIGH', lang: 'ja', n: 2}],
-  latency_ms: {p50: 1300, p95: 4200},
+  latency_ms: {check: {p50: 1300, p95: 4200}, live_look: {p50: 900, p95: 2100}},
   live: {calls: 1, looks: 2, alarms: 0},
   rule_hits: [{name: 'authority', n: 3}],
   reasons: [{playbook: 'fake_police', n: 1}],
@@ -59,7 +59,8 @@ describe('sectionState', () => {
   });
   it('empty when present but without rows or counts', () => {
     expect(sectionState(full({verdicts: []}), 'verdicts')).toBe('empty');
-    expect(sectionState(full({latency_ms: {p50: null, p95: null}}), 'latency')).toBe('empty');
+    expect(sectionState(full({latency_ms: {check: null, live_look: null}}), 'latency')).toBe('empty');
+    expect(sectionState(full({latency_ms: {check: {p50: null, p95: null}, live_look: null}}), 'latency')).toBe('empty');
     expect(sectionState(full({live: {calls: 0, looks: 0, alarms: 0}}), 'live')).toBe('empty');
     expect(sectionState(full({rule_hits: []}), 'rule_hits')).toBe('empty');
     expect(sectionState(full({reasons: []}), 'reasons')).toBe('empty');
@@ -76,5 +77,15 @@ describe('sectionState', () => {
     const s = full();
     delete s.unavailable;
     expect(sectionState(s, 'live')).toBe('ok');
+  });
+});
+describe('latency', () => {
+  it('is ok when only one kind has numbers', () => {
+    expect(sectionState(full({latency_ms: {check: null, live_look: {p50: 900, p95: null}}}), 'latency')).toBe('ok');
+  });
+  it('shows a dash for a missing percentile or a missing kind, never 0', () => {
+    expect(latencyLine({p50: 1300, p95: 4200})).toBe('p50 1300 ms · p95 4200 ms');
+    expect(latencyLine({p50: 900, p95: null})).toBe('p50 900 ms · p95 - ms');
+    expect(latencyLine(null)).toBe('-');
   });
 });

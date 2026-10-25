@@ -35,10 +35,13 @@ QUERIES = {
 SELECT CAST({DAY} AS STRING) AS day, jsonPayload.kind AS kind, jsonPayload.level AS level, jsonPayload.lang AS lang, COUNT(*) AS n
 FROM `@table` WHERE {WHERE} AND jsonPayload.kind IN ('check', 'precheck', 'live_alarm') AND jsonPayload.level IS NOT NULL
 GROUP BY day, kind, level, lang ORDER BY day, kind, level, lang""",
+    # a Quick Check / Before You Pay answers one request; a Live Guard look is one judge call in the background
     "latency": f"""-- name: latency
-SELECT q[OFFSET(50)] AS p50, q[OFFSET(95)] AS p95 FROM (
-  SELECT APPROX_QUANTILES(CAST(jsonPayload.latency_ms AS FLOAT64), 100) AS q
-  FROM `@table` WHERE {WHERE} AND {CHECKS} AND jsonPayload.latency_ms IS NOT NULL)""",
+SELECT kind, q[OFFSET(50)] AS p50, q[OFFSET(95)] AS p95 FROM (
+  SELECT IF(jsonPayload.kind = 'live_look', 'live_look', 'check') AS kind,
+         APPROX_QUANTILES(CAST(jsonPayload.latency_ms AS FLOAT64), 100) AS q
+  FROM `@table` WHERE {WHERE} AND {CHECKS} AND jsonPayload.latency_ms IS NOT NULL
+  GROUP BY kind)""",
     "live": f"""-- name: live
 SELECT COUNTIF(jsonPayload.kind = 'live_call') AS calls, COUNTIF(jsonPayload.kind = 'live_look') AS looks,
        COUNTIF(jsonPayload.kind = 'live_alarm') AS alarms
@@ -69,6 +72,31 @@ def _int(x) -> int:
     return int(round(x)) if x is not None else 0
 
 
+def _ms(x) -> int | None:
+    """A percentile, or None when it is missing: an invented 0 ms would look like the fastest service ever."""
+    return int(round(x)) if x is not None else None
+
+
+LATENCY_KINDS = ("check", "live_look")
+NO_FEEDBACK = {"checks": {"n": 0, "correct": 0}, "alerts": {"n": 0, "correct": 0}}
+NO_HOUSEHOLDS = {"n": 0, "live_guard_on": 0, "devices_seen_24h": 0}
+
+
+def _latency(rows: list[dict]) -> dict:
+    by_kind = {r.get("kind"): r for r in rows}
+    return {k: ({"p50": _ms(by_kind[k].get("p50")), "p95": _ms(by_kind[k].get("p95"))} if k in by_kind else None)
+            for k in LATENCY_KINDS}
+
+
+def _store_section(name: str, read, empty: dict, unavailable: list[str]) -> dict:
+    """Firestore counts beside the BigQuery ones: a failing read empties its card and is named, never a 500."""
+    try:
+        return read()
+    except Exception:
+        unavailable.append(name)
+        return {k: (dict(v) if isinstance(v, dict) else v) for k, v in empty.items()}
+
+
 @router.get("/summary")
 def summary(days: int = Query(7, ge=1, le=30), _=Depends(auth.admin_only)) -> dict:
     try:
@@ -87,16 +115,17 @@ def summary(days: int = Query(7, ge=1, le=30), _=Depends(auth.admin_only)) -> di
             rows[name] = []
             unavailable.append(name)
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
-    lat = (rows["latency"] or [{}])[0]
     live = (rows["live"] or [{}])[0]
+    feedback = _store_section("feedback", lambda: STORE.feedback_stats(since), NO_FEEDBACK, unavailable)
+    households = _store_section("households", STORE.households_overview, NO_HOUSEHOLDS, unavailable)
     return {
         "days": days, "table": table, "unavailable": unavailable,
         "verdicts": [{"day": r["day"], "kind": r["kind"], "level": r["level"], "lang": r["lang"], "n": _int(r["n"])}
                      for r in rows["verdicts"]],
-        "latency_ms": {"p50": _int(lat.get("p50")), "p95": _int(lat.get("p95"))},
+        "latency_ms": _latency(rows["latency"]),
         "live": {k: _int(live.get(k)) for k in ("calls", "looks", "alarms")},
         "rule_hits": [{"name": r["name"], "n": _int(r["n"])} for r in rows["rule_hits"]],
         "reasons": [{"playbook": r["playbook"], "n": _int(r["n"])} for r in rows["reasons"]],
-        "feedback": STORE.feedback_stats(since),
-        "households": STORE.households_overview(),
+        "feedback": feedback,
+        "households": households,
     }

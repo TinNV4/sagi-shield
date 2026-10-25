@@ -4,7 +4,7 @@ import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxi
 import {api, ApiError} from '../api/client';
 import type {AdminSummary} from '../api/types';
 import {useI18n} from '../i18n';
-import {adminScreenState, agreementRate, sectionState, type AdminSection} from '../lib/adminState';
+import {adminScreenState, agreementRate, latencyLine, sectionState, type AdminSection} from '../lib/adminState';
 
 const DAY_CHOICES = [1, 7, 30] as const;
 const LEVEL_COLORS: Record<string, string> = {LOW: '#059669', MEDIUM: '#d97706', HIGH: '#dc2626'};
@@ -214,9 +214,14 @@ export const AdminScreen: React.FC<{onBack?: () => void}> = ({onBack}) => {
               {sec('latency') === 'unavailable' ? (
                 unavailableLine
               ) : (
-                <p className="text-sm font-bold font-mono">
-                  p50 {data.latency_ms.p50 ?? '-'} ms · p95 {data.latency_ms.p95 ?? '-'} ms
-                </p>
+                <>
+                  <p className="text-sm font-bold">
+                    {t('admin.latency_check')}: <span className="font-mono">{latencyLine(data.latency_ms?.check)}</span>
+                  </p>
+                  <p className="text-sm font-bold">
+                    {t('admin.latency_live')}: <span className="font-mono">{latencyLine(data.latency_ms?.live_look)}</span>
+                  </p>
+                </>
               )}
             </Card>
             <Card title={t('admin.agreement')}>

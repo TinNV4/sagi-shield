@@ -197,11 +197,17 @@ export interface HouseholdCode {
   expires_in: number;
 }
 
+export interface LatencyPercentiles {
+  p50: number | null;
+  p95: number | null;
+}
+
 export interface AdminSummary {
   days: number;
   table: string;
   verdicts: {day: string; kind: string; level: string; lang: string; n: number}[];
-  latency_ms: {p50: number | null; p95: number | null};
+  /** Per kind: a Quick Check / Before You Pay request, a Live Guard judge look. null = no data, never an invented 0. */
+  latency_ms: {check: LatencyPercentiles | null; live_look: LatencyPercentiles | null};
   live: {calls: number; looks: number; alarms: number};
   rule_hits: {name: string; n: number}[];
   reasons: {playbook: string; n: number}[];

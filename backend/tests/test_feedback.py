@@ -48,3 +48,9 @@ def test_feedback_needs_a_fresh_app_check_token_in_enforce(client, monkeypatch):
     assert client.post("/feedback", json=body).status_code == 403
     assert client.post("/feedback", json=body, headers={"X-Firebase-AppCheck": "good"}).status_code == 200
     assert client.post("/feedback", json=body, headers={"X-Firebase-AppCheck": "used"}).status_code == 403
+
+
+def test_before_you_pay_carries_a_verdict_id_for_feedback(client):
+    r = client.post("/precheck", json={"lang": "ja", "reason_text": "家賃を払う", "who_asked": "company", "recipient_type": "company"})
+    vid = r.json()["verdict_id"]
+    assert vid and client.post("/feedback", json={"verdict_id": vid, "correct": True, "lang": "ja", "reporter_id": "r1"}).status_code == 200

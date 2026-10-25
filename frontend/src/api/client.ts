@@ -978,7 +978,7 @@ class MockApi implements SagiApi {
       days,
       table: 'demo.sagi_demo.verdicts',
       verdicts,
-      latency_ms: {p50: 1300, p95: 4200},
+      latency_ms: {check: {p50: 1300, p95: 4200}, live_look: {p50: 1100, p95: 2600}},
       live: {calls: 3, looks: 17, alarms: 1},
       rule_hits: [{name: 'authority', n: 9}, {name: 'channel_switch', n: 4}],
       reasons: [{playbook: 'fake_police', n: 7}],

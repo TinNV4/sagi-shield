@@ -29,13 +29,14 @@ def test_summary_needs_admin(client):
 def test_summary_shapes_bigquery_rows(client, monkeypatch):
     monkeypatch.setenv("VERDICT_TABLE", "p.sagi_pilot.verdicts")
     rows = {"verdicts": [{"day": "2026-10-25", "kind": "check", "level": "HIGH", "lang": "ja", "n": 2}],
-            "latency": [{"p50": 1300.0, "p95": 4200.0}], "live": [{"calls": 1, "looks": 4, "alarms": 1}],
+            "latency": [{"kind": "check", "p50": 1300.0, "p95": 4200.0}], "live": [{"calls": 1, "looks": 4, "alarms": 1}],
             "rule_hits": [{"name": "authority", "n": 3}], "reasons": [{"playbook": "fake_police", "n": 2}]}
     monkeypatch.setattr(admin.bq, "query", lambda sql, params, timeout_s=20: rows[admin.which(sql)])
     r = client.get("/admin/summary?days=7", headers=ADMIN)
     assert r.status_code == 200
     body = r.json()
-    assert body["verdicts"][0]["n"] == 2 and body["latency_ms"] == {"p50": 1300, "p95": 4200}
+    assert body["verdicts"][0]["n"] == 2
+    assert body["latency_ms"] == {"check": {"p50": 1300, "p95": 4200}, "live_look": None}  # no looks: null, never 0
     assert body["households"] == {"n": 0, "live_guard_on": 0, "devices_seen_24h": 0} and body["feedback"]["checks"]["n"] == 0
     assert client.get("/admin/summary?days=99", headers=ADMIN).status_code == 422
 
@@ -85,3 +86,28 @@ def test_one_failing_query_does_not_hide_the_rest(client, monkeypatch):
     assert r.status_code == 200 and r.json()["unavailable"] == ["latency"] and r.json()["verdicts"][0]["n"] == 1
     monkeypatch.setattr(admin.bq, "query", lambda sql, params, timeout_s=20: (_ for _ in ()).throw(admin.bq.Unavailable("x")))
     assert client.get("/admin/summary", headers=ADMIN).status_code == 503
+
+
+def test_latency_is_split_into_checks_and_live_looks_and_a_missing_percentile_is_null(client, monkeypatch):
+    monkeypatch.setenv("VERDICT_TABLE", "p.sagi_pilot.verdicts")
+    rows = {"latency": [{"kind": "check", "p50": 900.4, "p95": None}, {"kind": "live_look", "p50": 1300.0, "p95": 2500.0}]}
+    monkeypatch.setattr(admin.bq, "query", lambda sql, params, timeout_s=20: rows.get(admin.which(sql), []))
+    body = client.get("/admin/summary", headers=ADMIN).json()
+    assert body["latency_ms"] == {"check": {"p50": 900, "p95": None}, "live_look": {"p50": 1300, "p95": 2500}}
+    assert "GROUP BY" in admin.QUERIES["latency"] and "live_look" in admin.QUERIES["latency"]
+
+
+def test_a_failing_store_section_is_named_unavailable_not_a_500(client, monkeypatch):
+    monkeypatch.setenv("VERDICT_TABLE", "p.sagi_pilot.verdicts")
+    monkeypatch.setattr(admin.bq, "query", lambda sql, params, timeout_s=20: [])
+
+    def boom(*a, **kw):
+        raise RuntimeError("firestore down")
+    monkeypatch.setattr(admin.STORE, "feedback_stats", boom)
+    monkeypatch.setattr(admin.STORE, "households_overview", boom)
+    r = client.get("/admin/summary", headers=ADMIN)
+    assert r.status_code == 200
+    body = r.json()
+    assert {"feedback", "households"} <= set(body["unavailable"])
+    assert body["feedback"] == {"checks": {"n": 0, "correct": 0}, "alerts": {"n": 0, "correct": 0}}
+    assert body["households"] == {"n": 0, "live_guard_on": 0, "devices_seen_24h": 0}
