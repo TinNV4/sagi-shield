@@ -5,9 +5,12 @@
     python backend/tools/grant_admin.py --email me@example.com      # grant
     python backend/tools/grant_admin.py --email me@example.com --revoke
 
+    python backend/tools/grant_admin.py --gcloud-token --project <id> --list   # no ADC on this machine
+
 Credentials: Application Default Credentials (`gcloud auth application-default login`) or
-GOOGLE_APPLICATION_CREDENTIALS; there is no --gcloud-token fallback here. The project comes from GOOGLE_CLOUD_PROJECT
-(repo-root .env). An anonymous user (a protected person's device) is refused. The user has to sign in again, or wait for
+GOOGLE_APPLICATION_CREDENTIALS; without ADC, --gcloud-token --project <id> signs the calls with
+`gcloud auth print-access-token` (as tools/load_phish_list.py does). The project otherwise comes from
+GOOGLE_CLOUD_PROJECT (repo-root .env). An anonymous user (a protected person's device) is refused. The user has to sign in again, or wait for
 the ID token to refresh (up to an hour), before the claim shows.
 """
 from __future__ import annotations
@@ -31,15 +34,28 @@ def main() -> int:
     ap.add_argument("--revoke", action="store_true", help="remove the claim instead of setting it")
     ap.add_argument("--list", action="store_true", help="print the uids that hold the claim")
     ap.add_argument("--show-emails", action="store_true", help="with --list: print addresses too")
+    ap.add_argument("--gcloud-token", action="store_true", help="no ADC on this machine: use `gcloud auth print-access-token`")
+    ap.add_argument("--project", help="Firebase project id (required with --gcloud-token)")
     a = ap.parse_args()
     if not a.list and not a.email:
         ap.error("give --email or --list")
+    if a.gcloud_token and not a.project:
+        ap.error("--gcloud-token needs --project")
 
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env")
     from firebase_admin import auth
-    from app import appcheck
-    app = appcheck._app()
+    if a.gcloud_token:  # this laptop has no ADC: wrap the gcloud user token as a google-auth credential
+        import subprocess
+        import firebase_admin
+        from google.oauth2.credentials import Credentials
+        token = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True,
+                               shell=True, check=True).stdout.strip()
+        app = firebase_admin.initialize_app(credential=Credentials(token), options={"projectId": a.project},
+                                            name="grant-admin")
+    else:
+        from app import appcheck
+        app = appcheck._app()
 
     if a.list:
         n = 0

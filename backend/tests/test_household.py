@@ -380,3 +380,10 @@ def test_heartbeat_is_device_only_and_shows_on_the_dashboard(client):
     status = client.get(f"/household/{hid}", headers=H(G1)).json()["device_status"]
     assert status["listening"] is True and status["last_seen"] is not None
     assert "devices_seen" not in client.get(f"/household/{hid}", headers=H(G1)).json()  # uids never leave the server
+
+
+def test_alert_without_reasons_gets_a_fallback_sentence(client):
+    h = client.post("/household", json={"market": "vi"}, headers=H(DEV)).json(); hid = h["household_id"]
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
+    client.post(f"/household/{hid}/notify", json={"risk_level": "HIGH", "lang": "vi"}, headers=H(DEV))
+    assert client.get(f"/household/{hid}/alerts", headers=H(G1)).json()[0]["summary"] == "Đã phát hiện một cuộc gọi có nguy cơ cao."

@@ -35,6 +35,28 @@ _SALT = secrets.token_bytes(16)
 _hits: dict[str, deque] = defaultdict(deque)
 
 
+class _HandshakeQueryFilter(logging.Filter):
+    """uvicorn logs `<client> - "WebSocket <path>?<query>" [accepted]`; the query holds the App Check token and
+    family ids, so every string argument is cut at its first `?` before the line is formatted."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            if "WebSocket " in str(record.msg) and isinstance(record.args, tuple):
+                record.args = tuple(a.split("?", 1)[0] if isinstance(a, str) and "?" in a else a for a in record.args)
+        except Exception:
+            pass
+        return True
+
+
+def _install_handshake_filter() -> None:
+    uv = logging.getLogger("uvicorn.error")
+    if not any(isinstance(f, _HandshakeQueryFilter) for f in uv.filters):  # idempotent across reloads
+        uv.addFilter(_HandshakeQueryFilter())
+
+
+_install_handshake_filter()
+
+
 def limit_per_min() -> int:
     return int(os.getenv("RATE_LIMIT_PER_MIN", "30"))
 

@@ -24,11 +24,20 @@ def _messaging():
     return messaging
 
 
+FALLBACK_SUMMARY = {"ja": "危険度の高い通話が検知されました。", "vi": "Đã phát hiện một cuộc gọi có nguy cơ cao."}
+
+
+def _summary(result: dict, lang: str) -> str:
+    """First reason, else the advice, else a fixed sentence - an alert never reaches a guardian empty."""
+    return (next((r for r in result.get("reasons") or [] if r), None) or result.get("advice")
+            or FALLBACK_SUMMARY.get(lang, FALLBACK_SUMMARY["ja"]))
+
+
 def alert_family(family_id: str | None, result: dict, lang: str) -> dict | None:
     """result: a /check-shaped dict. Stores a summary sentence only - never the transcript."""
     if not family_id:
         return None
-    summary = (result.get("reasons") or [result.get("advice", "")])[0]
+    summary = _summary(result, lang)
     alert = STORE.add_alert(family_id, result["risk_level"], result.get("scam_type", "unknown"),
                             int(result.get("stage", 0)), summary)
     if not alert:
@@ -63,7 +72,7 @@ def alert_household(household_id: str | None, result: dict, lang: str) -> dict |
     """Same as alert_family over a household: a summary sentence only, FCM best effort on top."""
     if not household_id:
         return None
-    summary = (result.get("reasons") or [result.get("advice", "")])[0]
+    summary = _summary(result, lang)
     alert = STORE.add_household_alert(household_id, result["risk_level"], result.get("scam_type", "unknown"),
                                       int(result.get("stage", 0)), summary)
     if not alert:

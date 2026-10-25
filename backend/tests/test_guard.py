@@ -55,3 +55,21 @@ def test_access_log_has_no_personal_data(client, caplog):
     text = caplog.text
     assert "POST /check 200" in text and "GET /family/alerts" in text
     assert not any(leak in text for leak in ("1234", "super-secret", "testclient", "family_id"))
+
+
+def test_websocket_handshake_log_drops_the_query_string(caplog):
+    import logging
+    from app import guard  # installs the filter
+    log = logging.getLogger("uvicorn.error")
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+        log.info('%s - "WebSocket %s" [accepted]', "1.2.3.4:5", "/ws/live?lang=ja&appcheck=eyJhbGciOi.abc.def")
+    assert "appcheck" not in caplog.text and '"WebSocket /ws/live" [accepted]' in caplog.text
+
+
+def test_handshake_filter_never_raises(caplog):
+    import logging
+    from app import guard
+    log = logging.getLogger("uvicorn.error")
+    with caplog.at_level(logging.INFO, logger="uvicorn.error"):
+        log.info("WebSocket %s", None)
+    assert "WebSocket" in caplog.text
