@@ -64,7 +64,7 @@ jobs:
       environment: pilot
       firestore_db: pilot
       bq_table: ""
-      verdict_table: ${{ vars.VERDICT_TABLE }}  # a repository variable (the caller job has no environment); the called workflow also falls back to the "pilot" environment variable; empty until infra/setup_verdict_sink.ps1 has run and a record landed
+      verdict_table: ${{ vars.PILOT_VERDICT_TABLE }}  # repository variable (the caller job has no environment); empty until the sink table exists
       env_label: PILOT
       update_phish_job: false
       update_heartbeat_job: true

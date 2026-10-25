@@ -6,7 +6,7 @@
 #   pwsh infra/setup_verdict_sink.ps1 -Service sagi-shield-api -Dataset sagi_verdicts    # judged service, only after the freeze
 #
 # The sink creates its table lazily: `run_googleapis_com_stdout` appears after the FIRST matching record. Only then set
-# VERDICT_TABLE (GitHub variable read by the deploy workflow) to <project>.<dataset>.run_googleapis_com_stdout and redeploy.
+# the pilot variable PILOT_VERDICT_TABLE (see the closing message) to <project>.<dataset>.run_googleapis_com_stdout and redeploy.
 param(
     [string]$Project = "sagi-shield-560661",
     [string]$Region = "asia-northeast1",
@@ -31,15 +31,27 @@ if ($LASTEXITCODE -ne 0) {
 $sink = "sagi-verdicts-$Service"
 $dest = "bigquery.googleapis.com/projects/$Project/datasets/$Dataset"
 $filter = "resource.type=`"cloud_run_revision`" AND resource.labels.service_name=`"$Service`" AND jsonPayload.kind:*"
-gcloud logging sinks describe $sink --project $Project 2>$null | Out-Null
-if ($LASTEXITCODE -eq 0) {
-    gcloud logging sinks update $sink $dest --project $Project --log-filter $filter --use-partitioned-tables --quiet
-    Check "update the sink"
-    Write-Host "Updated sink $sink"
-} else {
-    gcloud logging sinks create $sink $dest --project $Project --log-filter $filter --use-partitioned-tables
-    Check "create the sink"
-    Write-Host "Created sink $sink"
+# the filter has spaces and double quotes, which the gcloud.cmd shim on Windows can split or strip: pass it in a flags file
+$flags = [IO.Path]::GetTempFileName()
+try {
+    $quoted = $filter -replace "'", "''"
+    [IO.File]::WriteAllText($flags, "--log-filter: '$quoted'`n", (New-Object Text.UTF8Encoding($false)))
+    gcloud logging sinks describe $sink --project $Project 2>$null | Out-Null
+    if ($LASTEXITCODE -eq 0) {
+        gcloud logging sinks update $sink $dest --project $Project "--flags-file=$flags" --use-partitioned-tables --quiet
+        Check "update the sink"
+        Write-Host "Updated sink $sink"
+    } else {
+        gcloud logging sinks create $sink $dest --project $Project "--flags-file=$flags" --use-partitioned-tables
+        Check "create the sink"
+        Write-Host "Created sink $sink"
+    }
+} finally { Remove-Item $flags -ErrorAction SilentlyContinue }
+# read it back: a mangled filter would copy every log line (or none) into BigQuery
+$stored = gcloud logging sinks describe $sink --project $Project --format="value(filter)" | Out-String
+Check "read the sink filter"
+if (-not ($stored.Contains("jsonPayload.kind:*") -and $stored.Contains("service_name=`"$Service`""))) {
+    throw "sink $sink has an unexpected filter: $stored"
 }
 
 # the sink writes with its own identity: give it editor rights on this dataset only
@@ -70,5 +82,7 @@ Write-Host ""
 Write-Host "Sink $sink -> ${Project}:$Dataset (day-partitioned; filter: jsonPayload.kind present)."
 Write-Host "The table is created by the first record: after a check on $Service, run"
 Write-Host "  bq --project_id=$Project ls --format=pretty ${Project}:$Dataset"
-Write-Host "and expect run_googleapis_com_stdout. Then set VERDICT_TABLE=$Project.$Dataset.run_googleapis_com_stdout"
-Write-Host "(GitHub variable VERDICT_TABLE, read by the deploy workflow) and redeploy."
+Write-Host "and expect run_googleapis_com_stdout. Then use the table name $Project.$Dataset.run_googleapis_com_stdout:"
+Write-Host "pilot: set the GitHub repository variable PILOT_VERDICT_TABLE to that name and redeploy:"
+Write-Host "  gh variable set PILOT_VERDICT_TABLE --body `"$Project.$Dataset.run_googleapis_com_stdout`""
+Write-Host "local infra/deploy.sh run: export VERDICT_TABLE=$Project.$Dataset.run_googleapis_com_stdout"

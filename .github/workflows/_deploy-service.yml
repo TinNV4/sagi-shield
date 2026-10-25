@@ -139,7 +139,7 @@ jobs:
           LEGACY_FAMILY: ${{ vars.LEGACY_FAMILY }}  # 0 = the shared-secret /family/* routes answer 410; unset -> on (removed 2026-11-14)
           FIRESTORE_DB: ${{ inputs.firestore_db }}
           BQ_TABLE: ${{ inputs.bq_table }}
-          VERDICT_TABLE: ${{ inputs.verdict_table || vars.VERDICT_TABLE }}  # the job runs in the GitHub environment, so its variable applies too
+          VERDICT_TABLE: ${{ inputs.verdict_table }}
         run: |
           # one --set-env-vars only (gcloud keeps the last); "^@^" makes @ the separator so CORS_ORIGINS may hold commas
           ENV="GOOGLE_GENAI_USE_ENTERPRISE=true@GOOGLE_CLOUD_PROJECT=${{ vars.GCP_PROJECT }}@GOOGLE_CLOUD_LOCATION=global"

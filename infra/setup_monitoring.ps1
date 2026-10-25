@@ -43,7 +43,7 @@ $chan = Find-ByName (gcloud beta monitoring channels list --project $Project --f
 Check "list channels"
 if ($chan) {
     if ($chan.labels.email_address -ne $Email) {
-        gcloud beta monitoring channels update $chan.name --project $Project "--channel-labels=email_address=$Email"
+        gcloud beta monitoring channels update $chan.name --project $Project "--update-channel-labels=email_address=$Email"
         Check "update the channel"
         Write-Host "Channel '$chanName' now mails $Email"
     } else { Write-Host "Channel '$chanName' exists ($Email)" }
