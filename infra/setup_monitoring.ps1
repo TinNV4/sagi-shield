@@ -1,7 +1,8 @@
-# Uptime check on /health + email alert when the service is down. Idempotent by display name.
+# Uptime check on /health + email alerts when the service is down or answers with 5xx. Idempotent by display name.
 #   pwsh infra/setup_monitoring.ps1 -Email you@example.com                # pilot
 #   pwsh infra/setup_monitoring.ps1 -Service sagi-shield-api -Email ...   # judged service, only after the freeze
-# Alert: the check fails from 2 or more regions for 5 minutes (one flaky region does not page anyone).
+# Alerts: the check fails from 2 or more regions for 5 minutes (one flaky region does not page anyone), and more than
+# 3 requests end in a 5xx within 10 minutes. infra/terraform/main.tf mirrors both policies.
 # Everything goes through the Cloud Monitoring REST API (like setup_appcheck.ps1), so no gcloud beta component is needed.
 param(
     [string]$Project = "sagi-shield-560661",
@@ -63,7 +64,18 @@ if ($chan) {
     Write-Host "Created channel '$chanName' ($Email)"
 }
 
-# --- alert policy
+# --- alert policies (created once; an existing policy is left as it is)
+function Ensure-Policy($policy) {
+    $name = $policy.displayName
+    $existing = @((Api GET "$mon/alertPolicies").alertPolicies) | Where-Object { $_.displayName -eq $name } | Select-Object -First 1
+    if ($existing) {
+        Write-Host "Alert policy '$name' exists - left as it is (delete it in the console to recreate with new settings)"
+    } else {
+        Api POST "$mon/alertPolicies" $policy | Out-Null
+        Write-Host "Created alert policy '$name'"
+    }
+}
+
 $policyName = "$Service down"
 $policy = [ordered]@{
     displayName          = $policyName
@@ -86,14 +98,31 @@ $policy = [ordered]@{
     })
     notificationChannels = @($chan.name)
 }
-$existing = @((Api GET "$mon/alertPolicies").alertPolicies) | Where-Object { $_.displayName -eq $policyName } | Select-Object -First 1
-if ($existing) {
-    Write-Host "Alert policy '$policyName' exists - left as it is (delete it in the console to recreate with new settings)"
-} else {
-    Api POST "$mon/alertPolicies" $policy | Out-Null
-    Write-Host "Created alert policy '$policyName'"
-}
+Ensure-Policy $policy
+
+$errorsName = "$Service 5xx"
+Ensure-Policy ([ordered]@{
+    displayName          = $errorsName
+    combiner             = "OR"
+    conditions           = @([ordered]@{
+        displayName        = "more than 3 responses with a 5xx in 10 minutes"
+        conditionThreshold = [ordered]@{
+            filter         = "metric.type=`"run.googleapis.com/request_count`" AND resource.type=`"cloud_run_revision`" AND resource.label.service_name=`"$Service`" AND metric.label.response_code_class=`"5xx`""
+            comparison     = "COMPARISON_GT"
+            thresholdValue = 3
+            duration       = "0s"
+            aggregations   = @([ordered]@{
+                alignmentPeriod    = "600s"
+                perSeriesAligner   = "ALIGN_SUM"
+                crossSeriesReducer = "REDUCE_SUM"
+            })
+            trigger        = [ordered]@{ count = 1 }
+        }
+    })
+    notificationChannels = @($chan.name)
+})
 
 Write-Host ""
 Write-Host "Done: https://$hostName/health is checked every 5 min; '$policyName' mails $Email after 5 min of failures from 2+ regions."
+Write-Host "'$errorsName' mails $Email when more than 3 requests end in a 5xx within 10 minutes."
 Write-Host "A new email channel may send a verification mail first: check the inbox of $Email."

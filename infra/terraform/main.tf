@@ -73,6 +73,7 @@ resource "google_project_iam_member" "api_roles" {
     "roles/datastore.user",                 # Firestore
     "roles/speech.client",                  # Chirp 3 fallback transcription
     "roles/bigquery.dataEditor",            # anonymous verdict rows
+    "roles/bigquery.jobUser",               # admin page queries of the verdict table (dataEditor cannot run jobs)
     "roles/logging.logWriter",              # verdict log lines
     "roles/firebaseappcheck.tokenVerifier", # consume limited-use App Check tokens on /report
     "roles/firebasecloudmessaging.admin",   # guardian push (FCM HTTP v1, app/notifier.py)
@@ -623,8 +624,9 @@ resource "google_cloud_run_v2_service_iam_member" "pilot_public" {
 # ---------------------------------------------------------------- observability (verdict log sink, uptime check, alert)
 # Each environment that is switched on gets: a BigQuery dataset fed by a Cloud Logging sink (only the structured
 # verdict records of app/verdict_log.py, day-partitioned), an uptime check on /health and an alert policy that mails
-# var.alert_email when the check fails from 2 or more regions for 5 minutes. Pilot: pilot_enabled. Production:
-# observability_prod_enabled (kept off until after the judging freeze).
+# var.alert_email when the check fails from 2 or more regions for 5 minutes, plus one that mails when the service
+# answers more than 3 requests with a 5xx in 10 minutes. Pilot: pilot_enabled. Production:
+# observability_prod_enabled (kept off until after the judging freeze). Mirrors infra/setup_monitoring.ps1.
 locals {
   observability = merge(
     var.pilot_enabled ? {
@@ -722,6 +724,35 @@ resource "google_monitoring_alert_policy" "down" {
         per_series_aligner   = "ALIGN_NEXT_OLDER"
         cross_series_reducer = "REDUCE_COUNT_FALSE"
         group_by_fields      = ["resource.label.*"]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  notification_channels = var.alert_email != "" ? [google_monitoring_notification_channel.alert_email[each.key].id] : []
+  depends_on            = [google_project_service.apis]
+}
+
+resource "google_monitoring_alert_policy" "errors_5xx" {
+  for_each     = local.observability
+  display_name = "${each.value.service} 5xx"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "more than 3 responses with a 5xx in 10 minutes"
+    condition_threshold {
+      filter          = "metric.type=\"run.googleapis.com/request_count\" AND resource.type=\"cloud_run_revision\" AND resource.label.service_name=\"${each.value.service}\" AND metric.label.response_code_class=\"5xx\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 3
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "600s"
+        per_series_aligner   = "ALIGN_SUM"
+        cross_series_reducer = "REDUCE_SUM"
       }
 
       trigger {

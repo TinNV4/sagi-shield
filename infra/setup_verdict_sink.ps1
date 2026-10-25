@@ -54,6 +54,12 @@ if (-not ($stored.Contains("jsonPayload.kind:*") -and $stored.Contains("service_
     throw "sink $sink has an unexpected filter: $stored"
 }
 
+# the admin page queries the table as the runtime account: dataEditor reads rows but cannot start a query job
+$runtime = "sagi-api@$Project.iam.gserviceaccount.com"
+Write-Host "Granting roles/bigquery.jobUser to $runtime (admin page queries)"
+gcloud projects add-iam-policy-binding $Project --member="serviceAccount:$runtime" --role=roles/bigquery.jobUser --condition None --quiet | Out-Null
+Check "grant roles/bigquery.jobUser to $runtime"
+
 # the sink writes with its own identity: give it editor rights on this dataset only
 $writer = gcloud logging sinks describe $sink --project $Project --format="value(writerIdentity)"
 Check "read the sink writer identity"

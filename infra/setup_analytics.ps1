@@ -12,7 +12,8 @@ bq --project_id=$Project show --format=none sagi *> $null
 if ($LASTEXITCODE -ne 0) {
     bq --project_id=$Project --location=$Region mk --dataset --description="Sagi Shield anonymous verdict events" sagi
 }
-$schema = "ts:TIMESTAMP,kind:STRING,lang:STRING,source:STRING,risk_level:STRING,risk_score:INTEGER,scam_type:STRING,stage:INTEGER,prefecture:STRING,llm_used:BOOLEAN,latency_ms:INTEGER"
+# a table that already exists keeps its columns: add new ones with ALTER TABLE (CLAUDE.md, merge checklist)
+$schema = "ts:TIMESTAMP,kind:STRING,lang:STRING,source:STRING,risk_level:STRING,risk_score:INTEGER,scam_type:STRING,stage:INTEGER,prefecture:STRING,llm_used:BOOLEAN,latency_ms:INTEGER,feedback_correct:BOOLEAN"
 bq --project_id=$Project show --format=none sagi.events *> $null
 if ($LASTEXITCODE -ne 0) {
     bq --project_id=$Project mk --table --time_partitioning_field=ts --time_partitioning_type=DAY --time_partitioning_expiration=34560000 sagi.events $schema
