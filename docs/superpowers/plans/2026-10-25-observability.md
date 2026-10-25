@@ -53,7 +53,7 @@ feedback doc (Firestore collection "feedback", id = f"{kind}:{target}:{who}")
   created_at ISO-8601 UTC
 analytics row kind="feedback": correct (bool as llm_used? no — add column "feedback_correct" BOOLEAN to the events table
              in Terraform and to analytics.FIELDS; the pilot has no BQ_TABLE so the row is simply dropped there)
-VERDICT_TABLE  env, e.g. "sagi-shield-560661.sagi_pilot.verdicts" (the sink's table); unset → admin routes answer 503
+VERDICT_TABLE  env, the sink's table: "sagi-shield-560661.sagi_pilot.run_googleapis_com_stdout" (pilot, from the PILOT_VERDICT_TABLE repository variable); unset → admin routes answer 503
                "verdict table not configured"
 ```
 
@@ -192,7 +192,7 @@ def test_summary_without_bigquery_is_503_with_a_sentence(client, monkeypatch):
 
 **Files:**
 - Create: `infra/setup_verdict_sink.ps1`, `infra/setup_monitoring.ps1`
-- Modify: `infra/terraform/main.tf`, `variables.tf`, `outputs.tf`; `.github/workflows/_deploy-service.yml` (input `verdict_table`, env `VERDICT_TABLE`), `.github/workflows/deploy-pilot.yml` (`verdict_table: sagi-shield-560661.sagi_pilot.verdicts` — use `${{ vars.GCP_PROJECT }}`), `infra/deploy.sh` (`VERDICT_TABLE` passthrough)
+- Modify: `infra/terraform/main.tf`, `variables.tf`, `outputs.tf`; `.github/workflows/_deploy-service.yml` (input `verdict_table`, env `VERDICT_TABLE`), `.github/workflows/deploy-pilot.yml` (`verdict_table: ${{ vars.PILOT_VERDICT_TABLE }}` — a repository variable, set once the sink's table exists; as built: `sagi-shield-560661.sagi_pilot.run_googleapis_com_stdout`), `infra/deploy.sh` (`VERDICT_TABLE` passthrough)
 
 **Behaviour:**
 - `setup_verdict_sink.ps1 -Service sagi-shield-pilot -Dataset sagi_pilot`: `bq mk --dataset --location=asia-northeast1` if missing (or `gcloud alpha bq`… use `bq` with `--flag=value` syntax per CLAUDE.md); `gcloud logging sinks create sagi-verdicts-<service> bigquery.googleapis.com/projects/<p>/datasets/<dataset> --log-filter 'resource.type="cloud_run_revision" AND resource.labels.service_name="<service>" AND jsonPayload.kind:*' --use-partitioned-tables`; grant the sink's writer identity `roles/bigquery.dataEditor` on the dataset; print the table name (`<p>.<dataset>.run_googleapis_com_stdout` is what a Cloud Run sink creates — read the actual table name after the first record lands and print how to set `VERDICT_TABLE`; the admin SQL must use the sink's column layout: `jsonPayload.kind`, `jsonPayload.level`, … — Task 2's SQL is written against that layout: `jsonPayload.<field>` columns, `timestamp` for the day).
@@ -229,4 +229,4 @@ def test_summary_without_bigquery_is_503_with_a_sentence(client, monkeypatch):
 ### Task 5: Docs and the live run
 
 - [ ] **Step 1: Docs** — ROADMAP step 3 heading "built <date>, verified: pending"; CLAUDE.md paragraph "Observability (2026-10-25)" (verdict ids, feedback, sink dataset per environment, admin page + claim, monitoring scripts, `VERDICT_TABLE`); PLAN section 9 routes. Commit `git commit -m "Docs: observability — verdict ids, feedback, sink, admin page, monitoring"`.
-- [ ] **Step 2 (controller):** after the pilot deploy: `pwsh infra/setup_verdict_sink.ps1 -Service sagi-shield-pilot -Dataset sagi_pilot`, run a check, wait for the table, set the GitHub `pilot` environment variable / workflow input `VERDICT_TABLE` to the real table name and redeploy; `pwsh infra/setup_monitoring.ps1 -Service sagi-shield-pilot -Email <owner>`; grant the owner the admin claim with `grant_admin.py --gcloud-token --project … --email <owner>`; open `/#admin` on the iPhone; press 👎 on a check and "false alarm" on an alert; confirm the feedback documents and the summary counts. Record in CLAUDE.md.
+- [ ] **Step 2 (controller):** after the pilot deploy: `pwsh infra/setup_verdict_sink.ps1 -Service sagi-shield-pilot -Dataset sagi_pilot`, run a check, wait for the table, set the GitHub repository variable `PILOT_VERDICT_TABLE` to the real table name (`gh variable set PILOT_VERDICT_TABLE --body "<project>.sagi_pilot.run_googleapis_com_stdout"`; deploy-pilot.yml passes it as the `verdict_table` input, which becomes `VERDICT_TABLE`) and redeploy; `pwsh infra/setup_monitoring.ps1 -Service sagi-shield-pilot -Email <owner>`; grant the owner the admin claim with `grant_admin.py --gcloud-token --project … --email <owner>`; open `/#admin` on the iPhone; press 👎 on a check and "false alarm" on an alert; confirm the feedback documents and the summary counts. Record in CLAUDE.md.

@@ -103,7 +103,7 @@ The guardian's phone becomes the control panel; the grandparent's device shows o
 - Everything in this step that only makes sense with Live Guard (heartbeat, kiosk single screen) is built behind a per-household `live_guard_enabled` flag from the start, so a step 0 outcome B costs nothing and a Quick Check-only household never sees it **[my call]**.
 - Device heartbeat: the member device pings every few minutes while Live Guard is on; the guardian dashboard shows "listening since 09:12" or "offline since Tuesday", and a push after 24 h offline **[my call]**. Without this a tablet that died on Monday is discovered when a scam call lands on Friday.
 
-### Step 3 - see what the system does
+### Step 3 - see what the system does (built 2026-10-25, verified on the pilot: pending the iPhone run)
 
 - Verdict log to BigQuery through a Cloud Logging sink (records already exist as `jsonPayload`; the sink and a view are infrastructure only).
 - Admin page in the PWA (admin claim required): aggregates only (verdicts per day by level and market, rule hits versus model reasons, Live Guard looks per call, community reports, households count, latency), read through a small `/admin/*` API, never raw text. Per-household drill-down exists only for households the signed-in user is also a guardian of, through the guardian routes, not the admin ones **[my call]**.
