@@ -12,6 +12,8 @@ export type ScamType =
 export type KillChainStage = 0 | 1 | 2 | 3 | 4 | 5;
 
 export interface CheckResult {
+  /** Handle for the 'was this right?' answer (16 hex); carries nothing about the content. */
+  verdict_id?: string;
   risk_score: number; // 0 - 100
   risk_level: RiskLevel;
   stage: KillChainStage;
@@ -193,4 +195,18 @@ export interface HouseholdCreated {
 export interface HouseholdCode {
   pair_code: string;
   expires_in: number;
+}
+
+export interface AdminSummary {
+  days: number;
+  table: string;
+  verdicts: {day: string; kind: string; level: string; lang: string; n: number}[];
+  latency_ms: {p50: number | null; p95: number | null};
+  live: {calls: number; looks: number; alarms: number};
+  rule_hits: {name: string; n: number}[];
+  reasons: {playbook: string; n: number}[];
+  feedback: {checks: {n: number; correct: number}; alerts: {n: number; correct: number}};
+  households: {n: number; live_guard_on: number; devices_seen_24h: number};
+  /** Parts of the summary the server could not read (each failing query is reported, never a 500). */
+  unavailable?: string[];
 }

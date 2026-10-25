@@ -19,6 +19,7 @@ import {CheckResult, DeepCheckResult} from '../api/types';
 import {KillChainBar} from '../components/KillChainBar';
 import {RiskMeter} from '../components/RiskMeter';
 import {DeepfakeNotice} from '../components/DeepfakeNotice';
+import {VerdictFeedback} from '../components/VerdictFeedback';
 import {useI18n} from '../i18n';
 import type {CheckInput} from './QuickCheckScreen';
 import * as speech from '../lib/speak';
@@ -281,6 +282,9 @@ export const ResultScreen: React.FC<ResultScreenProps> = ({
           </div>
         )}
       </div>
+
+      {/* "Was this right?": anonymous, once per verdict; a failed send never touches the verdict above */}
+      {result.verdict_id && <VerdictFeedback key={result.verdict_id} verdictId={result.verdict_id} level={result.risk_level} />}
 
       {/* Opt-in deep check: public reports about the domain / organisation (Google Search grounding) */}
       <div id="deep-check" className="p-4 rounded-2xl bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 space-y-3">

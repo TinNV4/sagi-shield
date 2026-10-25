@@ -464,7 +464,9 @@
     "status_paired": "Đã liên kết thiết bị, Live Guard chưa chạy",
     "alert_device_offline": "Thiết bị bảo vệ không phản hồi",
     "status_none": "Chưa có thiết bị",
-    "show_card": "Xem thẻ cài đặt"
+    "show_card": "Xem thẻ cài đặt",
+    "fb_false_alarm": "Báo nhầm",
+    "fb_real": "Đúng là lừa đảo"
   },
   "card": {
     "title": "Thẻ cài đặt",
@@ -734,5 +736,40 @@
     "save": "Lưu",
     "saved": "Đã lưu",
     "call_btn": "Cúp máy và gọi {{name}} theo số đã lưu"
+  },
+  "feedback": {
+    "question": "Kết quả này có đúng không?",
+    "yes": "Đúng",
+    "no": "Chưa đúng",
+    "reason_title": "Chưa đúng ở điểm nào?",
+    "reason_not_scam": "Đây không phải lừa đảo",
+    "reason_wrong_type": "Sai loại lừa đảo",
+    "reason_too_weak": "Cảnh báo chưa đủ mạnh",
+    "reason_too_strong": "Cảnh báo quá mạnh",
+    "reason_missed": "Đây là lừa đảo nhưng bị bỏ sót",
+    "thanks": "Cảm ơn bạn.",
+    "failed": "Lần này chưa gửi được."
+  },
+  "admin": {
+    "title": "Tổng quan thử nghiệm",
+    "range": "Khoảng thời gian",
+    "days": "{{n}} ngày",
+    "not_admin": "Trang này chỉ dành cho quản trị viên.",
+    "unavailable": "Hiện chưa có số liệu.",
+    "retry": "Thử lại",
+    "partial": "Thiếu một số số liệu:",
+    "verdicts_per_day": "Số kết quả mỗi ngày",
+    "no_data": "Không có dữ liệu trong khoảng này.",
+    "by_kind": "Theo loại và ngôn ngữ",
+    "live": "Live Guard",
+    "live_line": "{{calls}} cuộc gọi, {{looks}} lần xét, {{alarms}} lần báo động",
+    "latency": "Thời gian kiểm tra",
+    "agreement": "Mức đồng ý với kết quả",
+    "agreement_checks": "Kiểm tra",
+    "agreement_alerts": "Cảnh báo",
+    "no_answers": "Chưa có phản hồi",
+    "households": "Hộ gia đình",
+    "households_line": "{{n}} hộ, Live Guard bật ở {{on}} hộ, {{seen}} thiết bị hoạt động trong 24 giờ",
+    "settings_desc": "Số liệu tổng hợp của thử nghiệm (chỉ quản trị viên)."
   }
 }

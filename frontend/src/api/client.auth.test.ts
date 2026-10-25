@@ -375,3 +375,34 @@ describe('Live Guard socket', () => {
     }
   });
 });
+
+
+describe('feedback and admin routes', () => {
+  it('feedback on a check is anonymous: no Bearer, posted to /feedback with the reporter id', async () => {
+    const fetchMock = vi.fn((..._a: FetchArgs) => reply(200, {ok: true}));
+    vi.stubGlobal('fetch', fetchMock);
+    await new RealApi('http://api.test').sendFeedback('abcd1234abcd1234', false, 'too_weak', 'ja');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/feedback');
+    expect(bearer(fetchMock, 0)).toBeNull();
+    const body = JSON.parse(String(fetchMock.mock.calls[0][1]?.body));
+    expect(body).toMatchObject({verdict_id: 'abcd1234abcd1234', correct: false, reason: 'too_weak', lang: 'ja'});
+    expect(typeof body.reporter_id).toBe('string');
+  });
+
+  it('feedback on an alert carries the Bearer header', async () => {
+    const fetchMock = vi.fn((..._a: FetchArgs) => reply(200, {ok: true}));
+    vi.stubGlobal('fetch', fetchMock);
+    await new RealApi('http://api.test').sendAlertFeedback('h 1', 'a1', true);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/household/h%201/alerts/a1/feedback');
+    expect(bearer(fetchMock, 0)).toBe('Bearer stale');
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1]?.body))).toEqual({correct: true});
+  });
+
+  it('the admin summary sends the Bearer header and the day count', async () => {
+    const fetchMock = vi.fn((..._a: FetchArgs) => reply(200, {days: 7}));
+    vi.stubGlobal('fetch', fetchMock);
+    await new RealApi('http://api.test').adminSummary(7);
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/admin/summary?days=7');
+    expect(bearer(fetchMock, 0)).toBe('Bearer stale');
+  });
+});

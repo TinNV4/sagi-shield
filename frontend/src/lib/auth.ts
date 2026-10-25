@@ -213,3 +213,17 @@ export function idToken(force = false): Promise<string | null> {
     TOKEN_WAIT_MS
   );
 }
+
+/** True when the signed-in user carries the `admin` custom claim (the admin page's switch). False for nobody,
+ *  anonymous devices and any failure: never throws. The server checks the claim again on every admin route. */
+export async function isAdmin(): Promise<boolean> {
+  try {
+    const loaded = await load();
+    const user = loaded?.auth.currentUser;
+    if (!user || user.isAnonymous) return false;
+    const result = await withTimeout(user.getIdTokenResult(), TOKEN_WAIT_MS);
+    return result?.claims?.admin === true;
+  } catch {
+    return false;
+  }
+}

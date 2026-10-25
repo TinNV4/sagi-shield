@@ -464,7 +464,9 @@
     "status_paired": "Device paired, Live Guard not running yet",
     "alert_device_offline": "The protected device is not responding",
     "status_none": "No device yet",
-    "show_card": "Show setup card"
+    "show_card": "Show setup card",
+    "fb_false_alarm": "False alarm",
+    "fb_real": "It was a scam"
   },
   "card": {
     "title": "Setup card",
@@ -734,5 +736,40 @@
     "save": "Save",
     "saved": "Saved",
     "call_btn": "Hang up and call {{name}} on the saved number"
+  },
+  "feedback": {
+    "question": "Was this right?",
+    "yes": "Yes",
+    "no": "Not quite",
+    "reason_title": "What was off?",
+    "reason_not_scam": "It was not a scam",
+    "reason_wrong_type": "Wrong kind of scam",
+    "reason_too_weak": "Not strong enough",
+    "reason_too_strong": "Too alarming",
+    "reason_missed": "It was a scam, you missed it",
+    "thanks": "Thank you.",
+    "failed": "Could not send this time."
+  },
+  "admin": {
+    "title": "Pilot overview",
+    "range": "Period",
+    "days": "{{n}} d",
+    "not_admin": "This page is for administrators only.",
+    "unavailable": "The numbers are not available right now.",
+    "retry": "Try again",
+    "partial": "Some figures are missing:",
+    "verdicts_per_day": "Verdicts per day",
+    "no_data": "No data in this period.",
+    "by_kind": "By kind and language",
+    "live": "Live Guard",
+    "live_line": "{{calls}} calls, {{looks}} looks, {{alarms}} alarms",
+    "latency": "Check latency",
+    "agreement": "Agreement with verdicts",
+    "agreement_checks": "Checks",
+    "agreement_alerts": "Alerts",
+    "no_answers": "No answers yet",
+    "households": "Households",
+    "households_line": "{{n}} households, Live Guard on in {{on}}, {{seen}} devices seen in 24 h",
+    "settings_desc": "Aggregate numbers of the pilot (administrators only)."
   }
 }

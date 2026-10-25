@@ -1,4 +1,5 @@
 import {
+  AdminSummary,
   CheckResult,
   DeepCheckPayload,
   DeepCheckResult,
@@ -17,6 +18,7 @@ import {
 } from './types';
 import {APP_CHECK_HEADER, appCheckToken} from '../lib/appCheck';
 import {authSettled, currentUser, idToken} from '../lib/auth';
+import type {FeedbackReason} from '../lib/feedback';
 
 export interface SagiApi {
   isMock: boolean;
@@ -25,6 +27,12 @@ export interface SagiApi {
   deepcheck(payload: DeepCheckPayload): Promise<DeepCheckResult>;
   recovery(sessionId: string, message: string, lang: string): Promise<RecoveryResponse>;
   report(data: ReportPayload): Promise<{ok: boolean}>;
+  /** 'Was this right?' on a verdict: anonymous, one-time App Check token, stores no text. */
+  sendFeedback(verdictId: string, correct: boolean, reason: FeedbackReason | undefined, lang: string): Promise<{ok: boolean}>;
+  /** A guardian's 'false alarm' / 'it was a scam' on one alert of their household. */
+  sendAlertFeedback(householdId: string, alertId: string, correct: boolean, reason?: FeedbackReason): Promise<{ok: boolean}>;
+  /** Aggregates for the admin page (admin claim required). */
+  adminSummary(days: number): Promise<AdminSummary>;
   createFamilyCode(): Promise<{pair_code: string; guardians: string[]}>;
   linkFamily(pairCode: string, fcmToken?: string): Promise<{ok: boolean; guardian_name: string}>;
   notifyFamily(result: CheckResult, lang: string): Promise<boolean>;
@@ -103,6 +111,17 @@ export const JOIN_FROM_LINK: string = (() => {
 export const GUARDIAN_FROM_PUSH: boolean = (() => {
   try {
     const hit = window.location.hash === '#guardian';
+    if (hit) window.history.replaceState(null, '', window.location.pathname);
+    return hit;
+  } catch {
+    return false;
+  }
+})();
+
+/** Opened from the admin link (/#admin): go to the admin page. Read once. */
+export const ADMIN_FROM_LINK: boolean = (() => {
+  try {
+    const hit = window.location.hash === '#admin';
     if (hit) window.history.replaceState(null, '', window.location.pathname);
     return hit;
   } catch {
@@ -192,7 +211,7 @@ type AppCheckUse = 'session' | 'limited' | 'none';
 
 /** Routes that act for a signed-in user. Checks, reports and stats are anonymous by design: no ID token ever rides
  *  on them (it would tie a person's checks to an account) and they never wait for the auth SDK. */
-const SIGNED_IN_ROUTE = /^\/(household(\/|$)|agent\/)/;
+const SIGNED_IN_ROUTE = /^\/(household(\/|$)|agent\/|admin\/)/;
 
 /** Live Guard: how often a signed-in socket asks again for an ID token that was not ready when it opened. */
 export const AUTH_RETRY_MS = 3000;
@@ -270,6 +289,20 @@ export class RealApi implements SagiApi {
     // random per-install id: lets the server count distinct reporters without any account or address
     // a one-time App Check token: the server consumes it, so a captured request cannot be replayed into many reports
     return this.postJson('/report', {...data, reporter_id: getReporterId()}, 'limited');
+  }
+
+  sendFeedback(verdictId: string, correct: boolean, reason: FeedbackReason | undefined, lang: string): Promise<{ok: boolean}> {
+    // same one-time token and install id as report(): the server counts distinct people without any account
+    return this.postJson('/feedback', {verdict_id: verdictId, correct, reason, lang: apiLang(lang), reporter_id: getReporterId()}, 'limited');
+  }
+
+  sendAlertFeedback(householdId: string, alertId: string, correct: boolean, reason?: FeedbackReason): Promise<{ok: boolean}> {
+    const path = `/household/${encodeURIComponent(householdId)}/alerts/${encodeURIComponent(alertId)}/feedback`;
+    return this.postJson(path, {correct, reason});
+  }
+
+  adminSummary(days: number): Promise<AdminSummary> {
+    return this.request<AdminSummary>(`/admin/summary?days=${encodeURIComponent(String(days))}`);
   }
 
   async createFamilyCode(): Promise<{pair_code: string; guardians: string[]}> {
@@ -927,6 +960,34 @@ class MockApi implements SagiApi {
     return {ok: true};
   }
 
+  async sendFeedback(): Promise<{ok: boolean}> {
+    return {ok: true};
+  }
+
+  async sendAlertFeedback(): Promise<{ok: boolean}> {
+    return {ok: true};
+  }
+
+  async adminSummary(days: number): Promise<AdminSummary> {
+    const levels = ['LOW', 'MEDIUM', 'HIGH'];
+    const verdicts = Array.from({length: Math.min(days, 7)}, (_, i) => {
+      const day = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+      return levels.map((level, j) => ({day, kind: 'check', level, lang: 'ja', n: 6 - j * 2 + (i % 3)}));
+    }).flat();
+    return {
+      days,
+      table: 'demo.sagi_demo.verdicts',
+      verdicts,
+      latency_ms: {p50: 1300, p95: 4200},
+      live: {calls: 3, looks: 17, alarms: 1},
+      rule_hits: [{name: 'authority', n: 9}, {name: 'channel_switch', n: 4}],
+      reasons: [{playbook: 'fake_police', n: 7}],
+      feedback: {checks: {n: 5, correct: 4}, alerts: {n: 2, correct: 1}},
+      households: {n: 3, live_guard_on: 1, devices_seen_24h: 1},
+      unavailable: [],
+    };
+  }
+
   async createFamilyCode(): Promise<{pair_code: string; guardians: string[]}> {
     return {pair_code: '782904', guardians: []};
   }
@@ -1373,6 +1434,15 @@ export const api: SagiApi = {
   },
   report(data: any) {
     return getActiveApi().report(data);
+  },
+  sendFeedback(verdictId: string, correct: boolean, reason: FeedbackReason | undefined, lang: string) {
+    return getActiveApi().sendFeedback(verdictId, correct, reason, lang);
+  },
+  sendAlertFeedback(householdId: string, alertId: string, correct: boolean, reason?: FeedbackReason) {
+    return getActiveApi().sendAlertFeedback(householdId, alertId, correct, reason);
+  },
+  adminSummary(days: number) {
+    return getActiveApi().adminSummary(days);
   },
   createFamilyCode() {
     return getActiveApi().createFamilyCode();

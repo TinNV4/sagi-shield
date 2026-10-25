@@ -35,6 +35,15 @@ describe('App Check tokens on API calls', () => {
     expect(sent(fetchMock)).toBe('one-time');
   });
 
+  it('feedback on a check carries a one-time token and posts /feedback', async () => {
+    const fetchMock = vi.fn(ok);
+    vi.stubGlobal('fetch', fetchMock);
+    await new RealApi('http://api.test').sendFeedback('abcd1234abcd1234', true, undefined, 'vi');
+    expect(fetchMock.mock.calls[0][0]).toBe('http://api.test/feedback');
+    expect(appCheckToken).toHaveBeenCalledWith(true);
+    expect(sent(fetchMock)).toBe('one-time');
+  });
+
   it('reads carry no token, and a missing token sends the request anyway', async () => {
     const fetchMock = vi.fn((..._args: FetchArgs) => Promise.resolve(new Response(JSON.stringify({}), {status: 200})));
     vi.stubGlobal('fetch', fetchMock);

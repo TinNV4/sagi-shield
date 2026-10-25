@@ -464,7 +464,9 @@
     "status_paired": "端末は連携済みです。ライブガードはまだ動いていません",
     "alert_device_offline": "見守り端末から応答がありません",
     "status_none": "端末はまだありません",
-    "show_card": "設定カードを表示"
+    "show_card": "設定カードを表示",
+    "fb_false_alarm": "誤報だった",
+    "fb_real": "詐欺だった"
   },
   "card": {
     "title": "設定カード",
@@ -734,5 +736,40 @@
     "save": "保存する",
     "saved": "保存しました",
     "call_btn": "いったん切って、{{name}}さんの登録番号にかける"
+  },
+  "feedback": {
+    "question": "この判定は合っていましたか？",
+    "yes": "はい",
+    "no": "違う",
+    "reason_title": "どこが違いましたか？",
+    "reason_not_scam": "詐欺ではなかった",
+    "reason_wrong_type": "手口の種類が違う",
+    "reason_too_weak": "警告が弱すぎた",
+    "reason_too_strong": "警告が強すぎた",
+    "reason_missed": "詐欺だったのに見逃した",
+    "thanks": "ありがとうございました。",
+    "failed": "今回は送信できませんでした。"
+  },
+  "admin": {
+    "title": "パイロット概況",
+    "range": "期間",
+    "days": "{{n}}日",
+    "not_admin": "このページは管理者専用です。",
+    "unavailable": "現在、数値を取得できません。",
+    "retry": "再読み込み",
+    "partial": "一部の数値がありません：",
+    "verdicts_per_day": "日別の判定数",
+    "no_data": "この期間のデータはありません。",
+    "by_kind": "種別・言語別",
+    "live": "ライブガード",
+    "live_line": "通話{{calls}}件、判定{{looks}}回、警報{{alarms}}回",
+    "latency": "判定の所要時間",
+    "agreement": "判定との一致率",
+    "agreement_checks": "チェック",
+    "agreement_alerts": "通知",
+    "no_answers": "回答はまだありません",
+    "households": "世帯",
+    "households_line": "{{n}}世帯、ライブガード有効{{on}}世帯、24時間以内の端末{{seen}}台",
+    "settings_desc": "パイロットの集計値（管理者のみ）。"
   }
 }

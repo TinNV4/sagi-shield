@@ -1,4 +1,4 @@
-import React, {useRef, useState} from 'react';
+import React, {useEffect, useRef, useState} from 'react';
 import {
   Bell,
   Check,
@@ -18,6 +18,7 @@ import {
 import {StrictPrivacyToggle} from '../components/StrictPrivacyToggle';
 import {TrustedContactSetting} from '../components/TrustedContact';
 import {Language, useI18n} from '../i18n';
+import {isAdmin} from '../lib/auth';
 import * as speech from '../lib/speak';
 
 interface SettingsScreenProps {
@@ -31,6 +32,8 @@ interface SettingsScreenProps {
   onToggleDarkMode: () => void;
   onExitKioskConfirm?: () => void;
   onReplayOnboarding?: () => void;
+  /** Opens the pilot overview; the link shows only for a signed-in user with the admin claim. */
+  onOpenAdmin?: () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -44,8 +47,18 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onToggleDarkMode,
   onExitKioskConfirm,
   onReplayOnboarding,
+  onOpenAdmin,
 }) => {
   const {lang, setLang, t} = useI18n();
+
+  const [admin, setAdmin] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    if (onOpenAdmin) void isAdmin().then((yes) => !cancelled && setAdmin(yes));
+    return () => {
+      cancelled = true;
+    };
+  }, [onOpenAdmin]);
 
   // Long press state for Exit Kiosk (3 seconds)
   const [longPressProgress, setLongPressProgress] = useState(0);
@@ -302,6 +315,23 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <button
             id="replay-onboarding-btn"
             onClick={onReplayOnboarding}
+            className="px-4 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-[#1B4D3E] dark:text-emerald-300 font-bold text-xs shrink-0 transition"
+          >
+            {t('common.open')}
+          </button>
+        </div>
+      )}
+
+      {/* Pilot overview: only for a signed-in administrator (the server checks the claim again) */}
+      {admin && onOpenAdmin && (
+        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 shadow-xs flex items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <div className="text-base font-bold text-gray-900 dark:text-white">{t('admin.title')}</div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t('admin.settings_desc')}</p>
+          </div>
+          <button
+            id="open-admin-btn"
+            onClick={onOpenAdmin}
             className="px-4 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-[#1B4D3E] dark:text-emerald-300 font-bold text-xs shrink-0 transition"
           >
             {t('common.open')}

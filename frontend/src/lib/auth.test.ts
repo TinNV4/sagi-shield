@@ -1,6 +1,6 @@
 import {afterEach, describe, expect, it, vi} from 'vitest';
 
-type FakeUser = {uid: string; isAnonymous: boolean; displayName: string | null; getIdToken: (force?: boolean) => Promise<string>};
+type FakeUser = {uid: string; isAnonymous: boolean; displayName: string | null; getIdToken: (force?: boolean) => Promise<string>; getIdTokenResult?: () => Promise<{claims: Record<string, unknown>}>};
 
 const user: FakeUser = {uid: 'dev-1', isAnonymous: true, displayName: null, getIdToken: vi.fn(async (force?: boolean) => (force ? 'fresh' : 'tok'))};
 const googleUser: FakeUser = {uid: 'g-1', isAnonymous: false, displayName: 'Hanako', getIdToken: vi.fn(async () => 'g-tok')};
@@ -208,5 +208,30 @@ describe('auth state', () => {
     const cb = vi.fn();
     auth.onAuth(cb);
     await vi.waitFor(() => expect(cb).toHaveBeenCalledWith(null));
+  });
+});
+
+describe('isAdmin', () => {
+  it('is true only for a signed-in user whose token carries admin: true', async () => {
+    current = {...googleUser, getIdTokenResult: async () => ({claims: {admin: true}})};
+    const auth = await load(true);
+    expect(await auth.isAdmin()).toBe(true);
+  });
+
+  it('is false without the claim, for anonymous devices, for nobody, and when the lookup fails', async () => {
+    const auth = await load(true);
+    current = {...googleUser, getIdTokenResult: async () => ({claims: {admin: 'yes'}})};
+    expect(await auth.isAdmin()).toBe(false);
+    current = {...user, getIdTokenResult: async () => ({claims: {admin: true}})};
+    expect(await auth.isAdmin()).toBe(false);
+    current = null;
+    expect(await auth.isAdmin()).toBe(false);
+    current = {...googleUser, getIdTokenResult: async () => Promise.reject(new Error('offline'))};
+    expect(await auth.isAdmin()).toBe(false);
+  });
+
+  it('is false when Firebase is not configured', async () => {
+    const auth = await load(false);
+    expect(await auth.isAdmin()).toBe(false);
   });
 });

@@ -1,5 +1,5 @@
 import React, {Suspense, lazy, useEffect, useRef, useState} from 'react';
-import {api, GUARDIAN_FROM_PUSH, JOIN_FROM_LINK, mockApiInstance, PAIR_FROM_LINK, SHARE_FROM_LINK} from './api/client';
+import {ADMIN_FROM_LINK, api, GUARDIAN_FROM_PUSH, JOIN_FROM_LINK, mockApiInstance, PAIR_FROM_LINK, SHARE_FROM_LINK} from './api/client';
 import {readShareInbox, toCheckInput, type ShareCheckInput} from './lib/shareInbox';
 import {CheckResult} from './api/types';
 import {BottomNav, TabType} from './components/BottomNav';
@@ -19,6 +19,7 @@ import type {Household} from './api/types';
 // Home and Live Guard load with the shell (a kiosk tablet opens straight into the guard); every other screen is its
 // own chunk, fetched on first visit and precached by the service worker, so the first paint on an old tablet is
 // not paying for the charts of the Community screen. Each page module exports one named component.
+const AdminScreen = lazy(() => import('./pages/AdminScreen').then((m) => ({default: m.AdminScreen})));
 const BeforeYouPayScreen = lazy(() => import('./pages/BeforeYouPayScreen').then((m) => ({default: m.BeforeYouPayScreen})));
 const CommunityScreen = lazy(() => import('./pages/CommunityScreen').then((m) => ({default: m.CommunityScreen})));
 const FamilyScreen = lazy(() => import('./pages/FamilyScreen').then((m) => ({default: m.FamilyScreen})));
@@ -80,6 +81,7 @@ function AppContent() {
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<FullTabType>(() => {
+    if (ADMIN_FROM_LINK) return 'admin'; // /#admin: the pilot overview (the server decides who may read it)
     if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH) return 'guardian_view'; // a family member's QR code, or an alert notification
     if (SHARE_FROM_LINK) return 'quick'; // the OS share sheet handed a screenshot or text over
     if (JOIN_FROM_LINK) return 'family'; // the setup card's QR, scanned on the protected person's own device
@@ -113,7 +115,7 @@ function AppContent() {
     return window.location.pathname.includes('demo') || window.location.hash.includes('demo');
   });
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() => {
-    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK) return false; // a guardian came to pair or to read an alert, not to set up a kiosk
+    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK || ADMIN_FROM_LINK) return false; // a guardian came to pair or to read an alert, not to set up a kiosk
     try {
       return localStorage.getItem('sagi_onboarding_completed') !== 'true';
     } catch {
@@ -272,7 +274,7 @@ function AppContent() {
         });
     };
     // a guardian who came to pair or to read an alert, or a share, does not set up a kiosk on the first look
-    let firstCheckDone = Boolean(PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK);
+    let firstCheckDone = Boolean(PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK || ADMIN_FROM_LINK);
     const off = onAuth((user) => {
       authUserRef.current = user;
       if (firstCheckDone || !user?.anonymous) return;
@@ -447,8 +449,11 @@ function AppContent() {
           <HowItWorksScreen onBack={handleGoBack} />
         )}
 
+        {currentTab === 'admin' && <AdminScreen onBack={handleGoBack} />}
+
         {currentTab === 'settings' && (
           <SettingsScreen
+            onOpenAdmin={() => navigateTo('admin')}
             isKioskMode={isKioskMode}
             onSetKioskMode={handleSettingsKioskMode}
             speakEnabled={speakEnabled}

@@ -17,6 +17,7 @@ import {FamilyAlertItem, Household} from '../api/types';
 import {useI18n} from '../i18n';
 import * as speech from '../lib/speak';
 import {telHref} from '../components/TrustedContact';
+import {AlertFeedback} from '../components/AlertFeedback';
 import type {CardCode} from './SetupCardScreen';
 import {pushPermission, pushToken} from '../lib/push';
 import {AuthUser, cancelPhoneSignIn, confirmPhoneCode, onAuth, RECAPTCHA_CONTAINER_ID, signInGuardian, signOut} from '../lib/auth';
@@ -1186,6 +1187,8 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, o
                     </div>
                   )}
                 </div>
+
+                {selected && <AlertFeedback householdId={selected.household_id} alertId={alert.id} />}
               </div>
             );
           })
