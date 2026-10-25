@@ -12,7 +12,8 @@ agrees to before anything is installed:
 
 > I agree that Sagi Shield is installed on my parent's phone by me, that it warns our family when a call looks like a scam,
 > that the owner of the pilot sees only counts and the reasons for a warning (never the words of a call, never audio), and
-> that I can stop it, and have everything deleted, whenever I want.
+> that I can stop it whenever I want: deleting the household removes its alerts and pairings at once, and the few
+> text-free records that remain (section 6) expire on their own.
 
 The privacy notice the app links to is `/#privacy` (content in `frontend/src/content/privacy.ts`). Send it with the consent
 sentence. Record the date each household said yes in the Log (section 9), by first name only.
@@ -103,8 +104,8 @@ Print one per household. Short on purpose; the full text is the notice at `/#pri
 
 - **何をするアプリか:** 親御さんの電話が詐欺かもしれないとき、ご本人とご家族にそっとお知らせします。「100%安全」とはお約束できません。あやしいと思ったら、電話を切って、ご家族か公式の番号に確認してください。
 - **端末の外に出るもの:** 音声は端末の外に出ません。文字にした会話の一部だけが、電話番号などを伏せた形で判定に使われます。
-- **保存されるもの:** ご家族への通知(要約の一文のみ)は90日で消えます。会話の文字や録音は保存しません。
-- **やめたいとき:** いつでもやめられます。ご家族が設定から削除すれば、データも削除されます。
+- **保存されるもの:** ご家族への通知(危険度と要約の一文のみ)は90日、「この判定は合っていましたか」への回答(文章なし)は365日、文章や番号を含まない技術ログは400日で、自動で消えます。みんなの通報は電話番号のハッシュのみです。音声も通話の文字起こしも保存しません。
+- **やめたいとき:** いつでもやめられます。ご家族が見守り画面から世帯を削除すると、通知とペアリングはすぐに消えます。回答と技術ログは上の期間で自動的に消えます。
 - **困ったとき:** 運営の連絡先(家族グループまたは電話)へ。あやしい電話の内容そのものを送る必要はありません。
 - 詳しい説明は、アプリの「プライバシーについて」(`/#privacy`)をご覧ください。
 
@@ -114,8 +115,8 @@ Print one per household. Short on purpose; the full text is the notice at `/#pri
 
 - **Ứng dụng làm gì:** khi cuộc gọi đến cha mẹ có thể là lừa đảo, ứng dụng nhẹ nhàng báo cho chính người nhận và gia đình. Chúng tôi không thể hứa "an toàn 100%". Nếu thấy nghi ngờ, hãy cúp máy và gọi lại cho người nhà hoặc số chính thức.
 - **Những gì rời khỏi điện thoại:** âm thanh không bao giờ rời khỏi điện thoại. Chỉ một phần lời thoại đã chuyển thành chữ, đã che số điện thoại và số tài khoản, được dùng để đánh giá.
-- **Những gì được lưu:** thông báo gửi gia đình (chỉ một câu tóm tắt) tự xóa sau 90 ngày. Không lưu lời thoại hay bản ghi âm.
-- **Khi muốn dừng:** dừng bất cứ lúc nào. Người nhà xóa trong phần cài đặt thì dữ liệu cũng bị xóa.
+- **Những gì được lưu:** thông báo gửi gia đình (chỉ mức độ và một câu tóm tắt) tự xóa sau 90 ngày; câu trả lời "Đánh giá này có đúng không?" (không kèm nội dung) sau 365 ngày; nhật ký kỹ thuật (không có tin nhắn hay số điện thoại) sau 400 ngày. Báo cáo cộng đồng chỉ lưu giá trị băm của số điện thoại. Không lưu âm thanh và không lưu bản ghi lời thoại.
+- **Khi muốn dừng:** dừng bất cứ lúc nào. Khi người nhà xóa hộ gia đình trong màn hình theo dõi, thông báo và liên kết thiết bị bị xóa ngay; câu trả lời và nhật ký kỹ thuật tự xóa sau thời hạn nêu trên.
 - **Khi cần giúp:** liên hệ người phụ trách (nhóm gia đình hoặc điện thoại). Không cần gửi nội dung cuộc gọi đáng ngờ.
 - Xem giải thích đầy đủ trong ứng dụng, mục "Quyền riêng tư" (`/#privacy`).
 

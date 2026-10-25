@@ -115,7 +115,7 @@ The guardian's phone becomes the control panel; the grandparent's device shows o
 - One page for the family, in ja and vi: what the app does, what leaves the device (masked text, no audio), what is stored (alerts for 90 days, no transcripts), how to delete, who to call. Written as the privacy notice the app links to.
 - Caller consent, Japan and Vietnam: a party to a call may analyse or record it; Live Guard on speaker is the protected person's own analysis of their own call. Phase 1 adds a short spoken notice option (section 5) so the design also fits the device route later. **[open: a lawyer reads the notice before any non-relative household joins]**.
 - Weekly check-in script for the owner: number of checks, number of alarms, any complaint, any call the app missed. `tools/real_call_report.py` summarises the verdict log per household id.
-- Household retention: alerts auto-expire after 90 days (Firestore TTL). The anonymous analytics stream (`app/analytics.py`) stays without any household identifier. The verdict log, which the admin page and the weekly check-in read, carries a stable household id **during the pilot only**, because the pilot families consented to per-household review and a daily-rotating hash cannot follow a household across days; the field is removed, and rows older than the pilot deleted, before phase 2 **[my call]**.
+- Household retention: alerts auto-expire after 90 days (Firestore TTL). The anonymous analytics stream (`app/analytics.py`) stays without any household identifier. The verdict log, which the admin page and the weekly report read, carries no household id (counts only); per-household review uses the guardian dashboard and its alerts, not the log.
 
 ### Phase 0 exit criteria
 

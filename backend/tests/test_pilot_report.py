@@ -49,3 +49,15 @@ def test_empty_rows_print_zeros():
     assert "households 0, live guard on 0, seen in 24 h 0" in text
     assert "offline alerts sent: 0" in text
     assert "Traceback" not in text
+
+
+def test_expired_gcloud_login_returns_a_message_not_a_traceback(monkeypatch):
+    import subprocess
+    import pilot_report
+
+    def boom(*a, **k):
+        raise subprocess.CalledProcessError(1, "gcloud")
+    monkeypatch.setattr(subprocess, "run", boom)
+    creds, error = pilot_report.credentials("p", True)
+    assert creds is None and "gcloud auth login" in error
+    assert pilot_report.credentials("p", False) == (None, None)

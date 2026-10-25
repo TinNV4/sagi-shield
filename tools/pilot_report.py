@@ -75,10 +75,27 @@ def format_report(rows: dict) -> str:
     return "\n".join(out)
 
 
+GCLOUD_FAILED = "gcloud auth print-access-token failed; run `gcloud auth login`"
+
+
 def _token() -> str:
     import subprocess
     return subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True, shell=True,
                           check=True).stdout.strip()
+
+
+def credentials(project: str, gcloud_token: bool):
+    """(credentials, None), (None, None) without --gcloud-token, or (None, message) when the gcloud login is unusable."""
+    if not gcloud_token:
+        return None, None
+    try:
+        from google.oauth2.credentials import Credentials
+        token = _token()
+        if not token:
+            return None, GCLOUD_FAILED
+        return Credentials(token, quota_project_id=project), None
+    except Exception:  # CalledProcessError (expired login), FileNotFoundError (no gcloud), missing library
+        return None, GCLOUD_FAILED
 
 
 def _iso(x) -> str:
@@ -96,11 +113,8 @@ def _offline_alerts(store, since_iso: str, limit: int = 2000) -> int:
     return n
 
 
-def collect(a: argparse.Namespace) -> dict:
-    from google.oauth2.credentials import Credentials
-    token = _token() if a.gcloud_token else None
+def collect(a: argparse.Namespace, creds=None) -> dict:
     project = a.project or os.environ.get("GOOGLE_CLOUD_PROJECT", "")
-    creds = Credentials(token, quota_project_id=project) if token else None
     table = a.verdict_table or os.getenv("VERDICT_TABLE") or f"{project}.sagi_pilot.run_googleapis_com_stdout"
     rows: dict = {"days": a.days, "verdicts": None, "latency": None, "live": None}
 
@@ -145,7 +159,11 @@ def main() -> None:
     ap.add_argument("--database", default="pilot", help="Firestore database (default pilot)")
     a = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
-    print(format_report(collect(a)))
+    creds, error = credentials(a.project or os.environ.get("GOOGLE_CLOUD_PROJECT", ""), a.gcloud_token)
+    if error:
+        print(error)
+        sys.exit(1)
+    print(format_report(collect(a, creds)))
 
 
 if __name__ == "__main__":
