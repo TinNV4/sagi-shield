@@ -190,6 +190,11 @@ def _feedback(kind: str, target: str, who: str, correct: bool, reason: str | Non
             "reason": reason, "lang": lang, "created_at": _now_iso()}
 
 
+def _seen_within_24h(hh: dict) -> bool:
+    cutoff = datetime.fromtimestamp(time.time() - 86400, timezone.utc).isoformat()
+    return any((d or {}).get("at", "") >= cutoff for d in (hh.get("devices_seen") or {}).values())
+
+
 def _feedback_stats(docs) -> dict:
     out = {"checks": {"n": 0, "correct": 0}, "alerts": {"n": 0, "correct": 0}}
     for d in docs:
@@ -397,6 +402,12 @@ class MemoryStore:
 
     def feedback_stats(self, since_iso: str) -> dict:
         return _feedback_stats(d for d in self.feedback.values() if d["created_at"] >= since_iso)
+
+    def households_overview(self) -> dict:
+        """Counts only, for the admin page: no ids, no names."""
+        hhs = list(self.households.values())
+        return {"n": len(hhs), "live_guard_on": sum(1 for h in hhs if h.get("live_guard_enabled")),
+                "devices_seen_24h": sum(1 for h in hhs if _seen_within_24h(h))}
 
     def alert_exists(self, household_id: str, alert_id: str) -> bool:
         return any(a["id"] == alert_id for a in self.household_alerts.get(household_id, []))
@@ -677,6 +688,16 @@ class FirestoreStore:
             q = self.db.collection("feedback").where("kind", "==", kind).where("created_at", ">=", since_iso)
             docs += [d.to_dict() for d in q.stream()]
         return _feedback_stats(docs)
+
+    def households_overview(self) -> dict:
+        col = self.db.collection("households")
+
+        def count(q) -> int:  # server-side aggregation: no documents are read
+            return int(q.count().get()[0][0].value)
+        on = col.where(filter=self.fs.FieldFilter("live_guard_enabled", "==", True))
+        # heartbeats are nested per device, so "seen in 24 h" needs the documents; a pilot is small, the read is capped
+        seen = sum(1 for d in col.select(["devices_seen"]).limit(2000).stream() if _seen_within_24h(d.to_dict() or {}))
+        return {"n": count(col), "live_guard_on": count(on), "devices_seen_24h": seen}
 
     def alert_exists(self, household_id: str, alert_id: str) -> bool:
         return self.db.collection("households").document(household_id).collection("alerts").document(alert_id).get().exists

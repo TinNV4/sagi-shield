@@ -27,6 +27,7 @@ from model_ids import model_id  # noqa: E402
 from risk_engine import LANG_PACKS, analyze, level, precursor_hits as engine_precursor  # noqa: E402
 
 from . import appcheck, auth, households, services, share  # noqa: E402
+from .admin import router as admin_router  # noqa: E402
 from .agent import router as agent_router  # noqa: E402
 from .feedback import router as feedback_router  # noqa: E402
 from .analytics import log_event  # noqa: E402
@@ -79,6 +80,7 @@ app.include_router(agent_router)
 app.include_router(households.router)
 app.include_router(share.router)
 app.include_router(feedback_router)
+app.include_router(admin_router)
 
 
 @app.exception_handler(auth.AuthError)
