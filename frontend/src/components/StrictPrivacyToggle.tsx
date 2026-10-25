@@ -4,8 +4,9 @@ import {useI18n} from '../i18n';
 
 /**
  * Live Guard's text gate. Default ("periodic"): during a call the number-masked text is checked by Gemini about every
- * 20 s - real scam calls rarely contain the keywords a rule can catch. Strict ("rules"): text leaves the on-device
- * rules only after they see a warning sign. Audio never leaves the device in either mode. Takes effect on the next
+ * 20 s - real scam calls rarely contain the keywords a rule can catch. Strict ("rules"): every sentence still reaches
+ * the server, which runs the rules; Gemini sees the text only after the rules notice a warning sign. Audio never leaves
+ * the device in either mode (unless the cloud recogniser was opted into). Takes effect on the next
  * Live Guard start; read by api/client.ts when it opens the socket.
  */
 export const GATE_KEY = 'sagi_llm_gate';
