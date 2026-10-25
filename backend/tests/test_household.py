@@ -399,3 +399,6 @@ def test_guardian_feedback_on_an_alert_last_press_wins(client):
     assert client.post(f"/household/{hid}/alerts/{aid}/feedback", json={"correct": True}, headers=H(G1)).status_code == 200
     assert client.post(f"/household/{hid}/alerts/zzz/feedback", json={"correct": True}, headers=H(G1)).status_code == 404
     assert main.store.feedback_stats("2000-01-01T00:00:00+00:00")["alerts"] == {"n": 1, "correct": 1}
+    stored = list(main.store.feedback.items())
+    assert len(stored) == 1 and stored[0][1]["correct"] is True
+    assert not any("g1" in doc_id or "g1" in str(doc) for doc_id, doc in stored)  # the guardian's uid is never stored

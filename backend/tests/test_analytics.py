@@ -34,3 +34,15 @@ def test_extra_fields_cannot_reach_the_warehouse_and_it_is_off_by_default(monkey
     monkeypatch.delenv("BQ_TABLE", raising=False)
     analytics.log_event("check", risk_level="LOW")
     assert analytics._queue.empty() and analytics._state["thread"] is None
+
+
+def test_unknown_columns_never_reject_a_batch():
+    """A column added in code before the live table has it (feedback_correct) must not drop the whole row."""
+    calls = []
+
+    class Client:
+        def insert_rows_json(self, table, rows, **kw):
+            calls.append((table, rows, kw))
+            return []
+    analytics._insert(Client(), "p.sagi.events", [analytics.row("feedback", feedback_correct=True)])
+    assert calls and calls[0][2].get("ignore_unknown_values") is True

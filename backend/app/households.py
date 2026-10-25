@@ -9,6 +9,8 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 
+from input_layer import phone_hmac
+
 from . import auth
 from .analytics import log_event
 from .auth import Principal
@@ -187,7 +189,8 @@ def household_alert_feedback(hid: str, aid: str, body: AlertFeedback, p: Princip
     hh = _member(hid, p, guardian_only=True)
     if not STORE.alert_exists(hid, aid):
         raise HTTPException(404, "unknown alert")
-    STORE.save_feedback("alert", aid, p.uid, body.correct, body.reason, hh["market"])
+    who = phone_hmac("guardian:" + p.uid)  # one answer per guardian and alert, without storing the uid
+    STORE.save_feedback("alert", aid, who, body.correct, body.reason, hh["market"])
     return {"ok": True}
 
 
