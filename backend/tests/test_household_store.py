@@ -116,3 +116,11 @@ def test_firestore_update_household_writes_live_guard_since_as_a_field(monkeypat
     fs.update_household("h1", {"live_guard_enabled": True})
     fs.update_household("h1", {"live_guard_enabled": True})
     assert updates == [{"live_guard_enabled": True, "live_guard_since": "2026-10-05T00:00:00+00:00"}, {"live_guard_enabled": True}]
+
+
+def test_feedback_stats_ignores_documents_older_than_since():
+    s = MemoryStore()
+    s.save_feedback("check", "a" * 16, "w1", True, None, "ja")
+    s.save_feedback("alert", "x1", "g1", False, "not_scam", "ja")
+    s.feedback[next(iter(s.feedback))]["created_at"] = "2000-01-01T00:00:00+00:00"
+    assert s.feedback_stats("2001-01-01T00:00:00+00:00") == {"checks": {"n": 0, "correct": 0}, "alerts": {"n": 1, "correct": 0}}

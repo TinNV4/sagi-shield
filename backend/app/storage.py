@@ -683,11 +683,9 @@ class FirestoreStore:
         return doc
 
     def feedback_stats(self, since_iso: str) -> dict:
-        docs = []
-        for kind in ("check", "alert"):
-            q = self.db.collection("feedback").where("kind", "==", kind).where("created_at", ">=", since_iso)
-            docs += [d.to_dict() for d in q.stream()]
-        return _feedback_stats(docs)
+        # One range filter on one field needs no composite index; kind / correct are tallied here
+        q = self.db.collection("feedback").where(filter=self.fs.FieldFilter("created_at", ">=", since_iso)).limit(5000)
+        return _feedback_stats(d.to_dict() for d in q.stream())
 
     def households_overview(self) -> dict:
         col = self.db.collection("households")
