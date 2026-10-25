@@ -56,7 +56,7 @@ Question 5 matters most: an app that is switched off protects no one. If the ans
 ## 5. Incidents
 
 - **A HIGH alarm on a legitimate call:** the guardian taps "false alarm" (or the thumbs down). The same day, the owner finds the
-  record in the verdict log (Cloud Logging, filter `jsonPayload.kind="live_alarm"` or `"check"`, or `python tools/verdict_log.py`)
+  record by the alert's time and household (the alert carries no verdict id) in the verdict log (Cloud Logging, filter `jsonPayload.kind="live_alarm"` or `"check"`, or `python tools/verdict_log.py`)
   and reads the rule hits and the judge's reasons. Note the cause in the Log. Fix the rule or prompt only through the dev and test
   sets, never the final set (`docs/EVAL.md`).
 - **A missed scam:** the guardian says so (check-in question 4 or a message). Same day, same method. The transcript is never

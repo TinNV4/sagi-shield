@@ -4,7 +4,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "tools"))
-from pilot_report import format_report  # noqa: E402
+from pilot_report import collect_bigquery, format_report  # noqa: E402
 
 ROWS = {
     "days": 7,
@@ -61,3 +61,20 @@ def test_expired_gcloud_login_returns_a_message_not_a_traceback(monkeypatch):
     creds, error = pilot_report.credentials("p", True)
     assert creds is None and "gcloud auth login" in error
     assert pilot_report.credentials("p", False) == (None, None)
+
+
+def test_one_failing_query_keeps_the_sections_that_succeeded():
+    def run(name):
+        if name == "latency":
+            raise RuntimeError("quota")
+        return {"verdicts": ROWS["verdicts"], "live": [ROWS["live"]]}[name]
+
+    rows = {"days": 7, "verdicts": None, "latency": None, "live": None}
+    collect_bigquery(rows, run)
+    assert rows["verdicts"] == ROWS["verdicts"]
+    assert rows["latency"] is None
+    assert rows["live"] == ROWS["live"]
+    assert "quota" in rows["note"]
+    text = format_report({**ROWS, **rows})
+    assert "check: HIGH 5, LOW 10" in text
+    assert "calls 4, looks 120, alarms 1" in text

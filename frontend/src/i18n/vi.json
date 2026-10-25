@@ -146,7 +146,8 @@
     "debug_trigger": "Từ khóa kích hoạt",
     "debug_none": "không có",
     "debug_last_msg": "Nội dung gần nhất",
-    "cloud_privacy": "Đang dùng nhận dạng giọng nói trên đám mây của trình duyệt"
+    "cloud_privacy": "Đang dùng nhận dạng giọng nói trên đám mây của trình duyệt",
+    "speech_idle_privacy": "Chưa nghe"
   },
   "quick": {
     "title": "Kiểm tra nhanh",
@@ -567,7 +568,7 @@
     "lang_vi": "Tiếng Việt",
     "lang_en": "Tiếng Anh",
     "strict_privacy": "Bảo mật nghiêm ngặt cho chế độ canh gác",
-    "strict_privacy_desc": "Tắt (khuyên dùng): trong cuộc gọi, phần chữ đã che số được AI kiểm tra khoảng 20 giây một lần - cuộc gọi lừa đảo thật thường không có từ khóa rõ ràng. Bật: chỉ gửi chữ sau khi bộ quy tắc trên máy thấy dấu hiệu đáng ngờ; khả năng phát hiện yếu hơn. Dù chọn cách nào, âm thanh cũng không rời khỏi thiết bị.",
+    "strict_privacy_desc": "Tắt (khuyên dùng): trong cuộc gọi, phần chữ đã che số được AI kiểm tra khoảng 20 giây một lần - cuộc gọi lừa đảo thật thường không có từ khóa rõ ràng. Bật: mỗi câu vẫn được gửi đến máy chủ Sagi Shield, nhưng chỉ đưa cho AI xem sau khi bộ quy tắc thấy dấu hiệu đáng ngờ; khả năng phát hiện yếu hơn. Dù chọn cách nào, âm thanh cũng không rời khỏi thiết bị.",
     "privacy_link": "Thông báo về quyền riêng tư",
     "privacy_desc": "Thông tin nào rời khỏi điện thoại, thông tin nào được lưu và cách xóa"
   },

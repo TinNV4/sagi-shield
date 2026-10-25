@@ -5,6 +5,9 @@
 #   pwsh infra/setup_verdict_sink.ps1                                                    # pilot: sagi-shield-pilot -> dataset sagi_pilot
 #   pwsh infra/setup_verdict_sink.ps1 -Service sagi-shield-api -Dataset sagi_verdicts    # judged service, only after the freeze
 #
+# Retention: the dataset default only reaches tables created later, so the script also sets the expiry on the table the sink
+# already created (400 days, same as sagi.events).
+#
 # The sink creates its table lazily: `run_googleapis_com_stdout` appears after the FIRST matching record. Only then set
 # the pilot variable PILOT_VERDICT_TABLE (see the closing message) to <project>.<dataset>.run_googleapis_com_stdout and redeploy.
 param(
@@ -28,8 +31,19 @@ if ($LASTEXITCODE -ne 0) {
     Write-Host "Dataset ${Project}:$Dataset exists"
 }
 # retention: partitions expire after 400 days (seconds), same as sagi.events
-bq --project_id=$Project update --default_partition_expiration=34560000 "${Project}:$Dataset" | Out-Null
+$PartitionExpirySeconds = 34560000
+bq --project_id=$Project update "--default_partition_expiration=$PartitionExpirySeconds" "${Project}:$Dataset" | Out-Null
 Check "set the partition expiry"
+# the dataset default applies only to tables created later: set it on the sink's table too once it exists
+$table = "${Project}:$Dataset.run_googleapis_com_stdout"
+bq --project_id=$Project show --format=none $table *> $null
+if ($LASTEXITCODE -eq 0) {
+    bq --project_id=$Project update "--time_partitioning_expiration=$PartitionExpirySeconds" $table | Out-Null
+    Check "set the partition expiry on the verdict table"
+    Write-Host "Partition expiry on $table = $PartitionExpirySeconds s"
+} else {
+    Write-Host "Table $table does not exist yet: run this script again after the first record to set its expiry"
+}
 
 $sink = "sagi-verdicts-$Service"
 $dest = "bigquery.googleapis.com/projects/$Project/datasets/$Dataset"

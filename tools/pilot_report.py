@@ -113,6 +113,18 @@ def _offline_alerts(store, since_iso: str, limit: int = 2000) -> int:
     return n
 
 
+def collect_bigquery(rows: dict, run) -> None:
+    """Fill the verdict sections one query at a time: a query that fails leaves its own section empty (and sets the note),
+    the sections that already succeeded keep their results."""
+    for key, name in (("verdicts", "verdicts"), ("latency", "latency"), ("live", "live")):
+        try:
+            result = run(name)
+            rows[key] = (result or [{}])[0] if key == "live" else result
+        except Exception as e:
+            rows[key] = None
+            rows.setdefault("note", f"{type(e).__name__}: {str(e)[:100]}")
+
+
 def collect(a: argparse.Namespace, creds=None) -> dict:
     project = a.project or os.environ.get("GOOGLE_CLOUD_PROJECT", "")
     table = a.verdict_table or os.getenv("VERDICT_TABLE") or f"{project}.sagi_pilot.run_googleapis_com_stdout"
@@ -127,11 +139,8 @@ def collect(a: argparse.Namespace, creds=None) -> dict:
             cfg = bigquery.QueryJobConfig(query_parameters=[bigquery.ScalarQueryParameter("days", "INT64", a.days)])
             return [dict(r.items()) for r in client.query(QUERIES[name].replace("@table", table), job_config=cfg).result(timeout=60)]
         assert all(which(QUERIES[k]) == k for k in QUERIES)
-        rows["verdicts"] = run("verdicts")
-        rows["latency"] = run("latency")
-        rows["live"] = (run("live") or [{}])[0]
+        collect_bigquery(rows, run)
     except Exception as e:
-        rows["verdicts"] = None
         rows["note"] = f"{type(e).__name__}: {str(e)[:100]}"
 
     try:  # Firestore, same token as tools/load_phish_list.py
