@@ -9,7 +9,8 @@
 
 Credentials: Application Default Credentials (`gcloud auth application-default login`) or
 GOOGLE_APPLICATION_CREDENTIALS; without ADC, --gcloud-token --project <id> signs the calls with
-`gcloud auth print-access-token` (as tools/load_phish_list.py does). The project otherwise comes from
+`gcloud auth print-access-token` (as tools/load_phish_list.py does).
+The project also serves as the quota project (x-goog-user-project), which Identity Toolkit requires for a user token. The project otherwise comes from
 GOOGLE_CLOUD_PROJECT (repo-root .env). An anonymous user (a protected person's device) is refused. The user has to sign in again, or wait for
 the ID token to refresh (up to an hour), before the claim shows.
 """
@@ -51,7 +52,7 @@ def main() -> int:
         from google.oauth2.credentials import Credentials
         token = subprocess.run(["gcloud", "auth", "print-access-token"], capture_output=True, text=True,
                                shell=True, check=True).stdout.strip()
-        app = firebase_admin.initialize_app(credential=Credentials(token), options={"projectId": a.project},
+        app = firebase_admin.initialize_app(credential=Credentials(token, quota_project_id=a.project), options={"projectId": a.project},
                                             name="grant-admin")
     else:
         from app import appcheck
