@@ -480,7 +480,8 @@
     "step_charger": "Để thiết bị cắm sạc.",
     "iphone_note": "iPhone: hãy làm đúng thứ tự. 1) Trong Safari, mở liên kết, chọn Chia sẻ rồi Thêm vào Màn hình chính. 2) Mở ứng dụng từ biểu tượng trên màn hình chính, không mở trong Safari. 3) Bấm “…” Thêm → Kết nối người thân → “Tôi có mã từ người thân” rồi nhập mã. Nếu đã dùng mã trong Safari trước, ứng dụng trên màn hình chính sẽ không được kết nối.",
     "print": "In",
-    "live_guard_not_saved": "Không thể bật Live Guard. Hãy bật sau trong phần cài đặt hộ gia đình."
+    "live_guard_not_saved": "Không thể bật Live Guard. Hãy bật sau trong phần cài đặt hộ gia đình.",
+    "privacy_link": "Thông báo về quyền riêng tư"
   },
   "community": {
     "title": "Bản đồ lừa đảo cộng đồng",
@@ -565,7 +566,9 @@
     "lang_vi": "Tiếng Việt",
     "lang_en": "Tiếng Anh",
     "strict_privacy": "Bảo mật nghiêm ngặt cho chế độ canh gác",
-    "strict_privacy_desc": "Tắt (khuyên dùng): trong cuộc gọi, phần chữ đã che số được AI kiểm tra khoảng 20 giây một lần - cuộc gọi lừa đảo thật thường không có từ khóa rõ ràng. Bật: chỉ gửi chữ sau khi bộ quy tắc trên máy thấy dấu hiệu đáng ngờ; khả năng phát hiện yếu hơn. Dù chọn cách nào, âm thanh cũng không rời khỏi thiết bị."
+    "strict_privacy_desc": "Tắt (khuyên dùng): trong cuộc gọi, phần chữ đã che số được AI kiểm tra khoảng 20 giây một lần - cuộc gọi lừa đảo thật thường không có từ khóa rõ ràng. Bật: chỉ gửi chữ sau khi bộ quy tắc trên máy thấy dấu hiệu đáng ngờ; khả năng phát hiện yếu hơn. Dù chọn cách nào, âm thanh cũng không rời khỏi thiết bị.",
+    "privacy_link": "Thông báo về quyền riêng tư",
+    "privacy_desc": "Thông tin nào rời khỏi điện thoại, thông tin nào được lưu và cách xóa"
   },
   "types": {
     "fake_police": "Giả mạo Công an / Viện kiểm sát",
@@ -713,7 +716,8 @@
     "choice_individual_title": "Dùng trên điện thoại của tôi",
     "choice_individual_badge": "Dành cho điện thoại cá nhân",
     "choice_individual_desc": "Đầy đủ tính năng trên điện thoại cá nhân: bật Live Guard khi cần, Kiểm tra nhanh tin nhắn/ảnh/link đáng ngờ, Danh sách kiểm tra trước khi chuyển tiền và mạng lưới bảo vệ gia đình.",
-    "choice_individual_btn": "Dùng trên điện thoại của tôi"
+    "choice_individual_btn": "Dùng trên điện thoại của tôi",
+    "privacy_link": "Đọc thông báo về quyền riêng tư"
   },
   "deepfake": {
     "title": "Cảnh giác cuộc gọi video deepfake",
@@ -777,5 +781,9 @@
     "sign_in_needed": "Hãy đăng nhập bằng tài khoản quản trị viên để xem trang này.",
     "rule_hits": "Quy tắc đã kích hoạt",
     "playbooks": "Kịch bản lừa đảo đã gặp"
+  },
+  "privacy": {
+    "title": "Thông báo về quyền riêng tư",
+    "updated": "Cập nhật: {date}"
   }
 }

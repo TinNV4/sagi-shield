@@ -24,12 +24,15 @@ export interface OnboardingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete: (mode: 'kiosk' | 'individual') => void;
+  /** Opens the privacy notice (the host closes this dialog). */
+  onOpenPrivacy?: () => void;
 }
 
 export const OnboardingModal: React.FC<OnboardingModalProps> = ({
   isOpen,
   onClose,
   onComplete,
+  onOpenPrivacy,
 }) => {
   const {t} = useI18n();
   const [currentStep, setCurrentStep] = useState<number>(1);
@@ -272,6 +275,11 @@ export const OnboardingModal: React.FC<OnboardingModalProps> = ({
                   <p className="text-xs text-emerald-100/90 mt-0.5 leading-relaxed">
                     {t('onboarding.step2_privacy_notice')}
                   </p>
+                  {onOpenPrivacy && (
+                    <button id="onboarding-privacy-link" onClick={onOpenPrivacy} className="mt-1 underline font-bold text-xs text-emerald-200">
+                      {t('onboarding.privacy_link')}
+                    </button>
+                  )}
                 </div>
               </div>
 

@@ -100,6 +100,17 @@ describe('link fragments', () => {
     expect(window.location.hash).toBe('');
   });
 
+  it('#privacy gives PRIVACY_FROM_LINK and is stripped from the address bar', async () => {
+    const mod = await load('#privacy');
+    expect(mod.PRIVACY_FROM_LINK).toBe(true);
+    expect(mod.ADMIN_FROM_LINK).toBe(false);
+    expect(window.location.hash).toBe('');
+  });
+
+  it('other fragments do not set PRIVACY_FROM_LINK', async () => {
+    expect((await load('#admin')).PRIVACY_FROM_LINK).toBe(false);
+  });
+
   it('other fragments do not set SHARE_FROM_LINK', async () => {
     const mod = await load('#pair=123456');
     expect(mod.SHARE_FROM_LINK).toBe(false);

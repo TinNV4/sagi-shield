@@ -118,6 +118,17 @@ export const GUARDIAN_FROM_PUSH: boolean = (() => {
   }
 })();
 
+/** Opened from the privacy link (/#privacy): show the notice. Read once. */
+export const PRIVACY_FROM_LINK: boolean = (() => {
+  try {
+    const hit = window.location.hash === '#privacy';
+    if (hit) window.history.replaceState(null, '', window.location.pathname);
+    return hit;
+  } catch {
+    return false;
+  }
+})();
+
 /** Opened from the admin link (/#admin): go to the admin page. Read once. */
 export const ADMIN_FROM_LINK: boolean = (() => {
   try {

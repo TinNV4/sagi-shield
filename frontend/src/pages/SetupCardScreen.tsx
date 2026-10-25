@@ -32,9 +32,10 @@ interface SetupCardScreenProps {
   /** The code that was just issued (after "Protect a parent"); without it the card asks for a new one. */
   initialCode?: CardCode | null;
   onBack: () => void;
+  onOpenPrivacy?: () => void;
 }
 
-export const SetupCardScreen: React.FC<SetupCardScreenProps> = ({household, initialCode, onBack}) => {
+export const SetupCardScreen: React.FC<SetupCardScreenProps> = ({household, initialCode, onBack, onOpenPrivacy}) => {
   const {t, lang} = useI18n();
   const [code, setCode] = useState<CardCode | null>(initialCode ?? null);
   const [qr, setQr] = useState<string | null>(null);
@@ -162,6 +163,14 @@ export const SetupCardScreen: React.FC<SetupCardScreenProps> = ({household, init
           <span>{t('card.print')}</span>
         </button>
       </div>
+
+      {onOpenPrivacy && (
+        <p className="no-print text-center">
+          <button id="setup-card-privacy" onClick={onOpenPrivacy} className="underline text-sm font-bold text-gray-600 dark:text-gray-300">
+            {t('card.privacy_link')}
+          </button>
+        </p>
+      )}
     </div>
   );
 };

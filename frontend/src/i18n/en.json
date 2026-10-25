@@ -480,7 +480,8 @@
     "step_charger": "Leave the device on its charger.",
     "iphone_note": "iPhone: follow this order. 1) In Safari, open the link, tap Share, then Add to Home Screen. 2) Open the app from its home-screen icon, not from Safari. 3) Tap “…” More → Family Link → “I have a code from my family” and type the code. A code used in Safari first will not link the home-screen app.",
     "print": "Print",
-    "live_guard_not_saved": "Live Guard could not be turned on. Turn it on later in the household settings."
+    "live_guard_not_saved": "Live Guard could not be turned on. Turn it on later in the household settings.",
+    "privacy_link": "Privacy notice"
   },
   "community": {
     "title": "Community Fraud Radar",
@@ -565,7 +566,9 @@
     "lang_vi": "Vietnamese",
     "lang_en": "English",
     "strict_privacy": "Strict privacy for Live Guard",
-    "strict_privacy_desc": "Off (recommended): during a call, text with numbers hidden is checked by AI about every 20 seconds - real scam calls often contain no obvious keyword. On: text is sent only after the on-device rules notice a warning sign; detection is weaker. Audio never leaves this device either way."
+    "strict_privacy_desc": "Off (recommended): during a call, text with numbers hidden is checked by AI about every 20 seconds - real scam calls often contain no obvious keyword. On: text is sent only after the on-device rules notice a warning sign; detection is weaker. Audio never leaves this device either way.",
+    "privacy_link": "Privacy notice",
+    "privacy_desc": "What leaves your phone, what is kept, and how to delete it"
   },
   "types": {
     "fake_police": "Fake Police / Prosecutor Scam",
@@ -713,7 +716,8 @@
     "choice_individual_title": "Use on my own phone",
     "choice_individual_badge": "For Personal Smartphones",
     "choice_individual_desc": "Full mobile app access for everyday personal protection: on-demand Live Guard, Quick Check text/image scanner, Before You Pay safety checklist, and family guardian network.",
-    "choice_individual_btn": "Use on my own phone"
+    "choice_individual_btn": "Use on my own phone",
+    "privacy_link": "Read the privacy notice"
   },
   "deepfake": {
     "title": "Watch out for deepfake video calls",
@@ -777,5 +781,9 @@
     "sign_in_needed": "Sign in with your administrator account to see this page.",
     "rule_hits": "Rules that fired",
     "playbooks": "Scam playbooks seen"
+  },
+  "privacy": {
+    "title": "Privacy notice",
+    "updated": "Updated {date}"
   }
 }

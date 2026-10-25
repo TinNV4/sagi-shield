@@ -34,6 +34,8 @@ interface SettingsScreenProps {
   onReplayOnboarding?: () => void;
   /** Opens the pilot overview; the link shows only for a signed-in user with the admin claim. */
   onOpenAdmin?: () => void;
+  /** Opens the privacy notice. */
+  onOpenPrivacy?: () => void;
 }
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
@@ -48,6 +50,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onExitKioskConfirm,
   onReplayOnboarding,
   onOpenAdmin,
+  onOpenPrivacy,
 }) => {
   const {lang, setLang, t} = useI18n();
 
@@ -315,6 +318,23 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <button
             id="replay-onboarding-btn"
             onClick={onReplayOnboarding}
+            className="px-4 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-[#1B4D3E] dark:text-emerald-300 font-bold text-xs shrink-0 transition"
+          >
+            {t('common.open')}
+          </button>
+        </div>
+      )}
+
+      {/* Privacy notice */}
+      {onOpenPrivacy && (
+        <div className="p-5 rounded-3xl bg-white dark:bg-slate-900 border border-gray-200 dark:border-gray-800 shadow-xs flex items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <div className="text-base font-bold text-gray-900 dark:text-white">{t('settings.privacy_link')}</div>
+            <p className="text-xs text-gray-500 dark:text-gray-400">{t('settings.privacy_desc')}</p>
+          </div>
+          <button
+            id="open-privacy-btn"
+            onClick={onOpenPrivacy}
             className="px-4 py-2 rounded-xl bg-emerald-100 hover:bg-emerald-200 dark:bg-emerald-950 dark:hover:bg-emerald-900 text-[#1B4D3E] dark:text-emerald-300 font-bold text-xs shrink-0 transition"
           >
             {t('common.open')}

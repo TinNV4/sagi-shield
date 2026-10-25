@@ -1,5 +1,5 @@
 import React, {Suspense, lazy, useEffect, useRef, useState} from 'react';
-import {ADMIN_FROM_LINK, api, GUARDIAN_FROM_PUSH, JOIN_FROM_LINK, mockApiInstance, PAIR_FROM_LINK, SHARE_FROM_LINK} from './api/client';
+import {ADMIN_FROM_LINK, api, GUARDIAN_FROM_PUSH, JOIN_FROM_LINK, mockApiInstance, PAIR_FROM_LINK, PRIVACY_FROM_LINK, SHARE_FROM_LINK} from './api/client';
 import {readShareInbox, toCheckInput, type ShareCheckInput} from './lib/shareInbox';
 import {CheckResult} from './api/types';
 import {BottomNav, TabType} from './components/BottomNav';
@@ -25,6 +25,7 @@ const CommunityScreen = lazy(() => import('./pages/CommunityScreen').then((m) =>
 const FamilyScreen = lazy(() => import('./pages/FamilyScreen').then((m) => ({default: m.FamilyScreen})));
 const GuardianViewScreen = lazy(() => import('./pages/GuardianViewScreen').then((m) => ({default: m.GuardianViewScreen})));
 const HowItWorksScreen = lazy(() => import('./pages/HowItWorksScreen').then((m) => ({default: m.HowItWorksScreen})));
+const PrivacyScreen = lazy(() => import('./pages/PrivacyScreen').then((m) => ({default: m.PrivacyScreen})));
 const QuickCheckScreen = lazy(() => import('./pages/QuickCheckScreen').then((m) => ({default: m.QuickCheckScreen})));
 const RecoveryScreen = lazy(() => import('./pages/RecoveryScreen').then((m) => ({default: m.RecoveryScreen})));
 const ResultScreen = lazy(() => import('./pages/ResultScreen').then((m) => ({default: m.ResultScreen})));
@@ -81,6 +82,7 @@ function AppContent() {
 
   // Navigation tab
   const [currentTab, setCurrentTab] = useState<FullTabType>(() => {
+    if (PRIVACY_FROM_LINK) return 'privacy'; // /#privacy: the notice, readable before any setup
     if (ADMIN_FROM_LINK) return 'admin'; // /#admin: the pilot overview (the server decides who may read it)
     if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH) return 'guardian_view'; // a family member's QR code, or an alert notification
     if (SHARE_FROM_LINK) return 'quick'; // the OS share sheet handed a screenshot or text over
@@ -115,7 +117,7 @@ function AppContent() {
     return window.location.pathname.includes('demo') || window.location.hash.includes('demo');
   });
   const [isOnboardingOpen, setIsOnboardingOpen] = useState<boolean>(() => {
-    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK || ADMIN_FROM_LINK) return false; // a guardian came to pair or to read an alert, not to set up a kiosk
+    if (PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK || ADMIN_FROM_LINK || PRIVACY_FROM_LINK) return false; // a guardian came to pair or to read an alert, not to set up a kiosk
     try {
       return localStorage.getItem('sagi_onboarding_completed') !== 'true';
     } catch {
@@ -274,7 +276,7 @@ function AppContent() {
         });
     };
     // a guardian who came to pair or to read an alert, or a share, does not set up a kiosk on the first look
-    let firstCheckDone = Boolean(PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK || ADMIN_FROM_LINK);
+    let firstCheckDone = Boolean(PAIR_FROM_LINK || GUARDIAN_FROM_PUSH || JOIN_FROM_LINK || SHARE_FROM_LINK || ADMIN_FROM_LINK || PRIVACY_FROM_LINK);
     const off = onAuth((user) => {
       authUserRef.current = user;
       if (firstCheckDone || !user?.anonymous) return;
@@ -438,7 +440,7 @@ function AppContent() {
         )}
 
         {currentTab === 'setup_card' && cardTarget && (
-          <SetupCardScreen household={cardTarget.household} initialCode={cardTarget.code} onBack={handleGoBack} />
+          <SetupCardScreen household={cardTarget.household} initialCode={cardTarget.code} onBack={handleGoBack} onOpenPrivacy={() => navigateTo('privacy')} />
         )}
 
         {currentTab === 'community' && (
@@ -451,9 +453,12 @@ function AppContent() {
 
         {currentTab === 'admin' && <AdminScreen onBack={handleGoBack} />}
 
+        {currentTab === 'privacy' && <PrivacyScreen onBack={handleGoBack} />}
+
         {currentTab === 'settings' && (
           <SettingsScreen
             onOpenAdmin={() => navigateTo('admin')}
+            onOpenPrivacy={() => navigateTo('privacy')}
             isKioskMode={isKioskMode}
             onSetKioskMode={handleSettingsKioskMode}
             speakEnabled={speakEnabled}
@@ -491,6 +496,10 @@ function AppContent() {
         isOpen={isOnboardingOpen}
         onClose={() => setIsOnboardingOpen(false)}
         onComplete={handleOnboardingComplete}
+        onOpenPrivacy={() => {
+          setIsOnboardingOpen(false);
+          navigateTo('privacy');
+        }}
       />
     </div>
   );

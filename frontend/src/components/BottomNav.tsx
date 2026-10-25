@@ -28,6 +28,7 @@ export type TabType =
   | 'guardian_view'
   | 'setup_card'
   | 'admin'
+  | 'privacy'
   | 'demo';
 
 interface BottomNavProps {
