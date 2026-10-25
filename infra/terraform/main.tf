@@ -99,6 +99,21 @@ resource "google_firestore_field" "recovery_ttl" {
   ttl_config {}
 }
 
+# retention: alerts 90 days, feedback 365 days (backend/app/retention.py)
+resource "google_firestore_field" "alerts_ttl" {
+  database   = google_firestore_database.db.name
+  collection = "alerts"
+  field      = "expires_at"
+  ttl_config {}
+}
+
+resource "google_firestore_field" "feedback_ttl" {
+  database   = google_firestore_database.db.name
+  collection = "feedback"
+  field      = "expires_at"
+  ttl_config {}
+}
+
 # ---------------------------------------------------------------- HMAC key for phone-number hashes (never printed)
 resource "random_id" "hash_key" {
   byte_length = 32
@@ -541,6 +556,22 @@ resource "google_firestore_field" "pilot_recovery_ttl" {
   ttl_config {}
 }
 
+resource "google_firestore_field" "pilot_alerts_ttl" {
+  count      = var.pilot_enabled ? 1 : 0
+  database   = google_firestore_database.pilot[0].name
+  collection = "alerts"
+  field      = "expires_at"
+  ttl_config {}
+}
+
+resource "google_firestore_field" "pilot_feedback_ttl" {
+  count      = var.pilot_enabled ? 1 : 0
+  database   = google_firestore_database.pilot[0].name
+  collection = "feedback"
+  field      = "expires_at"
+  ttl_config {}
+}
+
 resource "google_cloud_run_v2_service" "pilot" {
   count    = var.pilot_enabled ? 1 : 0
   name     = "sagi-shield-pilot"
@@ -651,7 +682,9 @@ resource "google_bigquery_dataset" "verdicts" {
   dataset_id  = each.value.dataset
   location    = var.region
   description = "Structured verdict log of ${each.value.service} (rule hits, judge reasons, latency; no text, numbers or ids)"
-  depends_on  = [google_project_service.apis]
+  # retention: 400 days, same as sagi.events (backend/app/retention.py)
+  default_partition_expiration_ms = 34560000000
+  depends_on                      = [google_project_service.apis]
 }
 
 resource "google_logging_project_sink" "verdicts" {

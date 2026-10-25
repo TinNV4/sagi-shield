@@ -13,6 +13,9 @@ if (-not (gcloud firestore databases describe --project $Project --format="value
     gcloud firestore databases create --location=$Region --type=firestore-native --project $Project
 }
 gcloud firestore fields ttls update expires_at --collection-group=recovery_sessions --enable-ttl --async --project $Project
+# retention: alerts 90 days, feedback 365 days (backend/app/retention.py)
+gcloud firestore fields ttls update expires_at --collection-group=alerts --enable-ttl --async --project $Project
+gcloud firestore fields ttls update expires_at --collection-group=feedback --enable-ttl --async --project $Project
 
 # HMAC key for phone-number hashes: generated here, never printed, never on disk
 if (-not (gcloud secrets describe sagi-hash-key --project $Project --format="value(name)" 2>$null)) {

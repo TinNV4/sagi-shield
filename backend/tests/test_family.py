@@ -62,7 +62,7 @@ def test_notify_my_family_from_a_result(client):
     alert = client.get("/family/alerts", params={"family_id": fam["family_id"]}).json()[0]
     assert alert["risk_level"] == "HIGH" and alert["member_name"] == "Mom" and alert["stage"] == 4
     assert alert["summary"] == result["reasons"][0] and set(alert) == {
-        "id", "created_at", "member_name", "risk_level", "scam_type", "stage", "summary"}
+        "id", "created_at", "member_name", "risk_level", "scam_type", "stage", "summary", "expires_at"}
 
 
 def test_live_high_alerts_the_family_once_and_stores_no_transcript(client):

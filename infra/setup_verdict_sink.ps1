@@ -27,6 +27,9 @@ if ($LASTEXITCODE -ne 0) {
 } else {
     Write-Host "Dataset ${Project}:$Dataset exists"
 }
+# retention: partitions expire after 400 days (seconds), same as sagi.events
+bq --project_id=$Project update --default_partition_expiration=34560000 "${Project}:$Dataset" | Out-Null
+Check "set the partition expiry"
 
 $sink = "sagi-verdicts-$Service"
 $dest = "bigquery.googleapis.com/projects/$Project/datasets/$Dataset"

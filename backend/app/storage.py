@@ -17,6 +17,7 @@ from urllib.parse import urlsplit
 
 from pydantic import Field
 
+from app import retention
 from app.auth import Principal
 
 
@@ -145,9 +146,20 @@ def _without_guardian_token(hh: dict, uid: str, token: str) -> dict:
     return hh
 
 
+def _expiry_iso(days: int) -> str:
+    return retention.expires_at(days).isoformat(timespec="seconds")
+
+
+def _ttl_datetime(doc: dict) -> dict:
+    """Firestore TTL policies need a timestamp field: the shared helpers keep ISO strings, the write sites convert."""
+    exp = doc.get("expires_at")
+    return {**doc, "expires_at": datetime.fromisoformat(exp)} if isinstance(exp, str) else doc
+
+
 def _alert(risk_level: str, scam_type: str, stage: int, summary: str, member_name: str) -> dict:
     return {"id": uuid.uuid4().hex[:12], "created_at": _now_iso(), "member_name": member_name,
-            "risk_level": risk_level, "scam_type": scam_type, "stage": stage, "summary": summary[:300]}
+            "risk_level": risk_level, "scam_type": scam_type, "stage": stage, "summary": summary[:300],
+            "expires_at": _expiry_iso(retention.ALERT_DAYS)}
 
 
 def phish_keys(url: str) -> tuple[str, str]:
@@ -187,7 +199,7 @@ def _stats(checks: dict, reports: list[dict]) -> dict:
 def _feedback(kind: str, target: str, who: str, correct: bool, reason: str | None, lang: str) -> dict:
     """One "was this right?" answer: no text; id = one answer per person and target (the last press wins)."""
     return {"id": f"{kind}:{target}:{who}", "kind": kind, "target": target, "who": who, "correct": bool(correct),
-            "reason": reason, "lang": lang, "created_at": _now_iso()}
+            "reason": reason, "lang": lang, "created_at": _now_iso(), "expires_at": _expiry_iso(retention.FEEDBACK_DAYS)}
 
 
 def _seen_within_24h(hh: dict) -> bool:
@@ -540,7 +552,7 @@ class FirestoreStore:
         if not fam:
             return None
         alert = _alert(risk_level, scam_type, stage, summary, fam["member_name"])
-        self.db.collection("families").document(family_id).collection("alerts").document(alert["id"]).set(alert)
+        self.db.collection("families").document(family_id).collection("alerts").document(alert["id"]).set(_ttl_datetime(alert))
         return alert
 
     def list_alerts(self, family_id: str) -> list[dict]:
@@ -669,7 +681,7 @@ class FirestoreStore:
         if not hh:
             return None
         alert = _alert(risk_level, scam_type, stage, summary, hh["member_name"])
-        self.db.collection("households").document(household_id).collection("alerts").document(alert["id"]).set(alert)
+        self.db.collection("households").document(household_id).collection("alerts").document(alert["id"]).set(_ttl_datetime(alert))
         return alert
 
     def list_household_alerts(self, household_id: str) -> list[dict]:
@@ -679,7 +691,7 @@ class FirestoreStore:
 
     def save_feedback(self, kind: str, target: str, who: str, correct: bool, reason: str | None, lang: str) -> dict:
         doc = _feedback(kind, target, who, correct, reason, lang)
-        self.db.collection("feedback").document(doc["id"]).set(doc)  # same id = same person, same target: upsert
+        self.db.collection("feedback").document(doc["id"]).set(_ttl_datetime(doc))  # same id = same person, same target: upsert
         return doc
 
     def feedback_stats(self, since_iso: str) -> dict:

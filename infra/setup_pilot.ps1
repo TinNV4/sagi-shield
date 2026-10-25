@@ -34,6 +34,12 @@ if ($existing -match "/databases/$Database$") {
 gcloud firestore fields ttls update expires_at --collection-group recovery_sessions --database $Database --enable-ttl --async `
     --project $Project 2>$null | Out-Null
 Write-Host "Firestore: TTL on recovery_sessions.expires_at requested"
+# retention: alerts 90 days, feedback 365 days (backend/app/retention.py)
+foreach ($group in "alerts", "feedback") {
+    gcloud firestore fields ttls update expires_at --collection-group $group --database $Database --enable-ttl --async `
+        --project $Project 2>$null | Out-Null
+    Write-Host "Firestore: TTL on ${group}.expires_at requested"
+}
 
 # 2. the published phishing list: the pilot has no scheduled reload (that job belongs to the judged service), so load
 #    it by hand now and again when it matters (tools/load_phish_list.py, FIRESTORE_DB=$Database)

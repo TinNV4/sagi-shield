@@ -124,3 +124,13 @@ def test_feedback_stats_ignores_documents_older_than_since():
     s.save_feedback("alert", "x1", "g1", False, "not_scam", "ja")
     s.feedback[next(iter(s.feedback))]["created_at"] = "2000-01-01T00:00:00+00:00"
     assert s.feedback_stats("2001-01-01T00:00:00+00:00") == {"checks": {"n": 0, "correct": 0}, "alerts": {"n": 1, "correct": 0}}
+
+
+def test_alerts_and_feedback_carry_expires_at_and_old_alerts_still_list():
+    s = MemoryStore(); h = s.create_household("", "Mom", "ja", DEV); hid = h["household_id"]
+    a = s.add_household_alert(hid, "HIGH", "fake_police", 4, "x")
+    assert a["expires_at"] > a["created_at"]
+    s.household_alerts[hid].append({**a, "id": "old"}); del s.household_alerts[hid][-1]["expires_at"]   # a pre-retention document
+    assert [x["id"] for x in s.list_household_alerts(hid)] == [a["id"], "old"]
+    fb = s.save_feedback("check", "0123456789abcdef", "who", True, None, "ja")
+    assert "expires_at" in fb
