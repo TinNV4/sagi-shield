@@ -770,6 +770,10 @@
     "no_answers": "Chưa có phản hồi",
     "households": "Hộ gia đình",
     "households_line": "{{n}} hộ, Live Guard bật ở {{on}} hộ, {{seen}} thiết bị hoạt động trong 24 giờ",
-    "settings_desc": "Số liệu tổng hợp của thử nghiệm (chỉ quản trị viên)."
+    "settings_desc": "Số liệu tổng hợp của thử nghiệm (chỉ quản trị viên).",
+    "section_unavailable": "Hiện chưa có số liệu.",
+    "sign_in_needed": "Hãy đăng nhập bằng tài khoản quản trị viên để xem trang này.",
+    "rule_hits": "Quy tắc đã kích hoạt",
+    "playbooks": "Kịch bản lừa đảo đã gặp"
   }
 }

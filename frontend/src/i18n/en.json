@@ -770,6 +770,10 @@
     "no_answers": "No answers yet",
     "households": "Households",
     "households_line": "{{n}} households, Live Guard on in {{on}}, {{seen}} devices seen in 24 h",
-    "settings_desc": "Aggregate numbers of the pilot (administrators only)."
+    "settings_desc": "Aggregate numbers of the pilot (administrators only).",
+    "section_unavailable": "Not available right now.",
+    "sign_in_needed": "Sign in with your administrator account to see this page.",
+    "rule_hits": "Rules that fired",
+    "playbooks": "Scam playbooks seen"
   }
 }

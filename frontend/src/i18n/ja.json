@@ -770,6 +770,10 @@
     "no_answers": "回答はまだありません",
     "households": "世帯",
     "households_line": "{{n}}世帯、ライブガード有効{{on}}世帯、24時間以内の端末{{seen}}台",
-    "settings_desc": "パイロットの集計値（管理者のみ）。"
+    "settings_desc": "パイロットの集計値（管理者のみ）。",
+    "section_unavailable": "現在取得できません。",
+    "sign_in_needed": "このページを見るには、管理者アカウントでログインしてください。",
+    "rule_hits": "作動したルール",
+    "playbooks": "検出された手口"
   }
 }

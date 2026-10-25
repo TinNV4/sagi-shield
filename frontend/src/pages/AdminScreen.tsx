@@ -1,10 +1,10 @@
-import React, {useCallback, useEffect, useMemo, useState} from 'react';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {ArrowLeft, RefreshCw} from 'lucide-react';
 import {Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
 import {api, ApiError} from '../api/client';
 import type {AdminSummary} from '../api/types';
 import {useI18n} from '../i18n';
-import {adminScreenState, agreementRate} from '../lib/adminState';
+import {adminScreenState, agreementRate, sectionState, type AdminSection} from '../lib/adminState';
 
 const DAY_CHOICES = [1, 7, 30] as const;
 const LEVEL_COLORS: Record<string, string> = {LOW: '#059669', MEDIUM: '#d97706', HIGH: '#dc2626'};
@@ -23,12 +23,18 @@ export const AdminScreen: React.FC<{onBack?: () => void}> = ({onBack}) => {
   const [data, setData] = useState<AdminSummary | null>(null);
   const [error, setError] = useState<{status: number; detail: string | null} | null>(null);
 
+  // the selection the screen shows now: a slow answer for an earlier choice must not replace a newer one
+  const wanted = useRef(days);
+  wanted.current = days;
+
   const load = useCallback(async (d: number) => {
     setData(null);
     setError(null);
     try {
-      setData(await api.adminSummary(d));
+      const res = await api.adminSummary(d);
+      if (d === wanted.current && res.days === d) setData(res);
     } catch (err) {
+      if (d !== wanted.current) return;
       setError(err instanceof ApiError ? {status: err.status, detail: err.detail} : {status: 0, detail: null});
     }
   }, []);
@@ -54,6 +60,22 @@ export const AdminScreen: React.FC<{onBack?: () => void}> = ({onBack}) => {
     for (const v of data?.verdicts ?? []) m.set(`${v.kind}|${v.lang}`, (m.get(`${v.kind}|${v.lang}`) ?? 0) + v.n);
     return [...m.entries()].map(([k, n]) => ({kind: k.split('|')[0], lang: k.split('|')[1], n}));
   }, [data]);
+
+  const sec = (s: AdminSection) => (data ? sectionState(data, s) : 'ok');
+  const unavailableLine = <p className="text-sm text-amber-800 dark:text-amber-300">{t('admin.section_unavailable')}</p>;
+  const noData = <p className="text-sm text-gray-500">{t('admin.no_data')}</p>;
+  const pairTable = (rows: {key: string; n: number}[]) => (
+    <table className="w-full text-sm">
+      <tbody>
+        {rows.map((r) => (
+          <tr key={r.key} className="border-t border-gray-100 dark:border-gray-800">
+            <td className="py-1.5">{r.key}</td>
+            <td className="py-1.5 text-right font-mono font-bold">{r.n}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
 
   const rate = (fb: {n: number; correct: number}) => {
     const r = agreementRate(fb);
@@ -90,6 +112,12 @@ export const AdminScreen: React.FC<{onBack?: () => void}> = ({onBack}) => {
 
       {state.kind === 'loading' && <p className="text-center text-gray-500 font-bold py-8">{t('common.loading')}</p>}
 
+      {state.kind === 'sign_in' && (
+        <div id="admin-sign-in" className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-400 text-sm font-bold">
+          {t('admin.sign_in_needed')}
+        </div>
+      )}
+
       {state.kind === 'forbidden' && (
         <div id="admin-forbidden" className="p-5 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-400 text-sm font-bold">
           {t('admin.not_admin')}
@@ -112,15 +140,11 @@ export const AdminScreen: React.FC<{onBack?: () => void}> = ({onBack}) => {
 
       {state.kind === 'data' && data && (
         <>
-          {data.unavailable && data.unavailable.length > 0 && (
-            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
-              {t('admin.partial')} {data.unavailable.join(', ')}
-            </p>
-          )}
-
           <Card title={t('admin.verdicts_per_day')}>
-            {perDay.length === 0 ? (
-              <p className="text-sm text-gray-500">{t('admin.no_data')}</p>
+            {sec('verdicts') === 'unavailable' ? (
+              unavailableLine
+            ) : perDay.length === 0 ? (
+              noData
             ) : (
               <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
@@ -140,6 +164,11 @@ export const AdminScreen: React.FC<{onBack?: () => void}> = ({onBack}) => {
           </Card>
 
           <Card title={t('admin.by_kind')}>
+            {sec('verdicts') === 'unavailable' ? (
+              unavailableLine
+            ) : perKindLang.length === 0 ? (
+              noData
+            ) : (
             <table className="w-full text-sm">
               <tbody>
                 {perKindLang.map((r) => (
@@ -151,37 +180,79 @@ export const AdminScreen: React.FC<{onBack?: () => void}> = ({onBack}) => {
                 ))}
               </tbody>
             </table>
+            )}
           </Card>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Card title={t('admin.live')}>
-              <p className="text-sm font-bold">
-                {t('admin.live_line', {calls: data.live.calls, looks: data.live.looks, alarms: data.live.alarms})}
-              </p>
+            <Card title={t('admin.rule_hits')}>
+              {sec('rule_hits') === 'unavailable'
+                ? unavailableLine
+                : sec('rule_hits') === 'empty'
+                  ? noData
+                  : pairTable(data.rule_hits.map((r) => ({key: r.name, n: r.n})))}
             </Card>
-            <Card title={t('admin.latency')}>
-              <p className="text-sm font-bold font-mono">
-                p50 {data.latency_ms.p50 ?? '-'} ms · p95 {data.latency_ms.p95 ?? '-'} ms
-              </p>
-            </Card>
-            <Card title={t('admin.agreement')}>
-              <p className="text-sm font-bold">
-                {t('admin.agreement_checks')}: {rate(data.feedback.checks)}
-              </p>
-              <p className="text-sm font-bold">
-                {t('admin.agreement_alerts')}: {rate(data.feedback.alerts)}
-              </p>
-            </Card>
-            <Card title={t('admin.households')}>
-              <p className="text-sm font-bold">
-                {t('admin.households_line', {
-                  n: data.households.n,
-                  on: data.households.live_guard_on,
-                  seen: data.households.devices_seen_24h,
-                })}
-              </p>
+            <Card title={t('admin.playbooks')}>
+              {sec('reasons') === 'unavailable'
+                ? unavailableLine
+                : sec('reasons') === 'empty'
+                  ? noData
+                  : pairTable(data.reasons.map((r) => ({key: r.playbook, n: r.n})))}
             </Card>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <Card title={t('admin.live')}>
+              {sec('live') === 'unavailable' ? (
+                unavailableLine
+              ) : (
+                <p className="text-sm font-bold">
+                  {t('admin.live_line', {calls: data.live.calls, looks: data.live.looks, alarms: data.live.alarms})}
+                </p>
+              )}
+            </Card>
+            <Card title={t('admin.latency')}>
+              {sec('latency') === 'unavailable' ? (
+                unavailableLine
+              ) : (
+                <p className="text-sm font-bold font-mono">
+                  p50 {data.latency_ms.p50 ?? '-'} ms · p95 {data.latency_ms.p95 ?? '-'} ms
+                </p>
+              )}
+            </Card>
+            <Card title={t('admin.agreement')}>
+              {sec('feedback') === 'unavailable' ? (
+                unavailableLine
+              ) : (
+                <>
+                  <p className="text-sm font-bold">
+                    {t('admin.agreement_checks')}: {rate(data.feedback.checks)}
+                  </p>
+                  <p className="text-sm font-bold">
+                    {t('admin.agreement_alerts')}: {rate(data.feedback.alerts)}
+                  </p>
+                </>
+              )}
+            </Card>
+            <Card title={t('admin.households')}>
+              {sec('households') === 'unavailable' ? (
+                unavailableLine
+              ) : (
+                <p className="text-sm font-bold">
+                  {t('admin.households_line', {
+                    n: data.households.n,
+                    on: data.households.live_guard_on,
+                    seen: data.households.devices_seen_24h,
+                  })}
+                </p>
+              )}
+            </Card>
+          </div>
+
+          {data.unavailable && data.unavailable.length > 0 && (
+            <p className="text-xs font-semibold text-amber-800 dark:text-amber-300">
+              {t('admin.partial')} {data.unavailable.join(', ')}
+            </p>
+          )}
         </>
       )}
     </div>
