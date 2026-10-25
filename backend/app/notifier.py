@@ -59,11 +59,14 @@ def _push(tokens: list[str], lang: str, summary: str, alert: dict, urgency: str 
         return
     try:
         m = _messaging()
-        m.send_each_for_multicast(m.MulticastMessage(
+        resp = m.send_each_for_multicast(m.MulticastMessage(
             tokens=tokens, notification=m.Notification(title=titles.get(lang, titles["ja"]), body=summary),
             data={"alert_id": alert["id"], "risk_level": alert["risk_level"]},
             # high urgency: delivered at once to a phone in battery saving; useless after an hour
             webpush=m.WebpushConfig(headers={"Urgency": urgency, "TTL": "3600"})))
+        failed = getattr(resp, "failure_count", 0)
+        if isinstance(failed, int) and failed > 0:  # counts only: a dead token is otherwise invisible
+            print(f"[notifier] push sent={getattr(resp, 'success_count', 0)} failed={failed}", file=sys.stderr)
     except Exception as e:
         print(f"[notifier] push unavailable: {type(e).__name__}: {str(e)[:120]}", file=sys.stderr)
 

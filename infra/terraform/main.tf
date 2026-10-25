@@ -168,6 +168,7 @@ resource "google_bigquery_table" "events" {
     { name = "prefecture", type = "STRING" },
     { name = "llm_used", type = "BOOLEAN" },
     { name = "latency_ms", type = "INTEGER" },
+    { name = "feedback_correct", type = "BOOLEAN" },
   ])
 }
 

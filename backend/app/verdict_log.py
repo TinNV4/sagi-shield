@@ -24,9 +24,11 @@ import json
 import os
 import sys
 import threading
+import uuid
 from datetime import datetime, timezone
 
 _lock = threading.Lock()
+VERDICT_ID_KINDS = ("check", "precheck", "live_look")
 
 
 def _jsonable(x):
@@ -46,6 +48,8 @@ def record(kind: str, **fields) -> dict:
     if os.getenv("LOG_TEXT", "0") != "1":
         fields.pop("text", None)
     data = {k: _jsonable(v) for k, v in fields.items() if v is not None}
+    if kind in VERDICT_ID_KINDS:  # lets "was this right?" point at one verdict without knowing who asked
+        data["verdict_id"] = uuid.uuid4().hex[:16]
     return {"ts": datetime.now(timezone.utc).isoformat(timespec="milliseconds"), "kind": kind, **data}
 
 

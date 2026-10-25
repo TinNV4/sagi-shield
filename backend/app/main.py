@@ -28,6 +28,7 @@ from risk_engine import LANG_PACKS, analyze, level, precursor_hits as engine_pre
 
 from . import appcheck, auth, households, services, share  # noqa: E402
 from .agent import router as agent_router  # noqa: E402
+from .feedback import router as feedback_router  # noqa: E402
 from .analytics import log_event  # noqa: E402
 from .guard import GuardMiddleware  # noqa: E402
 from .live import router as live_router  # noqa: E402
@@ -77,6 +78,7 @@ app.include_router(live_router)
 app.include_router(agent_router)
 app.include_router(households.router)
 app.include_router(share.router)
+app.include_router(feedback_router)
 
 
 @app.exception_handler(auth.AuthError)
@@ -118,9 +120,10 @@ def finish(result: dict, flags: list[str], community_hits: int, kind: str = "che
     store.record_check(result["risk_level"])
     log_event(kind, lang=lang, source=source, risk_level=result["risk_level"], risk_score=result["risk_score"],
               scam_type=result["scam_type"], stage=result["stage"], llm_used=llm_used)  # aggregate fields only
-    log_verdict(kind, lang=lang, source=source, score=result["risk_score"], level=result["risk_level"], stage=result["stage"],
+    rec = log_verdict(kind, lang=lang, source=source, score=result["risk_score"], level=result["risk_level"], stage=result["stage"],
                 scam_type=result["scam_type"], reasons=result["reasons"], rules={"hits": result.get("rule_hits")},
                 flags=result["evidence_flags"], community_hits=community_hits, llm_used=llm_used)  # the "why"
+    result["verdict_id"] = rec.get("verdict_id")  # the handle for "was this right?"; the record keeps the why
     return result
 
 

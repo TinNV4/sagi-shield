@@ -1,5 +1,6 @@
 """The verdict log: every look and every check leaves a record that says why - and never the text."""
 import json
+import re
 import os
 import sys
 import time
@@ -79,3 +80,9 @@ def test_every_call_leaves_one_record_and_the_alarm_names_its_sentence(tmp_path,
         (first["session_id"], 4, "HIGH"), (second["session_id"], 2, "LOW")]
     assert calls[0]["alarm_line"] == 4 and "alarm_line" not in calls[1] and calls[1]["duration_s"] >= 0
     assert "警視庁" not in json.dumps(recs, ensure_ascii=False)          # counts and levels only, never the words
+
+
+def test_check_records_carry_a_verdict_id():
+    rec = verdict_log.record("check", level="LOW", score=0)
+    assert re.fullmatch(r"[0-9a-f]{16}", rec["verdict_id"])
+    assert "verdict_id" not in verdict_log.record("live_call", session="abc")

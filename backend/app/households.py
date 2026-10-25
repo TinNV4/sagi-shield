@@ -105,6 +105,11 @@ class PushToken(BaseModel):
     fcm_token: str = Field(min_length=1, max_length=4096)
 
 
+class AlertFeedback(BaseModel):
+    correct: bool
+    reason: Literal["not_scam", "wrong_type", "too_weak", "too_strong", "missed"] | None = None
+
+
 class HouseholdNotify(BaseModel):
     risk_level: Literal["LOW", "MEDIUM", "HIGH"]
     scam_type: str = Field(default="unknown", max_length=40)
@@ -174,6 +179,16 @@ def household_alerts(hid: str, p: Principal = Depends(auth.principal)):
     """Guardians only: the device raises alerts but never lists them (a borrowed or stolen phone shows no history)."""
     _member(hid, p, guardian_only=True)
     return STORE.list_household_alerts(hid)
+
+
+@router.post("/household/{hid}/alerts/{aid}/feedback")
+def household_alert_feedback(hid: str, aid: str, body: AlertFeedback, p: Principal = Depends(auth.principal)):
+    """Guardians only: "was this alert right?" - a yes/no and an optional enum reason, never text. Last press wins."""
+    hh = _member(hid, p, guardian_only=True)
+    if not STORE.alert_exists(hid, aid):
+        raise HTTPException(404, "unknown alert")
+    STORE.save_feedback("alert", aid, p.uid, body.correct, body.reason, hh["market"])
+    return {"ok": True}
 
 
 @router.delete("/household/{hid}/devices")

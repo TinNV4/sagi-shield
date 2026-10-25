@@ -184,6 +184,21 @@ def _stats(checks: dict, reports: list[dict]) -> dict:
     }
 
 
+def _feedback(kind: str, target: str, who: str, correct: bool, reason: str | None, lang: str) -> dict:
+    """One "was this right?" answer: no text; id = one answer per person and target (the last press wins)."""
+    return {"id": f"{kind}:{target}:{who}", "kind": kind, "target": target, "who": who, "correct": bool(correct),
+            "reason": reason, "lang": lang, "created_at": _now_iso()}
+
+
+def _feedback_stats(docs) -> dict:
+    out = {"checks": {"n": 0, "correct": 0}, "alerts": {"n": 0, "correct": 0}}
+    for d in docs:
+        bucket = out["checks" if d["kind"] == "check" else "alerts"]
+        bucket["n"] += 1
+        bucket["correct"] += 1 if d["correct"] else 0
+    return out
+
+
 class MemoryStore:
     def __init__(self):
         self.reports: list[dict] = []
@@ -192,6 +207,7 @@ class MemoryStore:
         self.alerts: dict[str, list[dict]] = {}
         self.households: dict[str, dict] = {}
         self.household_alerts: dict[str, list[dict]] = {}
+        self.feedback: dict[str, dict] = {}
         self.recovery: dict[str, dict] = {}  # insertion-ordered: oldest first
         self.phish_urls: dict[str, dict] = {}   # url_key -> {brand, date, source}
         self.phish_hosts: dict[str, dict] = {}  # host_key -> {count, latest}
@@ -373,6 +389,17 @@ class MemoryStore:
 
     def list_household_alerts(self, household_id: str) -> list[dict]:
         return list(self.household_alerts.get(household_id, []))
+
+    def save_feedback(self, kind: str, target: str, who: str, correct: bool, reason: str | None, lang: str) -> dict:
+        doc = _feedback(kind, target, who, correct, reason, lang)
+        self.feedback[doc["id"]] = doc
+        return dict(doc)
+
+    def feedback_stats(self, since_iso: str) -> dict:
+        return _feedback_stats(d for d in self.feedback.values() if d["created_at"] >= since_iso)
+
+    def alert_exists(self, household_id: str, alert_id: str) -> bool:
+        return any(a["id"] == alert_id for a in self.household_alerts.get(household_id, []))
 
     def get_recovery(self, session_id: str) -> dict | None:
         doc = self.recovery.get(session_id)
@@ -638,6 +665,21 @@ class FirestoreStore:
         col = self.db.collection("households").document(household_id).collection("alerts")
         docs = col.order_by("created_at", direction=self.fs.Query.DESCENDING).limit(MAX_ALERTS).stream()
         return [d.to_dict() for d in docs]
+
+    def save_feedback(self, kind: str, target: str, who: str, correct: bool, reason: str | None, lang: str) -> dict:
+        doc = _feedback(kind, target, who, correct, reason, lang)
+        self.db.collection("feedback").document(doc["id"]).set(doc)  # same id = same person, same target: upsert
+        return doc
+
+    def feedback_stats(self, since_iso: str) -> dict:
+        docs = []
+        for kind in ("check", "alert"):
+            q = self.db.collection("feedback").where("kind", "==", kind).where("created_at", ">=", since_iso)
+            docs += [d.to_dict() for d in q.stream()]
+        return _feedback_stats(docs)
+
+    def alert_exists(self, household_id: str, alert_id: str) -> bool:
+        return self.db.collection("households").document(household_id).collection("alerts").document(alert_id).get().exists
 
     # recovery_sessions/{session_id}; set a Firestore TTL policy on `expires_at` so old chats are deleted for real
     def get_recovery(self, session_id: str) -> dict | None:

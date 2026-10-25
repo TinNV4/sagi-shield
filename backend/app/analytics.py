@@ -17,7 +17,7 @@ import sys
 import threading
 from datetime import datetime, timezone
 
-FIELDS = ("kind", "lang", "source", "risk_level", "risk_score", "scam_type", "stage", "prefecture", "llm_used", "latency_ms")
+FIELDS = ("kind", "lang", "source", "risk_level", "risk_score", "scam_type", "stage", "prefecture", "llm_used", "latency_ms", "feedback_correct")
 _queue: queue.Queue = queue.Queue(maxsize=1000)
 _state = {"thread": None, "warned": False}
 

@@ -1,5 +1,6 @@
 """API tests: rules only, in-memory store, Google services stubbed.  Run: python -m pytest tests -q"""
 import io
+import re
 import os
 import sys
 from pathlib import Path
@@ -14,7 +15,7 @@ from app import main, services  # noqa: E402
 
 SCAM = "警察です。口座が犯罪に使われています。LINEで逮捕状を送ります"
 CONTRACT = {"risk_score", "risk_level", "stage", "scam_type", "reasons", "advice", "hotlines",
-            "evidence_flags", "rule_hits", "community_hits"}
+            "evidence_flags", "rule_hits", "community_hits", "verdict_id"}
 
 
 _analyze = main.analyze
@@ -327,3 +328,8 @@ def test_share_target_without_a_worker_redirects_to_the_app(client):
     # no service worker took the share: nothing is read or kept, the app just opens
     r = client.post("/share-target", data={"text": "x"}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/#share"
+
+
+def test_check_response_has_a_verdict_id(client):
+    r = client.post("/check", json={"lang": "ja", "text": "こんにちは"}).json()
+    assert re.fullmatch(r"[0-9a-f]{16}", r["verdict_id"])

@@ -387,3 +387,15 @@ def test_alert_without_reasons_gets_a_fallback_sentence(client):
     client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
     client.post(f"/household/{hid}/notify", json={"risk_level": "HIGH", "lang": "vi"}, headers=H(DEV))
     assert client.get(f"/household/{hid}/alerts", headers=H(G1)).json()[0]["summary"] == "Đã phát hiện một cuộc gọi có nguy cơ cao."
+
+
+def test_guardian_feedback_on_an_alert_last_press_wins(client):
+    h = client.post("/household", json={"market": "ja"}, headers=H(DEV)).json(); hid = h["household_id"]
+    client.post("/household/join", json={"pair_code": h["pair_code"]}, headers=H(G1))
+    client.post(f"/household/{hid}/notify", json={"risk_level": "HIGH", "lang": "ja"}, headers=H(DEV))
+    aid = client.get(f"/household/{hid}/alerts", headers=H(G1)).json()[0]["id"]
+    assert client.post(f"/household/{hid}/alerts/{aid}/feedback", json={"correct": False, "reason": "not_scam"}, headers=H(DEV)).status_code == 403
+    assert client.post(f"/household/{hid}/alerts/{aid}/feedback", json={"correct": False, "reason": "not_scam"}, headers=H(G1)).status_code == 200
+    assert client.post(f"/household/{hid}/alerts/{aid}/feedback", json={"correct": True}, headers=H(G1)).status_code == 200
+    assert client.post(f"/household/{hid}/alerts/zzz/feedback", json={"correct": True}, headers=H(G1)).status_code == 404
+    assert main.store.feedback_stats("2000-01-01T00:00:00+00:00")["alerts"] == {"n": 1, "correct": 1}
