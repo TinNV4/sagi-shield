@@ -1,6 +1,6 @@
 # First-Week Fixes Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Fix the seven things the two final reviews and the live run of 2026-10-25 flagged as likely to bite the first pilot households, before any household is set up.
 
@@ -39,7 +39,7 @@
 - `notifier.py`: `summary = first reason or advice or FALLBACK_SUMMARY[lang]` with `FALLBACK_SUMMARY = {"ja": "危険度の高い通話が検知されました。", "vi": "Đã phát hiện một cuộc gọi có nguy cơ cao."}` (used by both `alert_family` and `alert_household`).
 - `grant_admin.py`: `--gcloud-token` flag, same approach as `tools/load_phish_list.py` (`gcloud auth print-access-token` via subprocess) building `firebase_admin` credentials from `google.oauth2.credentials.Credentials(token)` for `initialize_app(credential=…)`; docstring updated; `--project` required with it.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_guard.py
@@ -67,10 +67,10 @@ def test_alert_without_reasons_gets_a_fallback_sentence(client):
     assert client.get(f"/household/{hid}/alerts", headers=H(G1)).json()[0]["summary"] == "Đã phát hiện một cuộc gọi có nguy cơ cao."
 ```
 
-- [ ] **Step 2: Run** (PowerShell, backend/) `python -m pytest tests/test_guard.py tests/test_household.py -q` → FAIL.
-- [ ] **Step 3: Implement** the three changes; `python -m py_compile tools/grant_admin.py`.
-- [ ] **Step 4: Run** `python -m pytest tests -q` → PASS.
-- [ ] **Step 5: Commit** `git commit -m "Pilot fixes: no token in the WebSocket handshake log, alert fallback sentence, grant_admin with a gcloud token"`
+- [x] **Step 2: Run** (PowerShell, backend/) `python -m pytest tests/test_guard.py tests/test_household.py -q` → FAIL.
+- [x] **Step 3: Implement** the three changes; `python -m py_compile tools/grant_admin.py`.
+- [x] **Step 4: Run** `python -m pytest tests -q` → PASS.
+- [x] **Step 5: Commit** `git commit -m "Pilot fixes: no token in the WebSocket handshake log, alert fallback sentence, grant_admin with a gcloud token"`
 
 ---
 
@@ -85,14 +85,14 @@ def test_alert_without_reasons_gets_a_fallback_sentence(client):
 - Kiosk return: `afterResultTarget({kioskMode, cameFromShare}) → 'guard' | 'home'` in householdState.ts; App uses it for the result screen's back/finish when `SHARE_FROM_LINK` was set: on a kiosk device → `guard` (which restarts the guard as kiosk does), else `home`.
 - Marker back-fill: `kioskDecision` gains the case `kioskOn && !fromHousehold && household?.live_guard_enabled` → `'mark'` (write `sagi_kiosk_from_household`, change nothing else); App handles `'mark'`. A user-chosen kiosk with Live Guard off stays untouched (`'keep'`).
 
-- [ ] **Step 1: Write the failing tests** (householdState.test.ts): chip labels for named / unnamed households (date from `created_at`, `t` stubbed); `afterResultTarget` four combinations; `kioskDecision` → `'mark'` case and the user-chosen `'keep'` case; `shareNeedsTextHint(input)` true only with both text and images.
-- [ ] **Step 2: Run** `npx vitest run --pool=threads` → FAIL.
-- [ ] **Step 3: Implement** (keys in three files).
-- [ ] **Step 4: Run** vitest, `npm run lint`, build → PASS.
-- [ ] **Step 5: Commit** `git commit -m "Pilot fixes: household chips tell apart, shared text hint, back to Live Guard after a share, kiosk marker back-fill"`
+- [x] **Step 1: Write the failing tests** (householdState.test.ts): chip labels for named / unnamed households (date from `created_at`, `t` stubbed); `afterResultTarget` four combinations; `kioskDecision` → `'mark'` case and the user-chosen `'keep'` case; `shareNeedsTextHint(input)` true only with both text and images.
+- [x] **Step 2: Run** `npx vitest run --pool=threads` → FAIL.
+- [x] **Step 3: Implement** (keys in three files).
+- [x] **Step 4: Run** vitest, `npm run lint`, build → PASS.
+- [x] **Step 5: Commit** `git commit -m "Pilot fixes: household chips tell apart, shared text hint, back to Live Guard after a share, kiosk marker back-fill"`
 
 ---
 
 ### Task 3: Docs
 
-- [ ] Update the two findings in `CLAUDE.md`'s "Guardian setup (2026-10-25)" paragraph to "fixed 2026-10-25 (…)" and commit `git commit -m "Docs: first-week fixes recorded"`.
+- [x] Update the two findings in `CLAUDE.md`'s "Guardian setup (2026-10-25)" paragraph to "fixed 2026-10-25 (…)" and commit `git commit -m "Docs: first-week fixes recorded"`.

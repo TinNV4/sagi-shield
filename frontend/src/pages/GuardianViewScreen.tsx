@@ -605,11 +605,24 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, o
     }
   };
 
-  const label = (h: Household) => householdLabel(h, t('guardian.member_fallback'));
+  const label = (h: Household) => householdChipLabel(h, t);
   // The chip's dot repeats the device status: green listening, amber offline, grey for anything else.
   const chipDotClass = (h: Household) => {
     const kind = deviceStatusLabel(h.device_status, Date.now(), h.devices, h.live_guard_enabled).kind;
     return kind === 'listening' ? 'bg-green-600' : kind === 'offline' ? 'bg-amber-500' : 'bg-gray-400';
+  };
+  // The same status as words, for screen readers (the dot is decoration).
+  const chipStatusText = (h: Household) => {
+    const d = deviceStatusLabel(h.device_status, Date.now(), h.devices, h.live_guard_enabled);
+    return d.kind === 'listening'
+      ? t('guardian.status_listening', {time: hhmm(d.at!)})
+      : d.kind === 'offline'
+        ? t('guardian.status_offline', {time: ddmmhhmm(d.at!)})
+        : d.kind === 'seen'
+          ? t('guardian.status_seen', {time: ddmmhhmm(d.at!)})
+          : d.kind === 'paired'
+            ? t('guardian.status_paired')
+            : t('guardian.status_none');
   };
   const shownName = (g: {name: string}, i: number) => guardianName(g, i, (n) => t('family.guardian_fallback', {n}));
   const actions = detail ? manageActions(detail) : null;
@@ -842,9 +855,10 @@ export const GuardianViewScreen: React.FC<GuardianViewScreenProps> = ({onBack, o
                   >
                     <span
                       aria-hidden="true"
-                      className={`inline-block w-2.5 h-2.5 rounded-full mr-2 ${chipDotClass(h)}`}
+                      className={`inline-block w-2.5 h-2.5 rounded-full mr-2 ring-2 ring-white dark:ring-slate-900 ${chipDotClass(h)}`}
                     />
                     {householdChipLabel(h, t)}
+                    <span className="sr-only">{`, ${chipStatusText(h)}`}</span>
                   </button>
                 ))}
               </div>

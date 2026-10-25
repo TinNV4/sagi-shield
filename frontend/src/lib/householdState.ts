@@ -151,15 +151,23 @@ export function manageActions(household: Household): ManageActions {
 /** What a household is called on a chip and in the delete confirmation: the protected person first. */
 export const householdLabel = (household: Household, fallback: string): string => household.member_name || household.name || fallback;
 
+/** "DD/MM HH:MM" in the viewer's local time. */
+export function formatLocalDateTime(date: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(date.getDate())}/${p(date.getMonth() + 1)} ${p(date.getHours())}:${p(date.getMinutes())}`;
+}
+
 /**
- * A chip label: the protected person, else the household name, else "Household from DD/MM" (from the ISO creation date,
- * read as text so the time zone cannot shift the day) so two unnamed households do not look the same.
+ * A chip label: the protected person, else the household name, else "Household from DD/MM HH:MM" (local time of the
+ * ISO creation stamp) so two unnamed households, even made on the same day, do not look the same.
  */
 export function householdChipLabel(household: Household, t: (path: string, params?: Record<string, string | number>) => string): string {
   const named = household.member_name || household.name;
   if (named) return named;
-  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(household.created_at ?? '');
-  return m ? t('guardian.household_created', {date: `${m[3]}/${m[2]}`}) : t('guardian.member_fallback');
+  const created = household.created_at ? new Date(household.created_at) : null;
+  return created && Number.isFinite(created.getTime())
+    ? t('guardian.household_created', {date: formatLocalDateTime(created)})
+    : t('guardian.member_fallback');
 }
 
 // ---------------------------------------------------------------- phone sign-in (SignInCard)
@@ -228,20 +236,23 @@ export function kioskUnlockActive(raw: string | null, now: number): boolean {
  * the app comes back to the foreground. Only an anonymous user (a protected device) is ever switched; a kiosk left
  * in Settings during the last 24 h is kept. Household on + kiosk off -> 'on'. Household off (or no household any
  * more) -> 'off' only for a kiosk the household turned on (`fromHousehold`, `sagi_kiosk_from_household`); a kiosk
- * the person chose in onboarding or Settings is never touched. 'keep' otherwise, so the screen does not move.
+ * the person chose in onboarding or Settings (`userChosen`, `sagi_kiosk_user_chosen`) is never touched, not even
+ * marked. 'keep' otherwise, so the screen does not move.
  */
 export function kioskDecision(input: {
   user: AuthUser | null;
   household: Household | null;
   kioskOn: boolean;
   fromHousehold: boolean;
+  /** The person turned this kiosk on themselves (onboarding or Settings): it is never marked as the household's. */
+  userChosen: boolean;
   unlockedUntil: string | null;
   now: number;
 }): 'on' | 'off' | 'keep' | 'mark' {
   if (!input.user?.anonymous) return 'keep';
   if (kioskUnlockActive(input.unlockedUntil, input.now)) return 'keep';
   // 'mark': a kiosk that was already on (an older build, or turned on by hand) while the household has Live Guard on gets the marker back-filled, so switching Live Guard off later can undo it.
-  if (kioskFromHousehold(input.household)) return input.kioskOn ? (input.fromHousehold ? 'keep' : 'mark') : 'on';
+  if (kioskFromHousehold(input.household)) return input.kioskOn ? (input.fromHousehold || input.userChosen ? 'keep' : 'mark') : 'on';
   return input.kioskOn && input.fromHousehold ? 'off' : 'keep';
 }
 /** After a check that came in through the OS share sheet a kiosk device returns to Live Guard, anything else to Home. */

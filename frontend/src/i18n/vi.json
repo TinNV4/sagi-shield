@@ -390,7 +390,7 @@
   },
   "guardian": {
     "member_fallback": "người thân",
-    "household_created": "Nhóm gia đình tạo ngày {date}",
+    "household_created": "Nhóm gia đình tạo lúc {{date}}",
     "push_enable": "Bật thông báo trên điện thoại này",
     "push_on": "Thông báo trên điện thoại này đang bật: bạn vẫn nhận được khi đã đóng trang này.",
     "push_blocked": "Trình duyệt đang chặn thông báo trong phần cài đặt. Khi trang này đang mở, cảnh báo vẫn hiện ở đây.",

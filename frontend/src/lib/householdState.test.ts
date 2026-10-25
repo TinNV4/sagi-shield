@@ -4,6 +4,7 @@ import type {AuthUser} from './auth';
 import {
   afterResultTarget,
   householdChipLabel,
+  formatLocalDateTime,
   shareNeedsTextHint,
   formatPairCode,
   deviceHousehold,
@@ -365,12 +366,21 @@ describe('isSystemAlert', () => {
   });
 });
 
+describe('kioskDecision, a kiosk the person chose', () => {
+  const now = 1_000_000;
+  const base = {user: user({anonymous: true}), household: household({live_guard_enabled: false}) as Household | null, kioskOn: true, fromHousehold: false, userChosen: true, unlockedUntil: null as string | null, now};
+  it('is never marked when the household turns Live Guard on, nor turned off when it goes off again', () => {
+    expect(kioskDecision({...base, household: household({live_guard_enabled: true})})).toBe('keep');
+    expect(kioskDecision(base)).toBe('keep');
+  });
+});
+
 describe('kioskDecision', () => {
   const now = 1_000_000;
   const device = user({anonymous: true});
   const on = household({live_guard_enabled: true});
   const off = household({live_guard_enabled: false});
-  const base = {user: device, household: on as Household | null, kioskOn: false, fromHousehold: false, unlockedUntil: null as string | null, now};
+  const base = {user: device, household: on as Household | null, kioskOn: false, fromHousehold: false, userChosen: false, unlockedUntil: null as string | null, now};
 
   it('a guardian browser (or no user) is never switched', () => {
     expect(kioskDecision({...base, user: user()})).toBe('keep');
@@ -390,6 +400,7 @@ describe('kioskDecision', () => {
 
   it('household on + kiosk on without the marker only back-fills the marker', () => {
     expect(kioskDecision({...base, kioskOn: true})).toBe('mark');
+    expect(kioskDecision({...base, kioskOn: true, userChosen: false})).toBe('mark');
   });
 
   it('a kiosk the person chose with Live Guard off stays untouched', () => {
@@ -450,8 +461,19 @@ describe('householdChipLabel', () => {
     expect(householdChipLabel(household({member_name: 'Mom'}), t)).toBe('Mom');
     expect(householdChipLabel(household({member_name: '', name: 'Home'}), t)).toBe('Home');
   });
-  it('an unnamed household is told apart by its creation date (DD/MM)', () => {
-    expect(householdChipLabel(household({member_name: '', name: '', created_at: '2026-10-05T23:30:00Z'}), t)).toBe('guardian.household_created:05/10');
+  it('an unnamed household is told apart by its local creation date and time (DD/MM HH:MM)', () => {
+    const created = '2026-10-05T23:30:00Z';
+    const expected = formatLocalDateTime(new Date(created));
+    expect(expected).toMatch(/^\d{2}\/\d{2} \d{2}:\d{2}$/);
+    expect(householdChipLabel(household({member_name: '', name: '', created_at: created}), t)).toBe(`guardian.household_created:${expected}`);
+  });
+  it('two unnamed households made on the same day get different labels', () => {
+    const a = householdChipLabel(household({member_name: '', name: '', created_at: '2026-10-05T01:00:00Z'}), t);
+    const b = householdChipLabel(household({member_name: '', name: '', created_at: '2026-10-05T01:07:00Z'}), t);
+    expect(a).not.toBe(b);
+  });
+  it('formatLocalDateTime pads day, month, hour and minute', () => {
+    expect(formatLocalDateTime(new Date(2026, 0, 5, 7, 3))).toBe('05/01 07:03');
   });
   it('an unreadable date falls back to the generic label', () => {
     expect(householdChipLabel(household({member_name: '', name: '', created_at: ''}), t)).toBe('guardian.member_fallback');

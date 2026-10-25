@@ -197,10 +197,13 @@ function AppContent() {
     }
   };
 
-  // A kiosk the person chose (onboarding, Settings) is theirs: the household's switch may never turn it off.
+  // A kiosk the person chose (onboarding, Settings) is theirs: `sagi_kiosk_user_chosen` is set while it is on, and
+  // kioskDecision then neither turns it off with the household's switch nor marks it as the household's.
   const handleUserKioskMode = (enabled: boolean) => {
     try {
       localStorage.removeItem('sagi_kiosk_from_household');
+      if (enabled) localStorage.setItem('sagi_kiosk_user_chosen', '1');
+      else localStorage.removeItem('sagi_kiosk_user_chosen');
     } catch {}
     handleSetKioskMode(enabled);
   };
@@ -222,13 +225,15 @@ function AppContent() {
   const applyHouseholdKiosk = (household: Household | null) => {
     let kioskOn = false;
     let fromHousehold = false;
+    let userChosen = false;
     let unlockedUntil: string | null = null;
     try {
       kioskOn = localStorage.getItem('sagi_kiosk_mode') === 'true';
       fromHousehold = localStorage.getItem('sagi_kiosk_from_household') === '1';
+      userChosen = localStorage.getItem('sagi_kiosk_user_chosen') === '1';
       unlockedUntil = localStorage.getItem('sagi_kiosk_unlocked_until');
     } catch {}
-    const decision = kioskDecision({user: authUserRef.current ?? currentUser(), household, kioskOn, fromHousehold, unlockedUntil, now: Date.now()});
+    const decision = kioskDecision({user: authUserRef.current ?? currentUser(), household, kioskOn, fromHousehold, userChosen, unlockedUntil, now: Date.now()});
     if (decision === 'on') {
       setIsOnboardingOpen(false);
       handleSetKioskMode(true);

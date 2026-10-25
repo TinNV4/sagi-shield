@@ -390,7 +390,7 @@
   },
   "guardian": {
     "member_fallback": "ご家族",
-    "household_created": "{date} に作成した見守り",
+    "household_created": "{{date}} に作成した見守り",
     "push_enable": "このスマホで通知を受け取る",
     "push_on": "このスマホへの通知はオンです。この画面を閉じていても届きます。",
     "push_blocked": "このブラウザの設定で通知がブロックされています。この画面を開いている間は、ここに警告が表示されます。",
