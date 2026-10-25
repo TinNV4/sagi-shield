@@ -330,6 +330,16 @@ def test_share_target_without_a_worker_redirects_to_the_app(client):
     assert r.status_code == 303 and r.headers["location"] == "/#share"
 
 
+def test_check_and_precheck_log_an_integer_latency(client, monkeypatch):
+    from app import main as m
+    seen = []
+    real = m.log_verdict
+    monkeypatch.setattr(m, "log_verdict", lambda kind, **f: seen.append((kind, f.get("latency_ms"))) or real(kind, **f))
+    client.post("/check", json={"lang": "ja", "text": "こんにちは"})
+    client.post("/precheck", json={"lang": "ja", "reason_text": "家賃を払う", "who_asked": "company", "recipient_type": "company"})
+    assert [k for k, _ in seen] == ["check", "precheck"] and all(isinstance(ms, int) for _, ms in seen)
+
+
 def test_check_response_has_a_verdict_id(client):
     r = client.post("/check", json={"lang": "ja", "text": "こんにちは"}).json()
     assert re.fullmatch(r"[0-9a-f]{16}", r["verdict_id"])

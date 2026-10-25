@@ -64,3 +64,24 @@ def test_households_overview_counts_without_ids():
     s.households = {"a": {"live_guard_enabled": True, "devices_seen": {"u": {"at": _now_iso()}}},
                     "b": {"devices_seen": {"u": {"at": "2020-01-01T00:00:00+00:00"}}}}
     assert s.households_overview() == {"n": 2, "live_guard_on": 1, "devices_seen_24h": 1}
+
+
+def test_rule_hit_regex_counts_only_stages_with_markers():
+    import json
+    sample = json.dumps({"AUTHORITY": ["police"], "FEAR": [], "MONEY": ["transfer", "atm"], "ISOLATION": None}, separators=(",", ":"))  # BigQuery writes no spaces
+    assert admin.HIT_RE.findall(sample) == ["AUTHORITY", "MONEY"]
+    assert admin.HIT_PATTERN in admin.QUERIES["rule_hits"]
+
+
+def test_one_failing_query_does_not_hide_the_rest(client, monkeypatch):
+    monkeypatch.setenv("VERDICT_TABLE", "p.sagi_pilot.verdicts")
+
+    def fake(sql, params, timeout_s=20):
+        if admin.which(sql) == "latency":
+            raise admin.bq.Unavailable("no such field")
+        return [{"day": "2026-10-25", "kind": "check", "level": "LOW", "lang": "ja", "n": 1}] if admin.which(sql) == "verdicts" else []
+    monkeypatch.setattr(admin.bq, "query", fake)
+    r = client.get("/admin/summary", headers=ADMIN)
+    assert r.status_code == 200 and r.json()["unavailable"] == ["latency"] and r.json()["verdicts"][0]["n"] == 1
+    monkeypatch.setattr(admin.bq, "query", lambda sql, params, timeout_s=20: (_ for _ in ()).throw(admin.bq.Unavailable("x")))
+    assert client.get("/admin/summary", headers=ADMIN).status_code == 503

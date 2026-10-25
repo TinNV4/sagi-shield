@@ -12,6 +12,7 @@ import io
 import logging
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Literal
 
@@ -116,15 +117,17 @@ def raise_to(result: dict, floor: int, lang: str, reason: str, scam_type: str | 
     return result
 
 
-def finish(result: dict, flags: list[str], community_hits: int, kind: str = "check", source: str = "text", lang: str = "ja") -> dict:
+def finish(result: dict, flags: list[str], community_hits: int, kind: str = "check", source: str = "text", lang: str = "ja",
+           t0: float | None = None) -> dict:
+    latency_ms = round((time.monotonic() - t0) * 1000) if t0 is not None else None
     llm_used = result.pop("llm_used", None)  # internal; the contract exposes it as the `llm_unavailable` flag
     result.update(evidence_flags=sorted(set(flags)), community_hits=community_hits)
     store.record_check(result["risk_level"])
     log_event(kind, lang=lang, source=source, risk_level=result["risk_level"], risk_score=result["risk_score"],
-              scam_type=result["scam_type"], stage=result["stage"], llm_used=llm_used)  # aggregate fields only
+              scam_type=result["scam_type"], stage=result["stage"], llm_used=llm_used, latency_ms=latency_ms)  # aggregate fields only
     rec = log_verdict(kind, lang=lang, source=source, score=result["risk_score"], level=result["risk_level"], stage=result["stage"],
                 scam_type=result["scam_type"], reasons=result["reasons"], rules={"hits": result.get("rule_hits")},
-                flags=result["evidence_flags"], community_hits=community_hits, llm_used=llm_used)  # the "why"
+                flags=result["evidence_flags"], community_hits=community_hits, llm_used=llm_used, latency_ms=latency_ms)  # the "why"
     result["verdict_id"] = rec.get("verdict_id")  # the handle for "was this right?"; the record keeps the why
     return result
 
@@ -138,6 +141,7 @@ def healthz():
 
 @app.post("/check")
 async def check(request: Request):
+    t0 = time.monotonic()
     images, audio = [], None
     if request.headers.get("content-type", "").startswith("application/json"):
         try:
@@ -271,7 +275,7 @@ async def check(request: Request):
     if per_image:
         result["images_mode"], result["images"] = per_image["mode"], per_image["items"]
     source = "image" if images else "audio" if audio is not None else "phone" if phone and not text.strip() else "url" if url else "text"
-    return finish(result, flags, community_hits, "check", source, lang)
+    return finish(result, flags, community_hits, "check", source, lang, t0)
 
 
 class DeepCheckIn(BaseModel):
@@ -330,6 +334,7 @@ class PreCheck(BaseModel):
 @app.post("/precheck")
 def precheck(body: PreCheck):
     """Before-you-pay check (furikomi-mae): "I am about to send money because ..." """
+    t0 = time.monotonic()
     lang = check_lang(body.lang)
     ev = build_evidence(lang=lang, text=body.reason_text)
     result = analyze(ev.text, lang, use_llm=use_llm())
@@ -339,7 +344,7 @@ def precheck(body: PreCheck):
         raise_to(result, 90, lang, MSG["official_to_person"][lang])
     elif body.who_asked in ("stranger", "broker"):
         raise_to(result, 70, lang, MSG["stranger"][lang])
-    return finish(result, ev.flags, 0, "precheck", "form", lang)
+    return finish(result, ev.flags, 0, "precheck", "form", lang, t0)
 
 
 class Report(BaseModel):

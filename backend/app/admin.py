@@ -26,6 +26,10 @@ DAY = 'DATE(timestamp, "Asia/Tokyo")'
 WHERE = "timestamp >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL @days DAY)"
 CHECKS = "jsonPayload.kind IN ('check', 'precheck', 'live_look')"
 
+# a stage that did not hit serialises as "FEAR":[] and must not count; one that did as "FEAR":["marker", ...]
+HIT_PATTERN = r'"([A-Z_]+)":\[\s*"'
+HIT_RE = re.compile(HIT_PATTERN)
+
 QUERIES = {
     "verdicts": f"""-- name: verdicts
 SELECT CAST({DAY} AS STRING) AS day, jsonPayload.kind AS kind, jsonPayload.level AS level, jsonPayload.lang AS lang, COUNT(*) AS n
@@ -41,7 +45,7 @@ SELECT COUNTIF(jsonPayload.kind = 'live_call') AS calls, COUNTIF(jsonPayload.kin
 FROM `@table` WHERE {WHERE} AND jsonPayload.kind IN ('live_call', 'live_look', 'live_alarm')""",
     "rule_hits": f"""-- name: rule_hits
 SELECT name, COUNT(*) AS n FROM `@table`,
-  UNNEST(REGEXP_EXTRACT_ALL(TO_JSON_STRING(jsonPayload.rules.hits), r'"([A-Z_]+)":[^n]')) AS name
+  UNNEST(REGEXP_EXTRACT_ALL(TO_JSON_STRING(jsonPayload.rules.hits), r'{HIT_PATTERN}')) AS name
 WHERE {WHERE} AND {CHECKS}
 GROUP BY name ORDER BY n DESC LIMIT 20""",
     "reasons": f"""-- name: reasons
@@ -69,15 +73,24 @@ def _int(x) -> int:
 def summary(days: int = Query(7, ge=1, le=30), _=Depends(auth.admin_only)) -> dict:
     try:
         table = bq.table()
-        rows = {name: _run(name, table, days) for name in QUERIES}
+        rows = {"verdicts": _run("verdicts", table, days)}
     except bq.Unavailable as e:
         detail = e.detail if "not configured" in e.detail else f"verdict table not available: {e.detail}"
         raise HTTPException(503, detail)
+    unavailable = []
+    for name in QUERIES:  # a column the sink has not created yet fails one query, not the whole page
+        if name == "verdicts":
+            continue
+        try:
+            rows[name] = _run(name, table, days)
+        except bq.Unavailable:
+            rows[name] = []
+            unavailable.append(name)
     since = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
     lat = (rows["latency"] or [{}])[0]
     live = (rows["live"] or [{}])[0]
     return {
-        "days": days, "table": table,
+        "days": days, "table": table, "unavailable": unavailable,
         "verdicts": [{"day": r["day"], "kind": r["kind"], "level": r["level"], "lang": r["lang"], "n": _int(r["n"])}
                      for r in rows["verdicts"]],
         "latency_ms": {"p50": _int(lat.get("p50")), "p95": _int(lat.get("p95"))},
