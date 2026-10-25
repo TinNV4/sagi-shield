@@ -115,3 +115,15 @@ variable "pilot_image" {
   type        = string
   default     = ""
 }
+
+variable "observability_prod_enabled" {
+  description = "Also create the verdict-log sink (dataset sagi_verdicts), uptime check and alert policy for the judged service. Leave false until after the judging freeze (2026-11-07)"
+  type        = bool
+  default     = false
+}
+
+variable "alert_email" {
+  description = "Address that receives the \"service down\" alert; empty = no notification channel (the policy still exists)"
+  type        = string
+  default     = ""
+}

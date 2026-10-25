@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: ""
+      verdict_table:
+        description: BigQuery table the admin page reads the verdict log from (the log sink's run_googleapis_com_stdout); empty = admin routes answer 503
+        required: false
+        type: string
+        default: ""
       env_label:
         description: Badge shown in the PWA header (PILOT); empty for production
         required: false
@@ -134,12 +139,13 @@ jobs:
           LEGACY_FAMILY: ${{ vars.LEGACY_FAMILY }}  # 0 = the shared-secret /family/* routes answer 410; unset -> on (removed 2026-11-14)
           FIRESTORE_DB: ${{ inputs.firestore_db }}
           BQ_TABLE: ${{ inputs.bq_table }}
+          VERDICT_TABLE: ${{ inputs.verdict_table || vars.VERDICT_TABLE }}  # the job runs in the GitHub environment, so its variable applies too
         run: |
           # one --set-env-vars only (gcloud keeps the last); "^@^" makes @ the separator so CORS_ORIGINS may hold commas
           ENV="GOOGLE_GENAI_USE_ENTERPRISE=true@GOOGLE_CLOUD_PROJECT=${{ vars.GCP_PROJECT }}@GOOGLE_CLOUD_LOCATION=global"
           ENV="$ENV@STORE=firestore@FIRESTORE_DB=$FIRESTORE_DB@USE_WEBRISK=1@USE_LLM=1@CORS_ORIGINS=*"
           # analytics stream (app/analytics.py): only when the caller names a table; the pilot runs without one
-          for job in BQ_TABLE GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL \
+          for job in BQ_TABLE VERDICT_TABLE GEMINI_MODEL GEMINI_VISION_MODEL GEMINI_LIVE_MODEL GEMINI_CONFIRM_MODEL GEMINI_DEEP_MODEL STT_BATCH_MODEL \
                      APPCHECK RATE_LIMIT_UNVERIFIED_PER_MIN AUTH LEGACY_FAMILY; do
             if [ -n "${!job:-}" ]; then ENV="$ENV@$job=${!job}"; fi
           done

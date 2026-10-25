@@ -54,6 +54,7 @@ resource "google_project_service" "apis" {
     "firebaseappcheck.googleapis.com",
     "recaptchaenterprise.googleapis.com",
     "fcm.googleapis.com",
+    "monitoring.googleapis.com",
   ])
   service            = each.value
   disable_on_destroy = false
@@ -617,4 +618,118 @@ resource "google_cloud_run_v2_service_iam_member" "pilot_public" {
   location = google_cloud_run_v2_service.pilot[0].location
   role     = "roles/run.invoker"
   member   = "allUsers"
+}
+
+# ---------------------------------------------------------------- observability (verdict log sink, uptime check, alert)
+# Each environment that is switched on gets: a BigQuery dataset fed by a Cloud Logging sink (only the structured
+# verdict records of app/verdict_log.py, day-partitioned), an uptime check on /health and an alert policy that mails
+# var.alert_email when the check fails from 2 or more regions for 5 minutes. Pilot: pilot_enabled. Production:
+# observability_prod_enabled (kept off until after the judging freeze).
+locals {
+  observability = merge(
+    var.pilot_enabled ? {
+      pilot = {
+        service = "sagi-shield-pilot"
+        dataset = "sagi_pilot"
+        host    = replace(google_cloud_run_v2_service.pilot[0].uri, "https://", "")
+      }
+    } : {},
+    var.observability_prod_enabled ? {
+      prod = {
+        service = var.service
+        dataset = "sagi_verdicts"
+        host    = replace(google_cloud_run_v2_service.api.uri, "https://", "")
+      }
+    } : {},
+  )
+}
+
+resource "google_bigquery_dataset" "verdicts" {
+  for_each    = local.observability
+  dataset_id  = each.value.dataset
+  location    = var.region
+  description = "Structured verdict log of ${each.value.service} (rule hits, judge reasons, latency; no text, numbers or ids)"
+  depends_on  = [google_project_service.apis]
+}
+
+resource "google_logging_project_sink" "verdicts" {
+  for_each               = local.observability
+  name                   = "sagi-verdicts-${each.value.service}"
+  destination            = "bigquery.googleapis.com/projects/${var.project}/datasets/${google_bigquery_dataset.verdicts[each.key].dataset_id}"
+  filter                 = "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${each.value.service}\" AND jsonPayload.kind:*"
+  unique_writer_identity = true
+
+  bigquery_options {
+    use_partitioned_tables = true
+  }
+}
+
+resource "google_bigquery_dataset_iam_member" "verdict_sink_writer" {
+  for_each   = local.observability
+  dataset_id = google_bigquery_dataset.verdicts[each.key].dataset_id
+  role       = "roles/bigquery.dataEditor"
+  member     = google_logging_project_sink.verdicts[each.key].writer_identity
+}
+
+resource "google_monitoring_notification_channel" "alert_email" {
+  for_each     = var.alert_email != "" ? local.observability : {}
+  display_name = "${each.value.service} alerts"
+  type         = "email"
+  labels       = { email_address = var.alert_email }
+  depends_on   = [google_project_service.apis]
+}
+
+resource "google_monitoring_uptime_check_config" "health" {
+  for_each     = local.observability
+  display_name = "${each.value.service} health"
+  period       = "300s"
+  timeout      = "10s"
+
+  http_check {
+    path           = "/health"
+    port           = 443
+    use_ssl        = true
+    validate_ssl   = true
+    request_method = "GET"
+  }
+
+  monitored_resource {
+    type = "uptime_url"
+    labels = {
+      project_id = var.project
+      host       = each.value.host
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+resource "google_monitoring_alert_policy" "down" {
+  for_each     = local.observability
+  display_name = "${each.value.service} down"
+  combiner     = "OR"
+
+  conditions {
+    display_name = "/health fails from 2 or more regions"
+    condition_threshold {
+      filter          = "metric.type=\"monitoring.googleapis.com/uptime_check/check_passed\" AND metric.labels.check_id=\"${google_monitoring_uptime_check_config.health[each.key].uptime_check_id}\" AND resource.type=\"uptime_url\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 1
+      duration        = "300s"
+
+      aggregations {
+        alignment_period     = "1200s"
+        per_series_aligner   = "ALIGN_NEXT_OLDER"
+        cross_series_reducer = "REDUCE_COUNT_FALSE"
+        group_by_fields      = ["resource.label.*"]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
+  notification_channels = var.alert_email != "" ? [google_monitoring_notification_channel.alert_email[each.key].id] : []
+  depends_on            = [google_project_service.apis]
 }

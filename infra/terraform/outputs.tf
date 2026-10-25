@@ -24,3 +24,8 @@ output "pilot_url" {
   description = "The pilot service URL (empty unless pilot_enabled)"
   value       = var.pilot_enabled ? google_cloud_run_v2_service.pilot[0].uri : ""
 }
+
+output "verdict_tables" {
+  description = "Per environment: the VERDICT_TABLE value once the first verdict record has landed (the sink creates run_googleapis_com_stdout lazily)"
+  value       = { for k, o in local.observability : k => "${var.project}.${o.dataset}.run_googleapis_com_stdout" }
+}
