@@ -7,19 +7,23 @@ this week?" across millions of rows. Different questions, different stores.
 One row per verdict. A row holds NO text, NO phone number or hash, NO family or session id, NO address - only:
   ts, kind (check | precheck | live_alarm | report | feedback), lang, source, risk_level, risk_score, scam_type, stage,
   prefecture (only when the user typed one in a report), llm_used, latency_ms, feedback_correct (feedback rows)
-Enabled by BQ_TABLE=project.dataset.table. Rows are queued and written off the request path; any failure is
-swallowed after one warning - analytics must never delay or fail a check.
+Enabled by BQ_TABLE=project.dataset.table. Rows are queued and written by a thread, never on the verdict's path; any
+failure is swallowed after one warning - analytics must never fail a check. Cloud Run throttles the CPU once a request
+has ended and may stop an idle instance, so a row still queued then is lost: FlushMiddleware (main.py) keeps the
+request open until flush() has seen the queue written, which costs the caller nothing (the response is already sent).
 """
 from __future__ import annotations
 import os
 import queue
 import sys
 import threading
+import time
 from datetime import datetime, timezone
 
 FIELDS = ("kind", "lang", "source", "risk_level", "risk_score", "scam_type", "stage", "prefecture", "llm_used", "latency_ms", "feedback_correct")
 _queue: queue.Queue = queue.Queue(maxsize=1000)
-_state = {"thread": None, "warned": False}
+_state = {"thread": None, "warned": False, "pending": 0}
+_idle = threading.Condition()
 
 
 def _worker() -> None:
@@ -30,6 +34,25 @@ def _worker() -> None:
         while len(rows) < 50 and not _queue.empty():
             rows.append(_queue.get_nowait())
         _insert(client, table, rows)
+        with _idle:
+            _state["pending"] -= len(rows)
+            _idle.notify_all()
+
+
+def flush(timeout: float = 5.0) -> bool:
+    """Block until every queued row has been handed to BigQuery (or failed); False when the timeout ran out."""
+    deadline = time.monotonic() + timeout
+    with _idle:
+        while _state["pending"] > 0:
+            left = deadline - time.monotonic()
+            if left <= 0:
+                return False
+            _idle.wait(left)
+    return True
+
+
+def pending() -> bool:
+    return _state["pending"] > 0
 
 
 def _insert(client, table: str, rows: list[dict]) -> None:
@@ -59,5 +82,7 @@ def log_event(kind: str, **fields) -> None:
         _state["thread"].start()
     try:
         _queue.put_nowait(row(kind, **fields))
+        with _idle:
+            _state["pending"] += 1
     except queue.Full:
         pass  # under a flood, dropping analytics is the right thing to drop

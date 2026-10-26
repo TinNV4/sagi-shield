@@ -46,3 +46,30 @@ def test_unknown_columns_never_reject_a_batch():
             return []
     analytics._insert(Client(), "p.sagi.events", [analytics.row("feedback", feedback_correct=True)])
     assert calls and calls[0][2].get("ignore_unknown_values") is True
+
+
+def test_flush_waits_for_the_worker_and_the_request_stays_open_until_then(monkeypatch):
+    """Cloud Run froze the instance right after the response, so queued rows never left. flush() is what keeps them alive."""
+    import time
+    written = []
+
+    class Client:
+        def insert_rows_json(self, table, rows, **kw):
+            time.sleep(0.2)
+            written.extend(rows)
+            return []
+    monkeypatch.setenv("BQ_TABLE", "p.sagi.events")
+    monkeypatch.setattr("google.cloud.bigquery.Client", Client, raising=False)
+    monkeypatch.setitem(analytics._state, "thread", None)
+    analytics.log_event("check", risk_level="LOW")
+    assert analytics.pending() and not written
+    assert analytics.flush(timeout=3) is True
+    assert written and not analytics.pending()
+
+
+def test_flush_gives_up_when_the_writer_is_stuck(monkeypatch):
+    monkeypatch.setitem(analytics._state, "pending", 1)
+    try:
+        assert analytics.flush(timeout=0.1) is False
+    finally:
+        analytics._state["pending"] = 0

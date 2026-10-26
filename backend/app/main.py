@@ -8,6 +8,7 @@ Sagi Shield - HTTP API (PLAN section 9). A thin wrapper over backend/core.
 Env: USE_LLM=0 rules only · STORE=firestore · USE_WEBRISK=1 · CORS_ORIGINS=https://a,https://b
 """
 from __future__ import annotations
+import asyncio
 import io
 import logging
 import os
@@ -31,6 +32,7 @@ from . import appcheck, auth, households, services, share  # noqa: E402
 from .admin import router as admin_router  # noqa: E402
 from .agent import router as agent_router  # noqa: E402
 from .feedback import router as feedback_router  # noqa: E402
+from . import analytics  # noqa: E402
 from .analytics import log_event  # noqa: E402
 from .guard import GuardMiddleware  # noqa: E402
 from .live import router as live_router  # noqa: E402
@@ -71,10 +73,25 @@ MSG = {
 }
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s %(message)s")
+class FlushMiddleware:
+    """Keep an HTTP request open until its analytics rows are written: Cloud Run throttles the CPU after the response and
+    the queued rows were being lost with the idle instance. The client already has its answer by then (pure ASGI, no
+    buffering), and the wait runs in a thread so the event loop keeps serving."""
+
+    def __init__(self, inner):
+        self.inner = inner
+
+    async def __call__(self, scope, receive, send):
+        await self.inner(scope, receive, send)
+        if scope["type"] == "http" and analytics.pending():
+            await asyncio.to_thread(analytics.flush)
+
+
 app = FastAPI(title="Sagi Shield API")
 app.add_middleware(GuardMiddleware)  # added first = innermost: CORS headers are still put on a 429
 app.add_middleware(CORSMiddleware, allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
                    allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(FlushMiddleware)  # added last = outermost: nothing wraps it, so the response is never held back
 store = STORE
 app.include_router(live_router)
 app.include_router(agent_router)
